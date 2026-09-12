@@ -6,21 +6,40 @@ Sprite-based implementation. The bar art is picked from the pet:
 
     assets/XaiBar_<type>_<level>.png   (96x30 source art)
 
-    type:  pet attribute — ""(Free)/Va -> 1, Da -> 2, Vi -> 3
-    level: pets whose module shows Level as a stat use their LEVEL,
-           everyone else uses EFFORT:
-               LEVEL 0-5  / EFFORT 0-8   -> 1
-               LEVEL 6-9  / EFFORT 9-15  -> 2
-               LEVEL 10   / EFFORT 16+   -> 3
+    type:  pet attribute — Va -> 1, ""(Free)/Da -> 2, Vi -> 3
+    level: pets whose module shows Level as a stat take the band their
+           STAGE and LEVEL put them in, read off the DMX attack table
+           (battle_utils.dmx_tier_index); everyone else uses EFFORT:
+               EFFORT 0-8 -> 1,  9-15 -> 2,  16+ -> 3
+
+           The bar widens where the attacks change row, and both were read
+           off the same device: a stage 6 pet steps at levels 5 and 10, but a
+           stage 3 pet steps at 3 and 4, and a Baby II at 2 and 3. A flat
+           `0-5 / 6-9 / 10` was stage 6's banding applied to every stage, so
+           every pet below Ultimate got the wrong bar for most of its life.
 
 The bar is integer-scaled (pixel perfect) to roughly the old widget's
 footprint (148px wide at 240x240). XaiArrow travels left-to-right above
 the bar, bouncing inside the bar's bounds minus a 2px (source) margin,
 at the classic speed (faster for lower XAI numbers). A/LCLICK stops it;
-the color of the bar under the arrow decides the result and recolors
-the arrow (XaiArrow_Red / _Yellow / _Blue, black when no color), and the
-minigame reports finished half a second later so the player sees where
-they landed.
+the color of the bar under the middle of the arrow decides the result
+and recolors the arrow, and the minigame reports finished half a second
+later so the player sees where they landed.
+
+The color is the charge quality the protocols carry as Bad (0), Good (1),
+Great (2), Excellent (3):
+
+    red     -> 3  Excellent      the smallest zone, and the hardest to hit
+    yellow  -> 2  Great
+    blue    -> 1  Good           the widest colored zone
+    grey    -> 0  Bad
+
+Red and blue used to be the other way round, which inverted the whole
+minigame: a level 1 bar carries 24px of blue against 6px of red, so
+stopping on the hardest zone scored Good and the easiest scored
+Excellent. Every consumer reads this one number -- the DMX wire's Attack
+field and Excite Training's ``selected_strength == 3`` alike -- so the
+sprite table below is keyed by it rather than by the color name.
 
 Result mapping: red=1, yellow=2, blue=3, anything else 0.
 """
@@ -29,7 +48,6 @@ import pygame
 
 from core import runtime_globals
 from utils.asset_utils import image_load
-from utils.module_utils import get_module
 from utils.pygame_utils import blit_with_cache
 
 BAR_SRC_W = 96
@@ -38,25 +56,29 @@ BAR_MARGIN_SRC = 2       # px margin inside the bar (source scale)
 REFERENCE_WIDTH = 148    # old widget width at 240x240 — sizing reference
 STOP_HOLD_MS = 500       # linger after stopping so the result is readable
 
+#: What each result value is called on the wire, for the log.
+QUALITY = ("Bad", "Good", "Great", "Excellent")
+
+#: Keyed by result value, not by color name (see above).
 ARROW_SPRITES = {
     None: "assets/XaiArrow.png",
-    1: "assets/XaiArrow_Red.png",
+    3: "assets/XaiArrow_Red.png",
     2: "assets/XaiArrow_Yellow.png",
-    3: "assets/XaiArrow_Blue.png",
+    1: "assets/XaiArrow_Blue.png",
 }
 
 
 def _classify_color(pixel):
-    """Map a bar pixel to a result value (1=red, 2=yellow, 3=blue, None)."""
+    """Map a bar pixel to its result value: red 3, yellow 2, blue 1, None."""
     if len(pixel) > 3 and pixel[3] < 200:
         return None
     r, g, b = pixel[0], pixel[1], pixel[2]
     if r > 180 and g > 140 and b < 100:
-        return 2  # yellow
+        return 2  # yellow -> Great
     if r > 180 and g < 110 and b < 110:
-        return 1  # red
+        return 3  # red    -> Excellent
     if b > 180 and r < 110:
-        return 3  # blue
+        return 1  # blue   -> Good
     return None
 
 
@@ -75,8 +97,10 @@ class XaiBar:
 
         bar_type = self._bar_type(pet)
         bar_level = self._bar_level(pet)
+        self.bar_name = f"XaiBar_{bar_type}_{bar_level}"
+        self._last_src_x = None
         self.bar_source = image_load(
-            f"assets/XaiBar_{bar_type}_{bar_level}.png").convert_alpha()
+            f"assets/{self.bar_name}.png").convert_alpha()
 
         k = self.scale
         self.width = BAR_SRC_W * k
@@ -123,34 +147,30 @@ class XaiBar:
 
     @staticmethod
     def _bar_type(pet):
+        """The column pattern, which is the attribute.
+
+        Free shares Data's rather than Vaccine's -- read off the device on a
+        Free Yarmon and a Data Herissmon, both type 2, against a Vaccine
+        Varudurumon's 1 and a Virus Agumon X's 3.
+        """
         attr = getattr(pet, "attribute", "") if pet else ""
-        if attr == "Da":
-            return 2
+        if attr == "Va":
+            return 1
         if attr == "Vi":
             return 3
-        return 1  # "" (Free) and Va
+        return 2  # Da, and "" (Free) with it
 
     @staticmethod
     def _bar_level(pet):
-        if pet is None:
-            return 1
-        module = get_module(getattr(pet, "module", None))
-        # Devices that level their Digimon scale the bar off the level;
-        # the rest use effort. Showing Level is what says a module has one.
-        uses_level = "Level" in (getattr(module, "visible_stats", None) or []) if module else False
-        if uses_level:
-            level = getattr(pet, "level", 1)
-            if level >= 10:
-                return 3
-            if level >= 6:
-                return 2
-            return 1
-        effort = getattr(pet, "effort", 0)
-        if effort >= 16:
-            return 3
-        if effort >= 9:
-            return 2
-        return 1
+        """Which of the three bar arts this pet plays.
+
+        Devices that level their Digimon scale the bar off the level and the
+        rest off effort, and `battle_utils.pet_tier_index` is where that
+        decision lives -- Count Match Z widens on the same ladder, so a copy
+        here would be a second place for the two to disagree.
+        """
+        from battle.sim.battle_utils import pet_tier_index
+        return pet_tier_index(pet)
 
     # ------------------------------------------------------------------
     # Game flow
@@ -187,6 +207,11 @@ class XaiBar:
         if colored is not None:
             self.arrow_sprite = colored
 
+        runtime_globals.game_console.log(
+            f"[XaiBar] stopped on {QUALITY[self.selected_strength]} "
+            f"({self.selected_strength}) -- bar {self.bar_name}, "
+            f"arrow at {self.arrow_cx:.1f}, source px {self._last_src_x}")
+
     def is_finished(self):
         """True once the post-stop hold (0.5s) has elapsed."""
         return (self.stopped and self._stop_tick is not None
@@ -201,6 +226,7 @@ class XaiBar:
         """
         src_x = int((center_x - self.x) / self.scale)
         src_x = max(0, min(BAR_SRC_W - 1, src_x))
+        self._last_src_x = src_x
         for src_y in range(BAR_SRC_H - 1 - BAR_MARGIN_SRC, BAR_MARGIN_SRC - 1, -1):
             value = _classify_color(self.bar_source.get_at((src_x, src_y)))
             if value is not None:
@@ -235,7 +261,7 @@ class XaiBar:
             self.arrow_dir = -1
 
     def get_result(self):
-        """Result value (0-3): red=1, yellow=2, blue=3, no color=0."""
+        """Result value (0-3): red=3, yellow=2, blue=1, no color=0."""
         return self.selected_strength if self.selected_strength is not None else 0
 
     def handle_event(self, event):

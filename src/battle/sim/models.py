@@ -39,8 +39,15 @@ class AttackLog:
     attacker: int  # Index of the attacker
     defender: int  # Index of the defender (-1 if no defender)
     hit: bool
+    #: On most wires this is the HP the attack costs. On the DMX wire it is
+    #: the attack TYPE id (1-5), because the encounter counts projectiles
+    #: from it -- there, the HP cost is a separate scale and lives in
+    #: ``hp_damage``. Anything applying damage should prefer that.
     damage: int
     critical: bool
+    #: HP the attack actually costs, where that differs from ``damage``.
+    #: None means the two are the same.
+    hp_damage: int = None
 
     def to_dict(self):
         return asdict(self)
@@ -124,6 +131,8 @@ def battle_result_from_serialized(serialized):
             # Older logs predate the field — fall back to inferring crit from
             # the damage value so historical fights still trigger the slide.
             critical=bool(d.get('critical', d.get('damage', 0) == 5)),
+            # Older logs have no hp_damage; None means "same as damage".
+            hp_damage=d.get('hp_damage'),
         )
 
     def _make_turn(t):
@@ -172,7 +181,8 @@ class AttributeEnum(Enum):
     VACCINE = 3
 
 class BattleProtocol(Enum):
-    DM_BS = auto()     # Original Digital Monster (slot-based)
+    DMOG_BS = auto()   # Digital Monster Original (slot-based)
+    PENOG_BS = auto()  # Digimon Pendulum (original), its own 4-packet battle
     DM20_BS = auto()
     DMC_BS = auto()
     DMX_BS = auto()

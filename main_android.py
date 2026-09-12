@@ -133,6 +133,22 @@ def main():
         game_width  = (width  // 2) & ~1
         game_height = (height // 2) & ~1
 
+        # The configuration is the engine's authority on the render
+        # resolution everywhere else, so record what was actually chosen here.
+        # Left at the imported default (a 240-based canvas derived from the
+        # screen's aspect) the two disagree, and every recompute that reads the
+        # configuration -- a save switch, a login, the graphics test -- resets
+        # SCREEN_WIDTH/HEIGHT to a value the offscreen canvas cannot follow,
+        # drawing the game into a corner of it.  It is also what a save records
+        # as the resolution it was written at, which is how the poops are
+        # re-placed on the next boot.
+        cfg = game_globals.configuration
+        cfg.fullscreen = True
+        cfg.window_width, cfg.window_height = width, height
+        cfg.screen_width, cfg.screen_height = game_width, game_height
+        cfg.base_resolution_width, cfg.base_resolution_height = game_width, game_height
+        cfg.resolution_multiplyer = 1
+
         # Update runtime globals to use the game's internal resolution (half)
         runtime_globals.update_resolution_constants(game_width, game_height)
 
@@ -154,8 +170,10 @@ def main():
         # If a previous session left the service running, stop it now.
         bg_service.stop_service()
 
-        # Ask for POST_NOTIFICATIONS at runtime (Android 13+).
-        bg_service.request_notification_permission()
+        # Notifications are disabled for now (service_main.NOTIFICATIONS_ENABLED),
+        # so don't ask for POST_NOTIFICATIONS — prompting for a permission the
+        # build never uses only costs the player a dialog. Restore this call
+        # alongside the background-service work.
 
         # SDL2 lifecycle events on Android.  SDL sends the APP_* pair on every
         # pause/resume; the WINDOW_* ones come straight out of nativePause /
@@ -318,11 +336,16 @@ def main():
                 sw, sh = screen.get_size()
                 if sw <= 0 or sh <= 0:
                     raise pygame.error(f"zero-size window surface ({sw}x{sh})")
-                screen.fill((0, 0, 0))
-                if canvas.get_size() != (sw, sh):
-                    pygame.transform.scale(canvas, (sw, sh), screen)
-                else:
-                    screen.blit(canvas, (0, 0))
+                # When the canvas IS the window surface (a render
+                # resolution equal to the device's), the frame is already
+                # where it has to be -- filling or blitting here would erase
+                # what was just drawn.
+                if canvas is not screen:
+                    screen.fill((0, 0, 0))
+                    if canvas.get_size() != (sw, sh):
+                        pygame.transform.scale(canvas, (sw, sh), screen)
+                    else:
+                        screen.blit(canvas, (0, 0))
                 pygame.display.flip()
                 present_failures = 0
             except pygame.error as draw_exc:

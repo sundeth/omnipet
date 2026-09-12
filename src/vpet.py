@@ -62,7 +62,16 @@ class VirtualPetGame:
                 game_globals.load_player_id()
             # Migrate legacy save folder structure (Type0→Default, Type1→<player_id>)
             game_globals.migrate_legacy_saves()
-            game_globals.load()
+            if runtime_globals.IS_ANDROID:
+                # The phone's render resolution was settled from the device
+                # screen before this point; a save's own display fields
+                # describe whatever wrote it, so they are carried across
+                # rather than applied.  Desktop wants the saved window size
+                # and reconciles it just below.
+                from utils import display_utils
+                display_utils.load_keeping_device_display()
+            else:
+                game_globals.load()
 
         # The window was created at launch with default config (the save wasn't
         # loaded yet); now that the configuration is in, resize the window to
@@ -85,6 +94,21 @@ class VirtualPetGame:
         except Exception as exc:
             runtime_globals.game_console.log(
                 f"[VirtualPetGame] pet resize after load failed: {exc}")
+
+        # Take the evolution routes from the modules as they are NOW. A pet
+        # keeps the routes it was created with, so without this a module fix
+        # can never reach a pet already in the save — updating the module and
+        # restarting is how a player repairs one. Only the evolution lists are
+        # touched; nothing else about the pet is overwritten.
+        try:
+            from utils.pet_utils import refresh_pet_evolutions
+            n = refresh_pet_evolutions()
+            if n:
+                runtime_globals.game_console.log(
+                    f"[Init] Refreshed evolution data on {n} pet(s) from their modules")
+        except Exception as exc:
+            runtime_globals.game_console.log(
+                f"[VirtualPetGame] evolution refresh failed: {exc}")
 
         # Reload input mappings after configuration is loaded
         from input.input_manager import reload_input_mappings

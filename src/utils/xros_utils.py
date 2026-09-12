@@ -22,6 +22,7 @@ import pygame
 
 from core import runtime_globals
 from utils.asset_utils import image_load, resolve_path
+from utils.data_compat import availability as read_availability
 from utils.module_utils import get_module
 from utils.utils_unlocks import is_unlocked
 
@@ -101,7 +102,7 @@ def _find_friend_monster(module, name):
     if not module or not name:
         return None
     for entry in module.get_all_monsters():
-        if entry.get("name") == name and (entry.get("avaliability") or "") == "Friend":
+        if entry.get("name") == name and read_availability(entry) == "Friend":
             return entry
     return None
 

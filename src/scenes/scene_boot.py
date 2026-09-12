@@ -20,6 +20,7 @@ import threading
 from ui.windows.window_background import WindowBackground
 from core import game_globals, runtime_globals
 import core.constants as constants
+from utils.data_compat import availability as read_availability
 from utils.module_utils import get_module
 from utils.pet_utils import fix_positions_for_current_resolution
 from utils.pygame_utils import blit_with_cache, blit_with_shadow, sprite_load_percent, get_font
@@ -384,7 +385,7 @@ class SceneBoot:
             if pet_data:
                 pet.evolve = pet_data.get("evolve", [])
                 pet.temp_evolve = pet_data.get("temporary-evolution") or []
-                pet.avaliability = pet_data.get("avaliability") or "Normal"
+                pet.availability = read_availability(pet_data)
             if pet.state not in ["dead", "hatch", "nap"]:
                 pet.set_state("idle")
             pet.patch()

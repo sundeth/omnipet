@@ -15,13 +15,26 @@ from ui.ui_constants import YELLOW
 from ui.components.heart import HeartMeter
 from ui.components.dp_bar import DPBar
 from ui.components.gcell_bar import GCellBar
+from ui.components.reliability_meter import ReliabilityMeter
 from ui.components.status_carousel import StatusCarousel
 from ui.components.experience_bar import ExperienceBar
 from ui.components.numeric_meter import NumericMeter
 from ui.components.heart_meter_condition import HeartMeterCondition
 from ui.components.flag_panel import FlagPanel
+from ui.components.digisoul_icon import DigiSoulIcon, normalize_digisoul
 from ui.windows.window_background import WindowBackground
 from utils.scene_utils import change_scene
+
+
+def digisoul_below_flags_available(visible_stats, use_condition_hearts=False):
+    """Whether the right-column row immediately below flags is unused."""
+    if any(stat in visible_stats for stat in (
+            "Level", "Experience", "Trophies", "Vital Values")):
+        return False
+    if (use_condition_hearts
+            and "Mistakes/Condition Hearts" in visible_stats):
+        return False
+    return True
 
 
 class SceneStatus:
@@ -62,10 +75,12 @@ class SceneStatus:
             
             # Flag panel for pet attributes and status
             self.flag_panel = None
+            self.digisoul_icon = None
             
             # Status components
             self.hunger_meter = None
             self.strength_meter = None  # Changed from vitamin_meter
+            self.reliability_meter = None
             self.effort_meter = None
             self.gcell_bar = None
             self.dp_bar = None
@@ -175,6 +190,18 @@ class SceneStatus:
             
             current_y += 15
 
+            # The right-column row immediately below the flags is normally
+            # used by Level/Experience-style stats. When that row is free, a
+            # module can use it for the pet's native DigiSoul family instead.
+            digisoul_size = 22
+            self.digisoul_icon = DigiSoulIcon(
+                flag_x + flag_width - digisoul_size,
+                current_y + 5,
+                digisoul_size,
+            )
+            self.digisoul_icon.visible = False
+            self.ui_manager.add_component(self.digisoul_icon)
+
             # Age label (right column) - will be shown based on module visible_stats
             self.age_label = Label(
                 margin, current_y, "Age: -", is_title=False, color_override=YELLOW
@@ -260,6 +287,17 @@ class SceneStatus:
             self.strength_meter.set_tooltip("Strength - basic need stat, keep at maximum to gain bonuses")
             self.strength_meter.visible = False  # Hidden by default, shown based on visible_stats
             self.ui_manager.add_component(self.strength_meter)
+
+            # Reliability replaces Strength in this slot on devices such as
+            # the iC, which have the former care stat and no protein meter.
+            self.reliability_meter = ReliabilityMeter(
+                margin, heart_y, heart_width, heart_height, constants.RELIABILITY_MIN
+            )
+            self.reliability_meter.set_tooltip(
+                "Reliability - trust between the pet and player, from 0 to 31"
+            )
+            self.reliability_meter.visible = False
+            self.ui_manager.add_component(self.reliability_meter)
             heart_y += 22
 
             self.effort_meter = HeartMeter(margin, heart_y, heart_width, heart_height, "Effort", 0, 4, 4)
@@ -438,15 +476,34 @@ class SceneStatus:
         stage_text = f"Stage: {constants.STAGES[pet.stage]}"
         self.stage_label.set_text(stage_text)
 
+        # Get module configuration before laying out flags: DigiSoul can use
+        # the otherwise-empty right-column row directly below them.
+        module = get_module(pet.module)
+        visible_stats = module.visible_stats if module else []
+
         # Update flag panel (including G-Cell fragment flag if applicable)
         flags = []
         if hasattr(pet, 'gcell_fragment') and pet.gcell_fragment:
             flags.append('GCellFragment')
-        self.flag_panel.set_pet_flags(pet, additional_flags=flags)
 
-        # Get module to check visible stats
-        module = get_module(pet.module)
-        visible_stats = module.visible_stats if module else []
+        shows_digisoul = any(
+            str(stat).casefold() == "digisoul" for stat in visible_stats)
+        digisoul = normalize_digisoul(getattr(pet, 'digisoul', ''))
+        uses_condition_hearts = (
+            getattr(module, 'use_condition_hearts', False) if module else False)
+        show_digisoul_below = bool(
+            shows_digisoul and digisoul
+            and digisoul_below_flags_available(
+                visible_stats, uses_condition_hearts))
+        self.flag_panel.set_pet_flags(
+            pet,
+            additional_flags=flags,
+            digisoul=(digisoul if shows_digisoul and not show_digisoul_below
+                      else None),
+        )
+        self.digisoul_icon.set_digisoul(
+            digisoul if show_digisoul_below else None)
+        self.digisoul_icon.visible = show_digisoul_below
 
         # Update age if it's in visible stats
         if "Age" in visible_stats:
@@ -544,8 +601,16 @@ class SceneStatus:
                 self.strength_meter.factor = 2
                 self.strength_meter.set_max_value(max(1, min(4, stomach // 2)))
             self.strength_meter.visible = True
+            self.reliability_meter.visible = False
+        elif "Reliability" in visible_stats:
+            self.reliability_meter.set_value(
+                getattr(pet, 'reliability', constants.RELIABILITY_MIN)
+            )
+            self.reliability_meter.visible = True
+            self.strength_meter.visible = False
         else:
             self.strength_meter.visible = False
+            self.reliability_meter.visible = False
             
         # Show G-Cell bar if G-Cell is in visible stats and Effort is not
         if "G-Cells" in visible_stats and "Effort" not in visible_stats:
@@ -630,4 +695,3 @@ class SceneStatus:
             'feed_time': getattr(pet, 'hunger_loss', '00:00')
         }
         self.status_carousel.set_pet_data(pet_data)
-        

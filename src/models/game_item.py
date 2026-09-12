@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 @dataclass
 class GameItem:
@@ -12,3 +13,6 @@ class GameItem:
     amount: int
     boost_time: int
     component_item: str
+    # None preserves the module's ordinary meat/protein weight rule. A
+    # numeric value is an item-specific gain declared by item.json.
+    weight_gain: Optional[int] = None

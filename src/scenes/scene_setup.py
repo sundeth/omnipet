@@ -736,6 +736,12 @@ class SceneSetup:
                 game_globals.configuration.screen_height
             )
 
+            # The canvas was created at the pre-test resolution, so it
+            # has to follow: drawing more pixels than it holds clips the
+            # game into the top-left of the screen until the next restart.
+            from utils import display_utils
+            display_utils.ensure_render_surface_matches()
+
         game_globals.setup_graphics = False
         runtime_globals.game_console.log("[SceneSetup] Graphics settings accepted and applied")
         self.complete_setup()

@@ -110,6 +110,25 @@ def _rebuild_render_surface():
     _invalidate_scaled_caches()
 
 
+def ensure_render_surface_matches():
+    """Guarantee the render canvas is the size the scaling constants claim.
+
+    The game draws SCREEN_WIDTH x SCREEN_HEIGHT pixels into
+    ``runtime_globals.render_surface``; when the two disagree it draws into a
+    corner of a canvas that is then upscaled whole, so the game appears in the
+    top-left of the screen over the stale remains of the previous frame.  That
+    is what a save switch did on Android, where the canvas is chosen from the
+    device screen before any save has been read.  Rebuilding is cheap next to
+    getting it wrong, but it drops the scaled sprite caches, so only do it when
+    the sizes really differ.
+    """
+    cfg = game_globals.configuration
+    surface = getattr(runtime_globals, 'render_surface', None)
+    if surface is not None and surface.get_size() == (cfg.screen_width, cfg.screen_height):
+        return
+    _rebuild_render_surface()
+
+
 def _reposition_entities(old_w, old_h):
     """Refresh pet/poop positions baked at the previous render scale."""
     try:
@@ -201,8 +220,20 @@ def apply_render_multiplier(multiplier):
     old_internal = (cfg.screen_width, cfg.screen_height)
     display = pygame.display.get_surface()
     win_w, win_h = display.get_size() if display else (cfg.window_width, cfg.window_height)
-    bw, bh = cfg.compute_base_resolution(win_w, win_h)
-    cfg.base_resolution_width, cfg.base_resolution_height = bw, bh
+    if runtime_globals.IS_ANDROID:
+        # Android's 1x is the half-native canvas main_android picked from the
+        # device screen, not a 240-based one, so the base is kept rather than
+        # recomputed -- deriving it from the window here would make 2x
+        # *smaller* than 1x.  It is also already a large surface, so the
+        # multiplier is held to what the screen's own pixels can justify.
+        bw, bh = cfg.base_resolution_width, cfg.base_resolution_height
+        while cfg.resolution_multiplyer > 1 and (
+                bw * cfg.resolution_multiplyer > win_w
+                or bh * cfg.resolution_multiplyer > win_h):
+            cfg.resolution_multiplyer -= 1
+    else:
+        bw, bh = cfg.compute_base_resolution(win_w, win_h)
+        cfg.base_resolution_width, cfg.base_resolution_height = bw, bh
     cfg.screen_width = bw * cfg.resolution_multiplyer
     cfg.screen_height = bh * cfg.resolution_multiplyer
     _rebuild_render_surface()
@@ -257,6 +288,7 @@ def load_preserving_display():
     runtime_globals.update_resolution_constants(
         game_globals.configuration.screen_width,
         game_globals.configuration.screen_height)
+    ensure_render_surface_matches()
     # Re-place the loaded pets/poops for the carried resolution.
     try:
         from utils.pet_utils import reposition_for_resolution
@@ -271,17 +303,48 @@ def load_preserving_display():
         pass
 
 
+def load_keeping_device_display():
+    """Load the active save at boot, keeping the display the device decided on.
+
+    The display fields live in every save but describe whichever device wrote
+    it, and the window is already open by the time a save is read.  On Android
+    the render resolution comes from the device screen (main_android), so a
+    save written on another machine -- or on this one before that resolution
+    was recorded -- would replace it with one the canvas cannot follow.
+
+    Nothing is repositioned or saved here: the boot scene re-places the pets
+    and poops once the display is final, and it needs
+    ``runtime_globals.save_render_resolution`` (set by the load, deliberately
+    left alone) to know what the save's coordinates were written against.
+    """
+    snap = _snapshot_display_config()
+    game_globals.load()
+    _restore_display_config(snap)
+    runtime_globals.update_resolution_constants(
+        game_globals.configuration.screen_width,
+        game_globals.configuration.screen_height)
+    ensure_render_surface_matches()
+
+
 def reconcile_window_from_config():
     """Re-apply the saved window size once the configuration has been loaded.
 
     The window is created at launch with default config (the per-player save
     isn't loaded yet), so the saved window size is applied here afterwards so a
-    restart honours it.  No-op in fullscreen / on Android, where the window is
-    locked to the screen.
+    restart honours it.  In fullscreen the window is locked to the screen, so
+    only the canvas is reconciled; on Android the device's own resolution wins
+    and the save's is carried across instead (load_keeping_device_display).
     """
     from core import runtime_globals
     cfg = game_globals.configuration
-    if runtime_globals.IS_ANDROID or cfg.fullscreen:
+    if runtime_globals.IS_ANDROID:
+        return
+    if cfg.fullscreen:
+        # The window is the screen and cannot be resized, but the canvas was
+        # created from the pre-load configuration -- make it follow whatever
+        # render resolution the save turned out to carry.  A no-op when the
+        # save was written on this screen, which is the ordinary case.
+        ensure_render_surface_matches()
         return
     # Skip the pet/poop reposition here — the boot scene re-places pets right
     # after the configuration loads.

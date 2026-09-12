@@ -17,6 +17,15 @@ class PetSelector(UIComponent):
         self.pets = []
         self.enabled_pets = []  # List of pet indices that are enabled
         self._selected_pets = []  # List of pet indices that are selected (internal)
+        #: How many may be held at once, or None for no limit.
+        #:
+        #: **The cap belongs here and not only in the label.** The view that
+        #: owns this knew its own `max_pets` and said so in its instructions
+        #: -- "Select 1 pet for DCom battle" -- while the selector happily
+        #: took as many as were clicked, and the confirm sent all of them. A
+        #: DCom or WiFiCom battle is one pet against one toy, and the packets
+        #: only ever describe the first.
+        self.max_selection = None
         
         # Custom theme overrides for specific pets {pet_index: theme_name}
         self.pet_custom_themes = {}
@@ -403,14 +412,7 @@ class PetSelector(UIComponent):
                 return result
             else:
                 # Default behavior: toggle selection (same as keyboard)
-                if cell in self._selected_pets:
-                    self._selected_pets.remove(cell)
-                    runtime_globals.game_sound.play("cancel")
-                else:
-                    self._selected_pets.append(cell)
-                    runtime_globals.game_sound.play("menu")
-                self.needs_redraw = True
-                return True
+                return self._pick(cell)
             
         return False
         
@@ -629,16 +631,38 @@ class PetSelector(UIComponent):
                     return result
                 else:
                     # Default behavior: toggle selection
-                    if self.focused_cell in self._selected_pets:
-                        self._selected_pets.remove(self.focused_cell)
-                        runtime_globals.game_sound.play("cancel")
-                    else:
-                        self._selected_pets.append(self.focused_cell)
-                        runtime_globals.game_sound.play("menu")
-                    self.needs_redraw = True
-                    return True
+                    return self._pick(self.focused_cell)
         return False
         
+    def _pick(self, cell):
+        """Select or deselect *cell*, honouring `max_selection`.
+
+        At a limit of one a new pick **replaces** the old, which is how a
+        single choice behaves everywhere else; above one a pick that would
+        overflow is refused, so nothing the player already chose disappears
+        without them asking.
+        """
+        if cell in self._selected_pets:
+            self._selected_pets.remove(cell)
+            runtime_globals.game_sound.play("cancel")
+            self.needs_redraw = True
+            return True
+
+        limit = self.max_selection
+        if limit is not None and len(self._selected_pets) >= limit:
+            if limit == 1:
+                self._selected_pets = [cell]
+                runtime_globals.game_sound.play("menu")
+                self.needs_redraw = True
+                return True
+            runtime_globals.game_sound.play("cancel")
+            return True
+
+        self._selected_pets.append(cell)
+        runtime_globals.game_sound.play("menu")
+        self.needs_redraw = True
+        return True
+
     def get_selected_pets(self):
         """Get list of currently selected pets"""
         return [self.pets[i] for i in self._selected_pets if i < len(self.pets)]
@@ -656,7 +680,9 @@ class PetSelector(UIComponent):
     def select_all_enabled(self):
         """Select all enabled pets"""
         old_selection = self._selected_pets[:]
-        self._selected_pets = self.enabled_pets[:]
+        self._selected_pets = (self.enabled_pets[:self.max_selection]
+                               if self.max_selection is not None
+                               else self.enabled_pets[:])
         if old_selection != self._selected_pets:
             self.needs_redraw = True
             

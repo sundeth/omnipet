@@ -7,7 +7,7 @@ from core import runtime_globals
 from utils.pygame_utils import blit_with_cache, blit_with_shadow
 
 class Label(UIComponent):
-    def __init__(self, x, y, text, is_title=False, color_override=None, align_right=False, fixed_width=None, tooltip_text=None, scroll_text=False, shadow_mode="disabled", custom_size=None, word_wrap=False, max_width=None, center=False):
+    def __init__(self, x, y, text, is_title=False, color_override=None, align_right=False, fixed_width=None, tooltip_text=None, scroll_text=False, shadow_mode="disabled", custom_size=None, word_wrap=False, max_width=None, center=False, center_lines=False):
         super().__init__(x, y, 1, 1)  # Width/height will be set after rendering
         self.text = text
         self.is_title = is_title
@@ -23,6 +23,10 @@ class Label(UIComponent):
         self.word_wrap = word_wrap
         self.max_width = max_width
         self.center = center  # If True, x position will be treated as center point
+        # Centre each wrapped line inside the wrap width.  Opt-in and off by
+        # default: `center` on its own centres the wrapped BLOCK, whose width
+        # is always max_width, and existing callers are laid out around that.
+        self.center_lines = center_lines
         self._center_adjusted = False  # Track if center adjustment has been applied
         self._center_origin = None  # Remembered centre point (base x) for re-centering
         
@@ -203,11 +207,14 @@ class Label(UIComponent):
             for i, line in enumerate(lines):
                 line_surface = font.render(line, True, color)
                 y_pos = i * line_height
+                x_pos = 0
+                if self.center_lines:
+                    x_pos = (scaled_width - line_surface.get_width()) // 2
                 
                 if self.manager and self.manager.should_render_shadow(self, "text"):
-                    blit_with_shadow(wrapped_surface, line_surface, (0, y_pos))
+                    blit_with_shadow(wrapped_surface, line_surface, (x_pos, y_pos))
                 else:
-                    blit_with_cache(wrapped_surface, line_surface, (0, y_pos))
+                    blit_with_cache(wrapped_surface, line_surface, (x_pos, y_pos))
             
             # Update component screen size
             self.rect.width = scaled_width

@@ -1,0 +1,425 @@
+{
+  "protocol": "PEN20",
+  "description": "The Pendulum 20th's attack table, measured: fifteen battles against a real Pendulum Ver.20th, one per point of the tap meter, with what the Digimon fired read off the screen each round (utilities/DIGIROM/pen20pattern.txt). Charges 0-6 were mapped twice, on two different Digimon after the first died, and matched -- the table belongs to the charge, not to the pet.\n\n**It is not DM20's.** Not one of the fifteen rows matches, which is what CLAUDE.md had assumed. A filmed battle settles it independently: the device's bar ran 10 -> 7 -> 4 -> 0, which is this table's row 10 exactly and not DM20's.\n\nA value is the attack and the attack is its damage: 1 single weak, 2 single strong, 3 double weak, 4 double strong. Critical is a fifth attack that only Tag Battles reach, so it never appears here.\n\nMeters 0, 5, 9 and 14 are pure rows of one attack each, which is a shape DM20's table does not have.",
+  "attacks": {
+    "single_weak": {
+      "value": 1,
+      "damage": 1,
+      "sprite_count": 1,
+      "sprite_type": "atk_alt"
+    },
+    "single_strong": {
+      "value": 2,
+      "damage": 2,
+      "sprite_count": 1,
+      "sprite_type": "atk_main"
+    },
+    "double_weak": {
+      "value": 3,
+      "damage": 3,
+      "sprite_count": 2,
+      "sprite_type": "atk_alt"
+    },
+    "double_strong": {
+      "value": 4,
+      "damage": 4,
+      "sprite_count": 2,
+      "sprite_type": "atk_main"
+    }
+  },
+  "sprite_note": "As on DM20, this line reverses the usual pairing: the WEAK attacks draw atk_alt and the STRONG ones atk_main. A pet with no atk_alt falls back to atk_main throughout and separates the four by count -- 1, 2 and 3 sprites, then a single sprite at double size for 4.",
+  "enemy_note": "Adventure enemies play no minigame, so they read their stage instead. Each row is one of the measured meter rows, picked so total damage rises strictly with the stage.",
+  "rounds": 5,
+  "single": [
+    {
+      "meter": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_weak",
+        "single_weak",
+        "single_weak",
+        "single_weak"
+      ]
+    },
+    {
+      "meter": 1,
+      "pattern": [
+        2,
+        1,
+        1,
+        1,
+        2
+      ],
+      "attacks": [
+        "single_strong",
+        "single_weak",
+        "single_weak",
+        "single_weak",
+        "single_strong"
+      ]
+    },
+    {
+      "meter": 2,
+      "pattern": [
+        1,
+        1,
+        2,
+        1,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_weak",
+        "single_strong",
+        "single_weak",
+        "single_weak"
+      ]
+    },
+    {
+      "meter": 3,
+      "pattern": [
+        1,
+        2,
+        1,
+        2,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_strong",
+        "single_weak",
+        "single_strong",
+        "single_weak"
+      ]
+    },
+    {
+      "meter": 4,
+      "pattern": [
+        3,
+        1,
+        1,
+        2,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "single_weak",
+        "single_weak",
+        "single_strong",
+        "double_weak"
+      ]
+    },
+    {
+      "meter": 5,
+      "pattern": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "attacks": [
+        "single_strong",
+        "single_strong",
+        "single_strong",
+        "single_strong",
+        "single_strong"
+      ]
+    },
+    {
+      "meter": 6,
+      "pattern": [
+        3,
+        2,
+        2,
+        4,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "single_strong",
+        "single_strong",
+        "double_strong",
+        "double_weak"
+      ]
+    },
+    {
+      "meter": 7,
+      "pattern": [
+        2,
+        3,
+        4,
+        3,
+        2
+      ],
+      "attacks": [
+        "single_strong",
+        "double_weak",
+        "double_strong",
+        "double_weak",
+        "single_strong"
+      ]
+    },
+    {
+      "meter": 8,
+      "pattern": [
+        2,
+        2,
+        2,
+        4,
+        2
+      ],
+      "attacks": [
+        "single_strong",
+        "single_strong",
+        "single_strong",
+        "double_strong",
+        "single_strong"
+      ]
+    },
+    {
+      "meter": 9,
+      "pattern": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "double_weak",
+        "double_weak",
+        "double_weak",
+        "double_weak"
+      ]
+    },
+    {
+      "meter": 10,
+      "pattern": [
+        3,
+        3,
+        4,
+        2,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "double_weak",
+        "double_strong",
+        "single_strong",
+        "double_weak"
+      ]
+    },
+    {
+      "meter": 11,
+      "pattern": [
+        4,
+        3,
+        2,
+        4,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "double_weak",
+        "single_strong",
+        "double_strong",
+        "double_strong"
+      ]
+    },
+    {
+      "meter": 12,
+      "pattern": [
+        3,
+        4,
+        4,
+        2,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "double_strong",
+        "double_strong",
+        "single_strong",
+        "double_weak"
+      ]
+    },
+    {
+      "meter": 13,
+      "pattern": [
+        4,
+        3,
+        4,
+        4,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "double_weak",
+        "double_strong",
+        "double_strong",
+        "double_strong"
+      ]
+    },
+    {
+      "meter": 14,
+      "pattern": [
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "double_strong",
+        "double_strong",
+        "double_strong",
+        "double_strong"
+      ]
+    }
+  ],
+  "enemy_patterns": [
+    {
+      "stage": 1,
+      "name": "Baby I",
+      "from_meter": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_weak",
+        "single_weak",
+        "single_weak",
+        "single_weak"
+      ]
+    },
+    {
+      "stage": 2,
+      "name": "Baby II",
+      "from_meter": 2,
+      "pattern": [
+        1,
+        1,
+        2,
+        1,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_weak",
+        "single_strong",
+        "single_weak",
+        "single_weak"
+      ]
+    },
+    {
+      "stage": 3,
+      "name": "Child",
+      "from_meter": 3,
+      "pattern": [
+        1,
+        2,
+        1,
+        2,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_strong",
+        "single_weak",
+        "single_strong",
+        "single_weak"
+      ]
+    },
+    {
+      "stage": 4,
+      "name": "Adult",
+      "from_meter": 5,
+      "pattern": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "attacks": [
+        "single_strong",
+        "single_strong",
+        "single_strong",
+        "single_strong",
+        "single_strong"
+      ]
+    },
+    {
+      "stage": 5,
+      "name": "Perfect",
+      "from_meter": 6,
+      "pattern": [
+        3,
+        2,
+        2,
+        4,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "single_strong",
+        "single_strong",
+        "double_strong",
+        "double_weak"
+      ]
+    },
+    {
+      "stage": 6,
+      "name": "Ultimate",
+      "from_meter": 9,
+      "pattern": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "double_weak",
+        "double_weak",
+        "double_weak",
+        "double_weak"
+      ]
+    },
+    {
+      "stage": 7,
+      "name": "Super Ultimate",
+      "from_meter": 14,
+      "pattern": [
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "double_strong",
+        "double_strong",
+        "double_strong",
+        "double_strong"
+      ]
+    }
+  ]
+}

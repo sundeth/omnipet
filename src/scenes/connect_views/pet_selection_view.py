@@ -10,15 +10,15 @@ from ui.components.label import Label
 from ui.components.pet_selector import PetSelector
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals
-from utils.pet_utils import get_battle_pvp_targets
+from utils.pet_utils import get_battle_pvp_targets, get_wificom_battle_targets
 
 
 class PetSelectionView:
     """Pet selection view for WiFi/Discord battles."""
     
     def __init__(self, ui_manager: UIManager, change_view_callback, 
-                 is_online_mode=False, is_dcom_mode=False, max_pets=4,
-                 return_view="main_menu", discord_module=None):
+                 is_online_mode=False, is_dcom_mode=False, is_wificom_mode=False,
+                 max_pets=4, return_view="main_menu", discord_module=None):
         """Initialize the pet selection view.
         
         Args:
@@ -26,6 +26,8 @@ class PetSelectionView:
             change_view_callback: Callback to change to another view
             is_online_mode: True if this is an online (Discord) battle
             is_dcom_mode: True if this is a DCom battle
+            is_wificom_mode: True if this is a WiFiCom battle.  Narrows the
+                list further than DCom does -- see get_wificom_battle_targets.
             max_pets: Maximum number of pets that can be selected
             return_view: View to return to on back (e.g., "main_menu" or submenu hint)
         """
@@ -33,7 +35,9 @@ class PetSelectionView:
         self.change_view = change_view_callback
         self.is_online_mode = is_online_mode
         self.is_dcom_mode = is_dcom_mode
-        self.max_pets = 1 if is_dcom_mode else max_pets
+        self.is_wificom_mode = is_wificom_mode
+        # Both device modes battle one pet against one toy.
+        self.max_pets = 1 if (is_dcom_mode or is_wificom_mode) else max_pets
         self.return_view = return_view
         
         # Selected pets
@@ -69,12 +73,27 @@ class PetSelectionView:
         selector_y = 40
         
         self.pet_selector = PetSelector(selector_x, selector_y, selector_width, selector_height)
-        self.pet_selector.set_pets(get_battle_pvp_targets())
+        # A WiFiCom battle announces the pet to a real device, so the pet
+        # needs a protocol to speak and a roster entry to claim.
+        eligible = (get_wificom_battle_targets() if self.is_wificom_mode
+                    else get_battle_pvp_targets())
+        self.pet_selector.set_pets(eligible)
+        # The cap the view already knew about, told to the thing that
+        # enforces it. Both device modes battle one pet against one toy, and
+        # the packets only ever describe the first.
+        self.pet_selector.max_selection = self.max_pets
         self.pet_selector.set_interactive(True)
         self.ui_manager.add_component(self.pet_selector)
         
         # Instructions
-        if self.is_dcom_mode:
+        if self.is_wificom_mode:
+            if eligible:
+                instruction_text = "Select 1 pet for WiFiCom battle"
+            else:
+                # Nothing qualifies, and the reason is not obvious from an
+                # empty selector.
+                instruction_text = "No pet can use WiFiCom yet"
+        elif self.is_dcom_mode:
             instruction_text = "Select 1 pet for DCom battle"
         else:
             instruction_text = f"Select up to {self.max_pets} pets. Press START when ready."
@@ -124,8 +143,13 @@ class PetSelectionView:
         runtime_globals.game_sound.play("menu")
         runtime_globals.game_console.log(f"[PetSelectionView] Selected {len(self.selected_pets)} pets")
         
-        if self.is_dcom_mode:
-            self.change_view("dcom", selected_pets=self.selected_pets)
+        if self.is_wificom_mode:
+            self.change_view("wificom", selected_pets=self.selected_pets)
+        elif self.is_dcom_mode:
+            # Via the temporary-evolution chooser: the DigiXros form is what
+            # fights, so it has to be picked before the packets are built.
+            # The view skips itself when no pet has a form available.
+            self.change_view("xros", selected_pets=self.selected_pets)
         elif self.is_online_mode:
             self.change_view("discord", selected_pets=self.selected_pets, is_online_mode=True)
         else:
@@ -134,8 +158,8 @@ class PetSelectionView:
     def _on_back(self):
         """Back button clicked."""
         runtime_globals.game_sound.play("cancel")
-        # Return to local_battle submenu for DCom/WiFi, or main menu for Discord
-        if self.is_dcom_mode or not self.is_online_mode:
+        # Return to local_battle submenu for DCom/WiFi/WiFiCom, or main menu for Discord
+        if self.is_dcom_mode or self.is_wificom_mode or not self.is_online_mode:
             # For local battles (DCom/WiFi), return to main_menu with local_battle submenu shown
             self.change_view("main_menu", initial_submenu="local_battle")
         else:

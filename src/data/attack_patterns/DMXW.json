@@ -1,0 +1,46 @@
+{
+  "protocol": "DMXW",
+  "description": "Digimon Color Xros Wars battle data. Like the Pendulum Color, this line fights a real battle rather than exchanging a verdict -- three hit points, a charge played before the fight, super hits counted and a Megahit at the top -- but its charge is Excite training's bar rather than Count Match Color.",
+  "hp": 3,
+  "turns": 5,
+  "damage": {
+    "normal": 1,
+    "super": 2,
+    "note": "Two values, as on the Pendulum Color. The device draws a Megahit for the all-super row, which is a picture rather than a third damage value."
+  },
+  "wire": {
+    "magic": "47445758 (GDWX)",
+    "operation_offset": "0x20",
+    "note": "The Colour layout exactly -- eight big-endian 16-bit words, the last a sum of the other seven -- with the DMC's four operations shifted up by 0x20, the same step PENC takes at 0x10.",
+    "measured": "A complete exchange, the device opening and us answering:\n  r 47445758002000000004001E00009EDE   op 0x20  ver 0 idx 4 power 30\n  s 47445758002100000004002800009EE9   op 0x21  ver 0 idx 4 power 40\n  r 474457580022001800000000000E9EE4   op 0x22  shot 24, w4 0, w5 0, w6 14\n  s 47445758002300000000000000009EBF   op 0x23  all zeros\nEvery field checked against what was watched: our word 3 of 0 drew the device's sprite 0 (our 1), our word 4 of 0 said the initiator lost and it did, our word 5 of 0 said the initiator missed every round so we hit every round and three hits were counted, and our word 6 of 0 threw three shots of 1 damage, which is band 0's row.",
+    "not_yet_known": "Whether a sixth round is ever played. Every pool row stores six values and Omnipet plays five, which is what training shows too -- but PENC's hit mask has twice been seen with bit 5 set, a sixth round. The ROM makes that a live question rather than a stray bit.",
+    "no_codes_exist": "utilities/DIGIROM carries no GDWX codes at all, and the Pico Terminal's analyzer knows this magic only as a DMC at device version 5 plus an index fold for 86-89. Both describe the compatibility view, not this protocol.",
+    "result_lives_in_0x23": "The RESPONDER's packet, as on the Pendulum Color and NOT as on the Digital Monster Color. The exchange above is the proof and it is the same accident that first exposed it on PENC: answering with a zeroed 0x23 told the device it had lost and missed everything, and that is exactly what happened. The device's own 0x22 carries word 4 = 0 and word 5 = 0, so the initiator reports nothing -- again as on PENC.",
+    "word_3_is_the_attack_sprite": "Ours went out as 0 and the device drew its sprite 0, which is Omnipet's sprite 1 -- the usual +1, since Omnipet reserves 0 for 'no sprite'. The device sent 24, its own numbering."
+  },
+  "attack_patterns": {
+    "key": "the attacker's STAGE, its EFFORT tier, and the Excite band",
+    "note": "Read straight out of the firmware rather than inferred: DMXW_SELECT.json holds 15 rows of four pool indexes -- five stages by three effort tiers -- and COLOUR_ROWS.json the rows they name. utilities/claude/extract_colour_patterns.py produces both and refuses to write unless the cross-checks pass.",
+    "effort_tiers": "0-9 trainings, 10-19, and 20",
+    "what_this_replaced": "**A per-Digimon table, which was wrong.** Three sets of rows had been measured and filed against the Digimon that threw them -- Shoutmon, Shoutmon X2 and 'every other Xros form' -- because two forms at the same stage threw different rows and the stage alone could not explain it. The missing axis was EFFORT: X2 was at tier 1 and the others at tier 2. The firmware reproduces all three readings exactly and a Digimon never comes into it.",
+    "reproduces_what_was_watched": "Shoutmon X2 threw stage 4 tier 1 (12111 12121 12122 22222); every other Xros form tried threw stage 4 tier 2 (11211 21121 21222 22222); a maximum-effort Shoutmon threw stage 3 tier 2 (12111 12121 11222 22222). The first Shoutmon reading spans two tiers, which is what crossing a training threshold between recordings looks like.",
+    "padding_was_wrong_too": "A row read in battle stops early, and padding it by repeating the last value was a guess the table now overrules: the partial 2112 continues as 21121 (pool row 7), not the 21122 repetition gave. Nothing is padded any more -- a row comes from the pool whole.",
+    "stages_1_to_5": "The selection table covers five stages, indexed by the monster record's w1, which is stage - 1. A stage above 5 clamps to the last rather than falling off the end."
+  },
+  "enemy_patterns": {
+    "key": "the enemy's stage -> a fixed tier and band",
+    "note": "A quest enemy plays no charge and has no training, so it reads its stage and takes a real row of the device's own table. **Which tier and band is ours**; nothing on a device says what an enemy brings. The middle band at tier 1 is the same 'not the weakest, not the strongest' choice every other line's enemy makes.",
+    "tier": 1,
+    "band": "middle"
+  },
+  "firmware": {
+    "dump": "utilities/DMXW/dmxw.bin, 8 MB",
+    "monster_records": "86 records of 48 bytes at 0x26574, confirmed against the module: for the 20 version 1 Digimon that match by index, the stage, the power and the attack sprite all agree, 0 disagreements.",
+    "fields": "As 16-bit little-endian words from the record's start: w1 = stage - 1 (the Colour line's own numbering), w3 = power with 0xFFFF for none, w11 = index, w21 = attack sprite - 1. w2, w4, w8, w9 and w10 are set only on Digimon that are RAISED and 0xFFFF on the Xros forms, so they are evolution requirements.",
+    "digixros_recipes": "21 entries of 14 bytes at 0x2431A: result index, a level, then up to five ingredient indexes with 0xFFFF for empty. It decodes cleanly -- X2 is Shoutmon plus Ballistamon, X4 takes five ingredients -- and the last entry runs into garbage, so the real count is 20 rather than 21. **Its level does not group the Xros forms the way the attack rows do**: X2 shares level 1 with X3 and X4, and X2 is precisely the one whose rows differ. So the level is not the pattern key.",
+    "word_12_marks_a_xros_form": "Set on all twelve fused Digimon and 0xFFFF on all fourteen raised ones, which is what `xros_indexes` above is built from.",
+    "attack_pattern_pool": "0x240B8: 15 rows of six 16-bit little-endian values, every one 1 or 2, weakest first with row 14 the Megahit. **Shared by the whole Colour family** -- see COLOUR_ROWS.json.",
+    "selection_table": "0x2427A: 15 rows of four 16-bit pool indexes, five stages by three effort tiers. A 16th row would read [2, 11, 0, 3], which gets weaker as the charge improves, and that is what fixes the count at 15.",
+    "earlier_search_missed_it": "An earlier sweep looked for the rows as bytes, 16-bit words, five-bit masks and two-bit-per-round packings, single and grouped, and found nothing -- because it searched for FIVE rounds and the table stores **six**. The two addresses came from a Codex analysis (utilities/codex/dmxw/DMXW_ANALYSIS.md); everything here is re-derived from the ROM by the extractor, so the data has its own provenance."
+  }
+}

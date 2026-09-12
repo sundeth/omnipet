@@ -260,6 +260,9 @@ class SceneMainGame:
             self.cleaning_x = runtime_globals.SCREEN_WIDTH
             runtime_globals.game_sound.play("happy")
             for pet in game_globals.pet_list:
+                # The iC Reliability penalty is per pair accumulated since
+                # the last flush, so cleaning begins a new episode.
+                pet.unflushed_poops = 0
                 module = get_module(pet.module)
                 if module.care_flush_disturbance_sleep:
                     pet.check_disturbed_sleep()

@@ -48,6 +48,45 @@ def get_battle_pvp_targets():
     """
     return [pet for pet in get_selected_pets() if pet.can_battle_pvp()]
 
+def can_battle_wificom(pet):
+    """Whether *pet* can be put on the wire as a WiFiCom.
+
+    Everything a PvP battle needs, plus what a real device expects to read
+    off the packets:
+
+    * the pet's module must declare a ``battle_protocol`` -- that protocol is
+      the one used, so a module without one has no wire to speak;
+    * the pet needs a ``device_version``, which is the hardware revision the
+      protocols key off (not the gameplay ``version``);
+    * the pet needs an ``index``, its id in the device's own roster.  Index 0
+      is the "outsider" sentinel a compatibility battle sends, so a pet that
+      has one cannot present itself as native to the line it is announcing.
+    """
+    if not pet.can_battle_pvp():
+        return False
+
+    from utils.module_utils import get_module
+    module = get_module(getattr(pet, 'module', ''))
+    if not module or not getattr(module, 'battle_protocol', ''):
+        return False
+
+    # **0 is a real device_version on the Colour line**, whose releases are
+    # numbered from zero -- a Digital Monster Color Ver.1 announces 0. So the
+    # test is whether the pet has one at all, not whether it is truthy; the
+    # falsy reading kept every Ver.1 pet off the WiFiCom.
+    if getattr(pet, 'device_version', None) is None:
+        return False
+    if not getattr(pet, 'index', 0):
+        return False
+
+    return True
+
+def get_wificom_battle_targets():
+    """
+    Returns pets eligible for a WiFiCom battle.
+    """
+    return [pet for pet in get_selected_pets() if can_battle_wificom(pet)]
+
 def pets_need_care():
     """
     Returns True if any pet needs care (callsign is active).
@@ -62,6 +101,54 @@ def all_pets_hatched():
     Returns True if all pets are hatched (stage > 0).
     """
     return all(pet.stage > 0 for pet in game_globals.pet_list)
+
+def refresh_pet_evolutions(pets=None) -> int:
+    """Re-read every pet's evolution routes from its module.
+
+    A pet copies its ``evolve`` and ``temporary-evolution`` lists out of the
+    module when it is created, so a pet already in a save keeps whatever those
+    lists said at the time — a module that later fixes a broken route cannot
+    reach it. Running this at boot lets a player repair such a pet by updating
+    the module and restarting.
+
+    Deliberately narrow: ONLY the two evolution lists are replaced. Stats, care
+    values and progress are the player's and are never touched from here.
+
+    Returns how many pets were updated.
+    """
+    from core import runtime_globals
+    from utils.module_utils import get_module
+
+    if pets is None:
+        pets = list(game_globals.pet_list)
+    updated = 0
+    for pet in pets:
+        try:
+            module = get_module(pet.module)
+        except Exception:
+            continue  # module no longer installed — leave the pet as it is
+        if module is None:
+            continue
+        try:
+            data = module.get_monster(pet.name, pet.version)
+        except Exception:
+            data = None
+        if not data:
+            runtime_globals.game_console.log(
+                f"[Pets] {pet.name} v{pet.version} not found in {pet.module}; evolutions left alone")
+            continue
+
+        from utils.jogress_utils import normalize_evolutions
+        new_evolve = normalize_evolutions(data.get("evolve") or [])
+        new_temp = data.get("temporary-evolution") or []
+        if new_evolve != getattr(pet, "evolve", None) or new_temp != getattr(pet, "temp_evolve", None):
+            pet.evolve = new_evolve
+            pet.temp_evolve = new_temp
+            updated += 1
+            runtime_globals.game_console.log(
+                f"[Pets] Refreshed evolutions for {pet.name} v{pet.version} ({pet.module})")
+    return updated
+
 
 def refresh_pet_sizes():
     """Resize the pets after the party has changed.

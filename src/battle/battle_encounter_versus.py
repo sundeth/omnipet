@@ -5,6 +5,8 @@ from battle.battle_encounter import BattleEncounter, GameBattle
 from battle.sim.battle_simulator import BattleSimulator, BattleProtocol
 from models.animation import PetFrame
 from battle.sim.models import Digimon
+from battle.sim.dcom_battle_simulator import pet_to_digimon
+from battle.sim import protocol_constants
 import core.constants as constants
 from utils.scene_utils import change_scene
 from core import game_globals, runtime_globals
@@ -17,7 +19,7 @@ from ui.components.component import UIComponent
 from battle.combat_constants import ANY_OTHER_DEVICE
 
 class BattleEncounterVersus(BattleEncounter):
-    def __init__(self, pet1, pet2, protocol: BattleProtocol):
+    def __init__(self, pet1, pet2, protocol: BattleProtocol, battle_format: str = None):
         """
         Initializes the Versus encounter for PvP battles.
         """
@@ -33,25 +35,28 @@ class BattleEncounterVersus(BattleEncounter):
         module = "DMC"
 
         super().__init__(module, 0, 0, pvp_mode=True)
+        # The device line this battle is fought on. The base class sets it to
+        # None, so it has to be filled in after super().__init__ -- without it
+        # a versus battle had no format at all, and the presentation fell back
+        # to whichever module the encounter happened to be built with.
+        self.battle_format = battle_format or self.BATTLE_FORMATS.get(protocol)
         self.enemy_entry_counter = 0
 
         # Override the BattlePlayer with the two pets for versus mode
         self.battle_player = GameBattle([pet1], [pet2], 0, 0, self.module)
-        fixed_hp = None
-        if protocol in [BattleProtocol.DM_BS]:
-            fixed_hp = 5  # Original DM uses 5 HP
-            self.turn_limit = 4  # 4 turns (3 normal + 1 finishing)
-        elif protocol in [BattleProtocol.DMC_BS]:
-            fixed_hp = 5  # DMC uses 5 HP (Winner 1112, Loser 1111)
-            self.turn_limit = 4  # 4 turns
-        elif protocol in [BattleProtocol.DM20_BS]:
-            fixed_hp = 5  # DM20 uses 5 HP
-            self.turn_limit = 5  # 5 turns
-        elif protocol in [BattleProtocol.PEN20_BS]:
-            fixed_hp = 5  # PEN20 uses 5 HP
-            self.turn_limit = 5  # 5 turns
-        elif protocol in [BattleProtocol.DMX_BS]:
-            self.turn_limit = 5
+        # The HP a versus battle is fought with belongs to the wire, exactly
+        # as it does over a cable, and so does the round count. This was a
+        # chain of literals keyed on the protocol, and PENOG had simply never
+        # been added to it -- so the simulation fought at its fixed 3 HP
+        # while the pets on screen kept their own, which is the DMX's
+        # variable-HP behaviour. Read from the format now, where the values
+        # already lived and where nothing new can be forgotten.
+        #
+        # FIXED_HP of None means the wire has no fixed HP (DMX, PENZ) and the
+        # pets keep theirs.
+        limits = protocol_constants.get_constants(self.battle_format)
+        fixed_hp = getattr(limits, 'FIXED_HP', None) if limits else None
+        self.turn_limit = getattr(limits, 'TURNS', 5) if limits else 5
 
         if fixed_hp is not None:
             self.battle_player.team1_hp[0] = fixed_hp
@@ -82,7 +87,7 @@ class BattleEncounterVersus(BattleEncounter):
         self.setup_alert_components()
 
         # Initialize the BattleSimulator with the given protocol
-        self.simulator = BattleSimulator(protocol)
+        self.simulator = BattleSimulator(protocol, battle_format=battle_format)
 
         # Configure the global HPBar for versus mode and initialize totals
         self.hp_bar.set_mode('versus')
@@ -175,79 +180,52 @@ class BattleEncounterVersus(BattleEncounter):
         self.right_label.get_font = lambda font_type, custom_size=None: UIComponent.get_font(self.right_label, font_type, custom_size=_versus_label_size)
         self.ui_manager.add_component(self.right_label)
 
-    def _wrap_byte_value(self, value, max_value=255):
-        """
-        Wrap a value to fit in the specified range, but ensure it never becomes 0.
-        If value exceeds max_value, wrap around (e.g., for max=255: 260->5, 256->1).
-        
-        Args:
-            value: Integer value that might exceed the range
-            max_value: Maximum allowed value (default 255 for byte)
-            
-        Returns:
-            Value wrapped to 1-max_value range
-        """
-        if value <= 0:
-            return 1
-        if value > max_value:
-            # Wrap around: (max+1)->1, (max+2)->2, etc.
-            wrapped = value % (max_value + 1)
-            return wrapped if wrapped != 0 else 1
-        return value
+    #: The device line each versus protocol builds its packets for. The
+    #: packets are the real ones, so the payload has to be built the same way
+    #: a DCom battle builds it.
+    BATTLE_FORMATS = {
+        BattleProtocol.DMOG_BS: 'DMOG',
+        BattleProtocol.PENOG_BS: 'PENOG',
+        BattleProtocol.DM20_BS: 'DM20',
+        BattleProtocol.PEN20_BS: 'PEN20',
+        BattleProtocol.DMX_BS: 'DMX',
+        BattleProtocol.DMC_BS: 'DMC',
+    }
+
+    #: Versus has no charge minigame; both sides get the same charge so the
+    #: fight is decided by the pets rather than by a bar nobody played.
+    #:
+    #: A format may name its own, because a flat number does not mean the
+    #: same thing on every scale: 3 is a full meter where the wire carries
+    #: the banded 0-3 quality, and a tenth of one where it carries the raw
+    #: shake count. `VERSUS_CHARGE` is that per-format value and is meant to
+    #: be a fixed, deliberate choice rather than a maximum -- PENOG sets 10
+    #: of its 40. Anything not naming one keeps the flat 3 it has always had.
+    FIXED_CHARGE = 3
+
+    @property
+    def fixed_charge(self):
+        constants = protocol_constants.get_constants(
+            self.BATTLE_FORMATS.get(self.protocol, 'DM20'))
+        return getattr(constants, 'VERSUS_CHARGE', self.FIXED_CHARGE)
 
     def simulate_combat(self):
-        strength_bonus = 3
+        """Run the protocol simulation over both pets' packets."""
+        battle_format = self.BATTLE_FORMATS.get(self.protocol, 'DM20')
 
-        # Attribute mapping
-        attribute_mapping = {
-            "Va": 0,  # Vaccine
-            "Da": 1,  # Data
-            "Vi": 2,  # Virus
-            "Free": 3  # Free
-        }
-
-        # Create Digimon instance for the attacker
-        # Note: DM20 protocol uses 6-bit shot values (0-63), so we cap them at 63
-        attacker = Digimon(
-            name=self.battle_player.team1[0].name,
-            order=0,
-            traited=1 if self.battle_player.team1[0].traited else 0,
-            egg_shake=1 if self.battle_player.team1[0].shook else 0,
-            index=0,
-            hp=self.battle_player.team1_hp[0],
-            attribute=attribute_mapping.get(self.battle_player.team1[0].attribute, 3),  # Default to Free if not found
-            power=self.battle_player.team1[0].get_power(),
-            handicap=0,
-            buff=0,
-            mini_game=strength_bonus,
-            level=self.battle_player.team1[0].level,
-            stage=self.battle_player.team1[0].stage,
-            sick=1 if self.battle_player.team1[0].sick else 0,
-            shot1=self._wrap_byte_value(self.battle_player.team1[0].atk_main, max_value=63),
-            shot2=self._wrap_byte_value(self.battle_player.team1[0].atk_alt, max_value=63),
-            tag_meter=2
-        )
-
-        # Create Digimon instance for the defender
-        defender = Digimon(
-            name=self.battle_player.team2[0].name,
-            order=1,
-            traited=1 if self.battle_player.team2[0].traited else 0,
-            egg_shake=1 if self.battle_player.team2[0].shook else 0,
-            index=1,
-            hp=self.battle_player.team2_hp[0],
-            attribute=attribute_mapping.get(self.battle_player.team2[0].attribute, 3),  # Default to Free if not found
-            power=self.battle_player.team2[0].get_power(),
-            handicap=0,
-            buff=0,
-            mini_game=strength_bonus,
-            level=self.battle_player.team2[0].level,
-            stage=self.battle_player.team2[0].stage,
-            sick=1 if self.battle_player.team2[0].sick else 0,
-            shot1=self._wrap_byte_value(self.battle_player.team2[0].atk_main, max_value=63),
-            shot2=self._wrap_byte_value(self.battle_player.team2[0].atk_alt, max_value=63),
-            tag_meter=2
-        )
+        # Built by the same conversion a DCom battle uses, so a versus packet
+        # says the same thing about a pet as a packet sent to a real device.
+        # Building it here by hand had drifted: the attack sprite ids went out
+        # 1-based (the protocols are 0-based, and Omnipet reserves 0 for "no
+        # sprite"), a pet with no second attack sent sprite 1 rather than
+        # none, `index` carried the pet's position in the team instead of its
+        # real index, and power was never clamped to the 8 bits the field has.
+        charge = self.fixed_charge
+        attacker = pet_to_digimon(self.battle_player.team1[0], battle_format,
+                                  charge)
+        defender = pet_to_digimon(self.battle_player.team2[0], battle_format,
+                                  charge)
+        defender.order = 1
 
         # Run simulation
         self.global_battle_log = self.simulator.simulate(attacker, defender)

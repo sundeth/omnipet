@@ -585,14 +585,22 @@ class HPBar(UIComponent):
 
         return surface
 
+    def is_animating(self) -> bool:
+        """Is the bar still draining, or flashing the hit that drained it?
+
+        The battle screen waits on this before handing over to the result, so
+        the blow that ends a fight is watched rather than glimpsed.
+        """
+        now = pygame.time.get_ticks()
+        draining = ((self._anim_damage_left and self._anim_start_left)
+                    or (self._anim_damage_right and self._anim_start_right))
+        flashing = (self._flash_left_until > now
+                    or self._flash_right_until > now)
+        return bool(draining or flashing)
+
     def update(self):
         """Update per-frame; ensure animated HPBar keeps re-rendering while active."""
-        now = pygame.time.get_ticks()
-        anim_active = False
-        if (self._anim_damage_left and self._anim_start_left) or (self._anim_damage_right and self._anim_start_right):
-            anim_active = True
-        if self._flash_left_until > now or self._flash_right_until > now:
-            anim_active = True
+        anim_active = self.is_animating()
 
         # if any animation/flash is active, force redraw every frame
         if anim_active:

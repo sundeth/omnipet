@@ -8,6 +8,8 @@ Progress Mode player have their own independent progress.
 import json
 import os
 
+from utils.data_compat import availability as read_availability
+
 # Legacy path (used only as a migration fallback)
 _LEGACY_DIGIDEX_PATH = "save/digidex.json"
 
@@ -111,10 +113,10 @@ def get_module_known_count(module) -> int:
     friends = None
     count = 0
     for monster in module.get_all_monsters():
-        avaliability = monster.get("avaliability") or "Normal"
-        if avaliability == "Unobtainable":
+        availability = read_availability(monster)
+        if availability == "Unobtainable":
             continue
-        if avaliability == "Friend":
+        if availability == "Friend":
             if friends is None:
                 from utils.xros_utils import get_module_friends
                 friends = get_module_friends(module.name)

@@ -161,6 +161,75 @@ class Training:
             combined.blit(sprite, (int(ox - min_ox), int(oy - min_oy)))
         return combined
 
+    #: Where the sprites of a multi-shot attack sit relative to each other.
+    def _shot_offsets(self, count):
+        s = runtime_globals.UI_SCALE
+        return [(0, 0), (-int(20 * s), -int(10 * s)),
+                (-int(40 * s), int(10 * s))][:count]
+
+    def line_pattern(self, pet, charge, protocol):
+        """The five attacks *pet* really throws at this charge, on *protocol*.
+
+        A training minigame belongs to a device line -- the Xai bar is the
+        DMX's and Count Match Z the Pendulum Z's -- so it plays that line's
+        table, read for this pet's own stage and level. The four hardcoded
+        rows this replaces were the same for every Digimon in the party, so a
+        Baby II and an Omnimon trained identically, and neither threw
+        anything its device would have thrown.
+        """
+        from battle.sim.battle_utils import get_attack_pattern
+        try:
+            level = int(getattr(pet, "level", 1) or 1)
+        except (TypeError, ValueError):
+            level = 1
+        return get_attack_pattern(level, charge, protocol,
+                                  stage=getattr(pet, "stage", None))
+
+    def ladder_sprite(self, pet, value):
+        """The sprite a pattern value draws, and whether it is the critical.
+
+        The five attack types are two ladders crossed: **a weak shot draws
+        `atk_main` and a strong one `atk_alt`**, and each goes out once or
+        twice -- 1 weak single, 2 strong single, 3 weak double, 4 strong
+        double, 5 the critical. That is the same ladder
+        `BattleEncounter._ladder_shot` draws, and the copy this replaces had
+        2 and 3 the other way round, so a strong single drew as a weak double
+        and a weak double as a strong single. It went unseen because training
+        threw made-up rows that no table had to agree with.
+
+        A pet with no `atk_alt` cannot tell the strong shots apart by sprite,
+        so it tells them apart by count -- the JSON's own fallbacks, which do
+        collide 2 with 3.
+
+        `atk_alt_2` indexes the **crit** bank and not the ordinary one, so an
+        id with nothing behind it drops to the ladder's own answer at double
+        size rather than naming an unrelated ordinary shot.
+        """
+        main = self.get_attack_sprite(pet, getattr(pet, "atk_main", 0))
+        if not main:
+            return None, False
+        alt_id = getattr(pet, "atk_alt", 0) or 0
+        alt = self.get_attack_sprite(pet, alt_id) if alt_id > 0 else None
+        alt2_id = getattr(pet, "atk_alt_2", 0) or 0
+
+        if value >= 5:
+            crit = (self.get_crit_attack_sprite(pet, alt2_id)
+                    if alt2_id > 0 else None)
+            if crit:
+                return crit, True
+            return pygame.transform.scale2x(alt or main), True
+        if value == 4:
+            if alt:
+                return self._combine_sprites(alt, self._shot_offsets(2)), False
+            return self._combine_sprites(main, self._shot_offsets(3)), False
+        if value == 3:
+            return self._combine_sprites(main, self._shot_offsets(2)), False
+        if value == 2:
+            if alt:
+                return alt, False
+            return self._combine_sprites(main, self._shot_offsets(2)), False
+        return main, False
+
     def _has_special_frame(self, pet):
         """Check if a pet has a valid SPECIAL frame (PetFrame.SPECIAL = 15)."""
         sprite_list = runtime_globals.pet_sprites.get(pet)

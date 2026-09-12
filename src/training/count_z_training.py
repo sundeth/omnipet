@@ -9,7 +9,7 @@ from core import runtime_globals
 from models.animation import PetFrame
 from training.training import Training
 from ui.ui_manager import UIManager
-from ui.minigames.count_match_z import CountMatchZ
+from ui.minigames.count_match_z import CountMatchZ, score_arrows
 from battle import combat_constants
 import core.constants as constants
 from utils.pygame_utils import blit_with_cache
@@ -25,7 +25,9 @@ class CountMatchZTraining(Training):
         super().__init__(ui_manager)
         self.press_counter = 0
         self.start_time = 0
-        self.super_hits = {}
+        #: The 0-3 each pet trains at. Not super hits -- this game has
+        #: none; the arrow counter is the whole score.
+        self.charge_result = {}
         self.result_text = None
         self.flash_frame = 0
         self.anim_counter = -1
@@ -86,16 +88,29 @@ class CountMatchZTraining(Training):
         if not pets:
             return
 
-        # Get result from minigame (0=BAD, 1=GOOD, 2=GREAT, 3=EXCELLENT/MEGAHIT)
-        result = self.count_match_z.calculate_result()
-        
+        # Straight off the arrow counter: the player was asked for a number
+        # of arrows and either filled it or did not, and the distance from
+        # that number is the whole result. One ready screen means one target
+        # and so one result, shared by everyone training -- the device raises
+        # one Digimon and shows one row of arrows.
+        result = score_arrows(self.count_match_z.get_press_counter(),
+                              self.count_match_z.pet)
+
         # Store strength result for result screen
         self.strength_result = result
 
         for p in pets:
-            self.super_hits[p] = result
+            self.charge_result[p] = result
 
     def prepare_attack(self):
+        """Prepare each pet's five attacks, from that pet's own table row.
+
+        Count Match Z is the Pendulum Z's charge, so this plays the **PENZ**
+        table -- its own file, sharing not a row with the DMX's -- read for
+        each Digimon's stage and level. The four hardcoded rows this replaces
+        were the DMX training screen's, shared by every pet in the party and
+        belonging to neither device.
+        """
         self.attack_phase = 0
         self.attack_waves = [[] for _ in range(5)]
         pets = self.pets
@@ -104,79 +119,38 @@ class CountMatchZTraining(Training):
         spacing = min(available_height // total_pets, runtime_globals.OPTION_ICON_SIZE + (20 * runtime_globals.UI_SCALE))
         start_y = (runtime_globals.SCREEN_HEIGHT - (spacing * total_pets)) // 2
 
-        # Per-wave maximum kind across all pets — drives crit-slide detection.
+        # Per-wave maximum kind across all pets -- drives crit-slide detection.
         wave_kinds_max = [0] * 5
 
         s = runtime_globals.UI_SCALE
         for i, pet in enumerate(pets):
             main_sprite = self.get_attack_sprite(pet, pet.atk_main)
-            alt_sprite = self.get_attack_sprite(pet, pet.atk_alt) if getattr(pet, "atk_alt", 0) > 0 else main_sprite
-            alt2_sprite = self.get_attack_sprite(pet, pet.atk_alt_2) if getattr(pet, "atk_alt_2", 0) > 0 else None
             if not main_sprite:
                 continue
-            count = self.super_hits.get(pet, 0)
-            # Use same patterns as DMX/excite training
-            if count == 3:
-                pattern = [5, 4, 5, 4, 4]  # megahit
-            elif count == 2:
-                pattern = [3, 4, 3, 3, 2]  # great
-            elif count == 1:
-                pattern = [1, 2, 1, 2, 2]  # good
-            else:
-                pattern = [1, 1, 1, 1, 1]  # fail
-
-            # Activate special attack animation if pattern includes strike 5
+            # The minigame's own 0-3 is the charge every row is keyed on.
+            pattern = self.line_pattern(pet, self.charge_result.get(pet, 0), "PENZ")
+            for j, kind in enumerate(pattern[:5]):
+                wave_kinds_max[j] = max(wave_kinds_max[j], kind)
             if 5 in pattern and self._is_critical_attack(pet, 5):
                 self.special_attack_active = True
 
-            # Merge this pet's pattern into the per-wave maximum (a wave is "crit" if any pet crits in it)
-            for j, kind in enumerate(pattern):
-                wave_kinds_max[j] = max(wave_kinds_max[j], kind)
-
             pet_y = start_y + i * spacing + runtime_globals.OPTION_ICON_SIZE // 2 - main_sprite.get_height() // 2
             slot_center_y = pet_y + main_sprite.get_height() // 2
-            for j, kind in enumerate(pattern):
-                x = runtime_globals.SCREEN_WIDTH - runtime_globals.OPTION_ICON_SIZE - (20 * s)
-                y = pet_y
-                if kind == 5:
-                    # Critical attack: prefer a dedicated atk_crit sprite (no scale2x needed).
-                    # Fall back to alt2/alt/main sprite scaled 2x when no crit sprite exists.
-                    # Start crit sprites at the visibility threshold (not past it) so they are
-                    # hidden during the slide-in and only appear when move_attacks() fires them.
-                    x_crit = runtime_globals.SCREEN_WIDTH - int(90 * s)
-                    atk_alt2 = getattr(pet, "atk_alt_2", 0)
-                    crit_sprite = self.get_crit_attack_sprite(pet, atk_alt2) if atk_alt2 and atk_alt2 > 0 else None
-                    if crit_sprite:
-                        self.attack_waves[j].append((crit_sprite, x_crit, slot_center_y - crit_sprite.get_height() // 2))
-                    else:
-                        sprite = alt2_sprite or alt_sprite or main_sprite
-                        scaled = pygame.transform.scale2x(sprite)
-                        self.attack_waves[j].append((scaled, x_crit, slot_center_y - scaled.get_height() // 2))
-                elif kind == 4:
-                    # 2 atk_alt sprites, fallback 3 atk_main sprites
-                    if getattr(pet, "atk_alt", 0) > 0:
-                        offsets = [(0, 0), (-int(20 * s), -int(10 * s))]
-                        combined = self._combine_sprites(alt_sprite, offsets)
-                    else:
-                        offsets = [(0, 0), (-int(20 * s), -int(10 * s)), (-int(40 * s), int(10 * s))]
-                        combined = self._combine_sprites(main_sprite, offsets)
-                    self.attack_waves[j].append((combined, x, y))
-                elif kind == 3:
-                    # 1 atk_alt sprite, fallback 3 atk_main sprites
-                    if getattr(pet, "atk_alt", 0) > 0:
-                        self.attack_waves[j].append((alt_sprite, x, y))
-                    else:
-                        offsets = [(0, 0), (-int(20 * s), -int(10 * s)), (-int(40 * s), int(10 * s))]
-                        combined = self._combine_sprites(main_sprite, offsets)
-                        self.attack_waves[j].append((combined, x, y))
-                elif kind == 2:
-                    # 2 atk_main sprites
-                    offsets = [(0, 0), (-int(20 * s), -int(10 * s))]
-                    combined = self._combine_sprites(main_sprite, offsets)
-                    self.attack_waves[j].append((combined, x, y))
+            for j, kind in enumerate(pattern[:5]):
+                sprite, is_crit = self.ladder_sprite(pet, kind)
+                if sprite is None:
+                    continue
+                if is_crit:
+                    # Crit sprites start at the visibility threshold rather
+                    # than past it, so they stay hidden through the slide-in
+                    # and only appear when move_attacks() fires them.
+                    x = runtime_globals.SCREEN_WIDTH - int(90 * s)
+                    y = slot_center_y - sprite.get_height() // 2
                 else:
-                    # 1 atk_main sprite
-                    self.attack_waves[j].append((main_sprite, x, y))
+                    x = runtime_globals.SCREEN_WIDTH - runtime_globals.OPTION_ICON_SIZE - (20 * s)
+                    y = pet_y
+                self.attack_waves[j].append((sprite, x, y))
+
         # Set attack_wave_kinds to the per-wave maximum kind across all pets
         self.attack_wave_kinds = wave_kinds_max
         self.frame_counter = 0
@@ -232,7 +206,7 @@ class CountMatchZTraining(Training):
     def draw_result(self, screen):
         pets = self.pets
         pet = pets[0]
-        hits = self.super_hits.get(pet, 0)
+        hits = self.charge_result.get(pet, 0)
         
         # Completely disable count_match_z during result phase to prevent interference
         if self.count_match_z:
@@ -263,11 +237,11 @@ class CountMatchZTraining(Training):
 
     def check_victory(self):
         """Apply training results and return to game."""
-        return self.super_hits.get(self.pets[0], 0) > 0
+        return self.charge_result.get(self.pets[0], 0) > 0
 
     def check_and_award_trophies(self):
         """Award trophy if strength result reaches maximum (3)"""
-        if self.super_hits.get(self.pets[0], 0) == 3:
+        if self.charge_result.get(self.pets[0], 0) == 3:
             for pet in self.pets:
                 pet.trophies += 1
             runtime_globals.game_console.log(f"[TROPHY] Count Match Z training perfect score achieved! Trophy awarded.")
@@ -280,4 +254,4 @@ class CountMatchZTraining(Training):
           1 (good) -> 1
           0 (bad/fail) -> 0
         """
-        return self.super_hits.get(self.pets[0], 0)
+        return self.charge_result.get(self.pets[0], 0)

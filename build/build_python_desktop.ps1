@@ -153,6 +153,16 @@ if ($LASTEXITCODE -ge 8) {
     exit 1
 }
 
+# Copy wificom directory
+Write-Status "Copying wificom directory..."
+$wificomSource = (Resolve-Path "..\src\wificom").Path
+$wificomDestination = "$TEMP_DIR\$BUILD_NAME\src\wificom"
+robocopy $wificomSource $wificomDestination /E /XD "__pycache__" /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+if ($LASTEXITCODE -ge 8) {
+    Write-Error-Message "Failed to copy wificom directory"
+    exit 1
+}
+
 # Copy vpet.py and src __init__.py
 Write-Status "Copying vpet.py..."
 New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\src" -Force | Out-Null

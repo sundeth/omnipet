@@ -1,10 +1,28 @@
 """
-DComView - DCom device connection and battle
-Handles DCom device discovery, protocol selection, minigames, and communication
+DComView - battling a real Digimon toy through a DCom adapter.
+
+The view drives the flow and owns nothing about the protocols:
+
+    scan -> connect -> pick the device line -> charge minigame -> exchange
+    -> hand the result to the PvP battle scene
+
+``DComBattleSimulator`` owns every wire decision (which packets, how many to
+expect, how to parse them) and ``MinigameSession`` owns the charge.  Both are
+shared with the rest of the battle code; this view used to carry its own
+copies of both, and they went stale -- the Count Match minigames were built
+without the AnimatedSprite they draw through, and PENZ generated six packets
+then looked for ten when building the battle log.
+
+The exchange itself is polled a frame at a time rather than run through
+``simulate_with_device``: that one blocks for its whole timeout, which would
+freeze the game for a minute while the player presses the button on the toy.
+
+The adapter reports why every failed read failed, and those codes are the
+only account of a connection that never gets going, so they are counted and
+shown to the player instead of a bare countdown.
 """
 import time
-import threading
-import traceback
+import re
 
 from ui.ui_manager import UIManager
 from ui.components.title_scene import TitleScene
@@ -12,20 +30,43 @@ from ui.components.button import Button
 from ui.components.background import Background
 from ui.components.label import Label
 from ui.components.menu import Menu
+from ui.minigames.minigame_session import MinigameSession
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals
 from battle.dcom.dcom_controller import DComController
-from battle.dcom.dcom_protocol import ProtocolType
-from battle.sim.models import Digimon
+from battle.dcom.dcom_protocol import EMPTY_PACKET, describe_status
+from battle.sim import protocol_constants
+from battle.sim.exchange import PacketExchange
+from battle.sim.dcom_battle_simulator import (DComBattleSimulator, is_oem_pet,
+                                              pet_to_digimon)
 
+#: How long to wait for the player to start the battle on the real toy.
+COMM_TIMEOUT_SECONDS = 60.0
+
+#: Half way through the wait, with nothing received, the other turn is tried:
+#: some toys open the exchange and some wait to be spoken to, and which is
+#: which is exactly what we cannot see from here.
+TURN_SWAP_SECONDS = COMM_TIMEOUT_SECONDS / 2
+
+#: An adapter that drops off the bus mid-wait -- a nudged USB connector, most
+#: likely, since the player is standing at the toy and not at the keyboard --
+#: is worth recovering from quietly. The bus is re-checked this often; the
+#: port is only reopened once the adapter is enumerated again, because
+#: opening one costs two and a half seconds of frozen game while the Arduino
+#: takes its reset.
+RECONNECT_INTERVAL_SECONDS = 2.0
+
+#: How long to keep trying before giving up and saying so. Long enough to
+#: cover pushing a connector back in, short enough not to retry all session.
+RECONNECT_WINDOW_SECONDS = 30.0
 
 class DComView:
     """DCom view for device battles."""
-    
+
     def __init__(self, ui_manager: UIManager, change_view_callback,
                  selected_pets=None, is_dcom_mode=True, discord_module=None):
         """Initialize the DCom view.
-        
+
         Args:
             ui_manager: The UI manager instance
             change_view_callback: Callback to change to another view
@@ -35,37 +76,54 @@ class DComView:
         self.ui_manager = ui_manager
         self.change_view = change_view_callback
         self.selected_pets = selected_pets or []
-        
-        # DCom state
-        self.phase = "device_list"  # device_list, protocol_select, minigame, minigame_dmx, minigame_penz, communicating, result
+
+        # device_list, protocol_select, minigame, communicating
+        self.phase = "device_list"
         self.dcom_controller = None
-        self.dcom_protocol = None
-        self.dcom_battle_format = None
         self.dcom_selected_device = None
-        
+        self.simulator = None
+        self.battle_format = None
+        self.format_menu = []
+
         # Device discovery
         self.discovered_devices = []
-        
-        # Minigame state
-        self.dcom_minigame = None
-        self.dcom_minigame_result = 0
-        self.dcom_minigame_start_time = 0
-        self.dcom_minigame_duration = 2500
-        
-        # DMX minigame state
-        self.dcom_xai_phase = 0
-        self.dcom_xai_roll = None
-        self.dcom_xai_bar = None
-        self.dcom_xai_number = 1
-        self._dcom_xai_pending_stop = False
-        
+
+        # Charge minigame
+        self.minigame = None
+        self.minigame_result = 0
+        self._minigame_settle_at = 0
+
         # Communication state
-        self.dcom_communicating = False
-        self.dcom_comm_start_time = 0
-        self.dcom_response_packets = []
-        self.dcom_battle_result = None
-        self.dcom_battle_sprite = None
-        
+        self.communicating = False
+        self.comm_start_time = 0
+        self.response_packets = []
+        self.player_packets = []
+        # What the adapter has been reporting: {code: (count, explanation)}.
+        # Its status codes are the only diagnosis a connection that never gets
+        # going ever produces, so they are counted rather than discarded.
+        self.status_counts = {}
+        self.empty_reads = 0
+        self.turn = None
+        self._turn_swapped = False
+        self._opened_at = 0.0
+        #: Who attacks first in the battle we hand to the scene. The toy
+        #: normally opens the exchange, so it normally strikes first; if we
+        #: open it, we do.
+        self.enemy_first = True
+        self._version_retried = False
+        self._device_answered = False
+        self._last_status_log = 0
+        self._last_comm_log = 0
+        # Set while the adapter is missing from the bus (see _on_port_lost).
+        self._port_lost = False
+        #: Set when the adapter answers as a Python prompt rather than as
+        #: firmware -- see _looks_like_repl.
+        self._repl_seen = False
+        self._port_lost_at = 0
+        self._next_reconnect_at = 0
+        self._last_reconnect_log = 0
+        self._reconnect_attempts = 0
+
         # UI Components
         self.background = None
         self.title_scene = None
@@ -73,794 +131,822 @@ class DComView:
         self.device_menu = None
         self.protocol_menu = None
         self.cancel_button = None
-        
+        self.start_button = None
+
+        # Set when the view cannot run at all. The hand-off waits for the
+        # first update(): changing views from inside a constructor leaves the
+        # scene overwriting the new view with this one.
+        self.abort = False
+
         self._setup_ui()
-        
+
         # Pets should be selected before reaching this view
         if not self.selected_pets:
             runtime_globals.game_console.log("[DComView] ERROR: No pets selected!")
-            self.change_view("main_menu", initial_submenu="local_battle")
+            self.abort = True
             return
-        
+
         # Start device scan
         self._start_dcom_scan()
-    
+
+    @property
+    def pet(self):
+        """The pet fighting this battle (a temporary evolution, if one was chosen)."""
+        return self.selected_pets[0] if self.selected_pets else None
+
     def _setup_ui(self):
         """Setup the UI components."""
         ui_width = ui_height = BASE_RESOLUTION
-        
+
         # Background
         self.background = Background(ui_width, ui_height)
         self.background.set_regions([(0, ui_height, "black")])
         self.ui_manager.add_component(self.background)
-        
+
         # Title
         self.title_scene = TitleScene(0, 9, "CONNECT")
         self.ui_manager.add_component(self.title_scene)
-        
+
         # Status label with word wrapping
-        self.status_label = Label(10, 60, "Scanning for DCom...", is_title=False, word_wrap=True, max_width=220)
+        self.status_label = Label(10, 60, "Scanning for DCom...", is_title=False,
+                                  word_wrap=True, max_width=220)
         self.ui_manager.add_component(self.status_label)
-        
+
         # Cancel button
         cancel_width = 100
         cancel_height = 35
         cancel_x = (BASE_RESOLUTION - cancel_width) // 2
         cancel_y = 195
-        
+
+        # **A button rather than a keypress.** Waiting for START or A means
+        # the player has to know the keypress exists, and gets no sign that
+        # it landed -- which is what made a working first press look inert
+        # and invited a second. A button says it is there, takes the focus so
+        # it can be pressed without hunting, and changes to LOADING the
+        # moment it is used.
+        self.start_button = Button(
+            cancel_x, cancel_y - cancel_height - 10, cancel_width,
+            cancel_height, "START", self._on_start
+        )
+        self.start_button.visible = False
+        self.ui_manager.add_component(self.start_button)
+
         self.cancel_button = Button(
             cancel_x, cancel_y, cancel_width, cancel_height,
             "CANCEL", self._on_cancel
         )
         self.ui_manager.add_component(self.cancel_button)
-        
+
         runtime_globals.game_console.log("[DComView] UI setup complete")
-    
+
+    # ------------------------------------------------------------------
+    # Device discovery and connection
+    # ------------------------------------------------------------------
+
     def _start_dcom_scan(self):
         """Scan for DCom devices."""
         runtime_globals.game_console.log("[DComView] Starting DCom device scan...")
-        
+
         try:
-            import serial.tools.list_ports
+            import serial.tools.list_ports  # noqa: F401
         except ImportError:
             runtime_globals.game_console.log("[DComView] pyserial not installed")
             self.status_label.set_text("ERROR: pyserial not installed!")
             return
-        
+
         try:
             if not self.dcom_controller:
                 self.dcom_controller = DComController()
-                self.dcom_protocol = ProtocolType.V_PET
-            
+
             # List all ports
             all_ports = DComController.list_all_ports()
             runtime_globals.game_console.log(f"[DComView] Found {len(all_ports)} serial ports")
-            
+
             # Find DCom devices
             self.discovered_devices = self.dcom_controller.find_dcom_devices()
-            
+
             if not self.discovered_devices:
                 if all_ports:
                     self.status_label.set_text(f"No DCom found ({len(all_ports)} ports)")
                 else:
                     self.status_label.set_text("No serial ports found!")
                 return
-            
+
             runtime_globals.game_console.log(f"[DComView] Found {len(self.discovered_devices)} DCom device(s)")
             self.status_label.set_text(f"Found {len(self.discovered_devices)} device(s)")
-            
+
             # Auto-select if only one device
             if len(self.discovered_devices) == 1:
                 self._on_device_select(0)
                 return
-            
+
             # Show device selection menu
             device_options = [desc for port, desc in self.discovered_devices]
             self.device_menu = Menu(width=180, height=140)
-            self.device_menu.open(device_options, self._on_device_select)
+            self.device_menu.open(device_options, self._on_device_select,
+                                  on_cancel=self._on_cancel)
             self.ui_manager.add_component(self.device_menu)
             self.ui_manager.set_active_menu(self.device_menu)
-            
+
         except Exception as e:
             runtime_globals.game_console.log(f"[DComView] Scan error: {e}")
             self.status_label.set_text(f"Scan error: {str(e)}")
-    
+
     def _on_device_select(self, index):
         """Device selected from menu."""
         if index >= len(self.discovered_devices):
             return
-        
+
         port, desc = self.discovered_devices[index]
         runtime_globals.game_console.log(f"[DComView] Selected: {desc} on {port}")
         self.dcom_selected_device = (port, desc)
-        
-        # Close menu
-        if self.device_menu:
-            self.device_menu.close()
-            if self.ui_manager.active_menu == self.device_menu:
-                self.ui_manager.active_menu = None
-        
+
+        self._close_menu('device_menu')
+
         # Connect to device
         try:
             if not self.dcom_controller:
                 self.dcom_controller = DComController()
-            
+
             if not self.dcom_controller.connect(port):
                 raise Exception("Failed to connect")
-            
+
             runtime_globals.game_console.log("[DComView] Connected!")
             self._show_protocol_selection()
-            
+
         except Exception as e:
             runtime_globals.game_console.log(f"[DComView] Connection error: {e}")
             self.status_label.set_text(f"Error: {str(e)}")
             if self.dcom_controller:
                 self.dcom_controller.disconnect()
-    
+
+    def _close_menu(self, attribute):
+        """Close and forget one of the view's menus."""
+        menu = getattr(self, attribute, None)
+        if not menu:
+            return
+        menu.close()
+        if self.ui_manager.active_menu is menu:
+            self.ui_manager.active_menu = None
+        self.ui_manager.remove_component(menu)
+        setattr(self, attribute, None)
+
+    # ------------------------------------------------------------------
+    # Device line selection
+    # ------------------------------------------------------------------
+
     def _show_protocol_selection(self):
-        """Show protocol selection menu."""
+        """Show the device-line menu."""
         runtime_globals.game_console.log("[DComView] Showing protocol selection...")
         self.phase = "protocol_select"
-        
-        protocol_options = [
-            "DM (Original)",
-            "DM20 (20th Anniversary)",
-            "PEN20 (Pendulum 20th)",
-            "DMX (Digimon X)",
-            "PenZ (Pendulum Z)",
-            "DMC (Color)",
-            "Cancel"
-        ]
-        
+        self.status_label.set_text("Which device?")
+
+        # Shared with the versus protocol menu, so the two always offer the
+        # same device lines.
+        self.format_menu = protocol_constants.menu_entries()
+        options = [label for _, label in self.format_menu]
+        options.append("Cancel")
+
         self.protocol_menu = Menu(width=200, height=140)
-        self.protocol_menu.open(protocol_options, self._on_protocol_select)
+        self.protocol_menu.open(options, self._on_protocol_select,
+                                on_cancel=self._on_cancel)
         self.ui_manager.add_component(self.protocol_menu)
         self.ui_manager.set_active_menu(self.protocol_menu)
-        
-        # Pre-select the protocol that matches the selected pet's module, if any
-        protocol_format_map = {'DM': 0, 'DM20': 1, 'PEN20': 2, 'DMX': 3, 'PENZ': 4, 'DMC': 5}
-        if self.selected_pets:
-            try:
-                from utils.module_utils import get_module
-                pet = self.selected_pets[0]
-                pet_module = get_module(getattr(pet, 'module', ''))
-                if pet_module:
-                    protocol = getattr(pet_module, 'battle_protocol', '')
-                    if protocol in protocol_format_map:
-                        self.protocol_menu.selected_index = protocol_format_map[protocol]
-            except Exception:
-                pass
-    
-    def _on_protocol_select(self, index):
-        """Protocol selected from menu."""
-        if self.protocol_menu:
-            self.protocol_menu.close()
-            if self.ui_manager.active_menu == self.protocol_menu:
-                self.ui_manager.active_menu = None
-        
-        if index == 0:  # DM (Original)
-            self.dcom_protocol = ProtocolType.V_PET
-            self.dcom_battle_format = 'DM'
-            self._start_communication_no_minigame()  # DM doesn't use minigame
-        elif index == 1:  # DM20
-            self.dcom_protocol = ProtocolType.V_PET
-            self.dcom_battle_format = 'DM20'
-            self._start_minigame()  # Dummy Charge
-        elif index == 2:  # PEN20
-            self.dcom_protocol = ProtocolType.PEN_X
-            self.dcom_battle_format = 'PEN20'
-            self._start_minigame_pen20()  # Count Match Classic
-        elif index == 3:  # DMX
-            self.dcom_protocol = ProtocolType.COLOR
-            self.dcom_battle_format = 'DMX'
-            self._start_minigame_dmx()  # Xai Roll + Xai Bar
-        elif index == 4:  # PenZ
-            self.dcom_protocol = ProtocolType.V_PET
-            self.dcom_battle_format = 'PENZ'
-            self._start_minigame_penz()  # Count Match Z
-        elif index == 5:  # DMC
-            self.dcom_protocol = ProtocolType.COLOR
-            self.dcom_battle_format = 'DMC'
-            self._start_communication_no_minigame()  # DMC doesn't use minigame
-        else:  # Cancel
-            self._on_cancel()
-    
-    def _start_minigame(self):
-        """Start the DM20 minigame (Dummy Charge)."""
-        from ui.minigames.dummy_charge import DummyCharge
-        import pygame
-        
-        runtime_globals.game_console.log("[DComView] Starting Dummy minigame...")
-        self.phase = "minigame"
-        self.dcom_minigame = DummyCharge(self.ui_manager, theme="RED_DARK_VARIANT")
-        self.dcom_minigame_start_time = pygame.time.get_ticks()
-        self.dcom_minigame_duration = 2500
-        
-        # Hide cancel button during minigame
-        self.cancel_button.visible = False
 
-    def _start_minigame_pen20(self):
-        """Start the PEN20 minigame (Count Match Classic)."""
-        from ui.minigames.count_match_classic import CountMatchClassic
-        import pygame
-        
-        runtime_globals.game_console.log("[DComView] Starting PEN20 Count Match Classic minigame...")
-        self.phase = "minigame_pen20"
-        self.dcom_minigame = CountMatchClassic(self.ui_manager, theme="RED_DARK_VARIANT")
-        self.dcom_minigame_start_time = pygame.time.get_ticks()
-        self.dcom_minigame_duration = 2500  # Same duration as Dummy Charge
-        
-        # Hide cancel button during minigame
-        self.cancel_button.visible = False
-    
-    def _start_minigame_dmx(self):
-        """Start the DMX minigame (XAI Roll + Bar)."""
-        from ui.minigames.xai_roll import XaiRoll
-        
-        runtime_globals.game_console.log("[DComView] Starting DMX XAI minigame...")
-        self.phase = "minigame_dmx"
-        self.dcom_xai_phase = 1
-        self.dcom_xai_number = 1
-        self.dcom_minigame_result = 1
-        
-        self.dcom_xai_roll = XaiRoll(
-            x=runtime_globals.SCREEN_WIDTH // 2 - int(100 * runtime_globals.UI_SCALE) // 2,
-            y=runtime_globals.SCREEN_HEIGHT // 2 - int(100 * runtime_globals.UI_SCALE) // 2,
-            width=int(100 * runtime_globals.UI_SCALE),
-            height=int(100 * runtime_globals.UI_SCALE),
-            xai_number=1
-        )
-        self.dcom_xai_roll.roll()
-        
-        # Hide cancel button during minigame
-        self.cancel_button.visible = False
-    
-    def _start_minigame_penz(self):
-        """Start the PENZ minigame (Count Match Z)."""
-        from ui.minigames.count_match_z import CountMatchZ
-        from ui.components.animated_sprite import AnimatedSprite
-        import pygame
-        
-        runtime_globals.game_console.log("[DComView] Starting PENZ Count Match Z minigame...")
-        self.phase = "minigame_penz"
-        
-        # CountMatchZ needs an animated sprite for ready/count display
-        animated_sprite = AnimatedSprite(self.ui_manager)
-        pet = self.selected_pets[0] if self.selected_pets else None
-        self.dcom_minigame = CountMatchZ(self.ui_manager, pet, animated_sprite)
-        self.dcom_minigame_start_time = pygame.time.get_ticks()
-        self.dcom_minigame_duration = 3000  # 3 seconds for count match
-        
-        # Hide cancel button during minigame
-        self.cancel_button.visible = False
-    
-    def _start_communication(self):
-        """Start DCom communication phase - V2 listen-and-reply mode."""
-        from ui.components.animated_sprite import AnimatedSprite
-        import os
-        
-        runtime_globals.game_console.log("[DComView] ===== STARTING DCOM COMMUNICATION PHASE =====")
-        self.phase = "communicating"
-        self.dcom_communicating = True
-        self.dcom_comm_start_time = time.time()
-        self.dcom_comm_timeout = 60.0  # 60 second timeout for V2 mode
-        self.dcom_response_packets = []
-        self.dcom_status_count = 0
-        self.dcom_last_status_time = time.time()
-        self._last_comm_log_time = time.time()
-        
-        self.status_label.set_text("Waiting for device...")
-        self.cancel_button.visible = True
-        
-        # Generate battle packets with minigame result
-        pet = self.selected_pets[0] if self.selected_pets else None
-        if not pet:
-            runtime_globals.game_console.log("[DComView] ERROR: No pet selected!")
-            self.status_label.set_text("Error: No pet selected")
-            return
-        
-        digimon = self._convert_pet_to_digimon(pet)
-        digimon.mini_game = self.dcom_minigame_result
-        
-        # Generate packets based on format
-        if self.dcom_battle_format == 'DMX':
-            from battle.sim.battle_simulator import DMXDevice
-            device = DMXDevice(digimon)
-            packets = [
-                device.generate_packet1(),
-                device.generate_packet2(),
-                device.generate_packet3(),
-                device.generate_packet4(),
-                device.generate_packet5(),
-            ]
-            # Generate packet 6 with optimistic hits pattern
-            device.hits = 0x1F  # All 5 rounds hit
-            cou3 = 0
-            eol = 0xE
-            hits = 0x1F
-            checksum = 0
-            for pkt in packets:
-                for byte in pkt:
-                    checksum += (byte >> 4) & 0x0F
-                    checksum += byte & 0x0F
-            byte1_without_check = (cou3 << 1) | (hits >> 4)
-            byte2 = ((hits & 0x0F) << 4) | eol
-            checksum += byte1_without_check & 0x0F
-            checksum += (byte2 >> 4) & 0x0F
-            checksum += byte2 & 0x0F
-            check = (8 - (checksum % 16)) % 16
-            byte1 = (check << 4) | byte1_without_check
-            import struct
-            packets.append(struct.pack(">BB", byte1, byte2))
-            self.dcom_player_packets = packets
-        elif self.dcom_battle_format == 'PENZ':
-            # PENZ uses same packet format as DMX (6 packets), only minigame differs
-            from battle.sim.battle_simulator import DMXDevice
-            device = DMXDevice(digimon)
-            packets = [
-                device.generate_packet1(),
-                device.generate_packet2(),
-                device.generate_packet3(),
-                device.generate_packet4(),
-                device.generate_packet5(),
-            ]
-            # Generate packet 6 with optimistic hits pattern
-            device.hits = 0x1F  # All 5 rounds hit
-            cou3 = 0
-            eol = 0xE
-            hits = 0x1F
-            checksum = 0
-            for pkt in packets:
-                for byte in pkt:
-                    checksum += (byte >> 4) & 0x0F
-                    checksum += byte & 0x0F
-            byte1_without_check = (cou3 << 1) | (hits >> 4)
-            byte2 = ((hits & 0x0F) << 4) | eol
-            checksum += byte1_without_check & 0x0F
-            checksum += (byte2 >> 4) & 0x0F
-            checksum += byte2 & 0x0F
-            check = (8 - (checksum % 16)) % 16
-            byte1 = (check << 4) | byte1_without_check
-            import struct
-            packets.append(struct.pack(">BB", byte1, byte2))
-            self.dcom_player_packets = packets
-        else:
-            # DM20 or PEN20 - use DM20Device (10 packets)
-            from battle.sim.battle_simulator import DM20Device
-            device = DM20Device(digimon)
-            self.dcom_player_packets = device.generate_all_packets_for_dcom(order=0)
-        
-        runtime_globals.game_console.log(f"[DComView] Generated {len(self.dcom_player_packets)} packets with minigame result: {self.dcom_minigame_result}")
-        
-        # Load battle animation sprite
-        battle_sprite_path = "assets/ui/animations/play_battle.png"
-        if os.path.exists(battle_sprite_path):
-            runtime_globals.game_console.log("[DComView] Loading battle animation sprite...")
-            try:
-                self.dcom_battle_sprite = AnimatedSprite(
-                    battle_sprite_path,
-                    frame_width=240,
-                    frame_height=240,
-                    frame_count=13,
-                    fps=10,
-                    loop=True
-                )
-                self.dcom_battle_sprite.play()
-                runtime_globals.game_console.log("[DComView] Battle animation loaded successfully")
-            except Exception as e:
-                runtime_globals.game_console.log(f"[DComView] Warning: Failed to load battle sprite: {e}")
-                self.dcom_battle_sprite = None
-        else:
-            runtime_globals.game_console.log(f"[DComView] Warning: Battle sprite not found at {battle_sprite_path}")
-            self.dcom_battle_sprite = None
-        
-        # Send V2 command (listen-and-reply mode)
-        self._send_dcom_packets()
-        runtime_globals.game_console.log("[DComView] Communication phase started - 60 second window active")
-        runtime_globals.game_console.log("[DComView] IMPORTANT: Start the battle on your DM20 device NOW!")
-    
-    def _start_communication_no_minigame(self):
-        """Start DCom communication for protocols without minigame (DM/DMC) - direct to communication."""
-        from ui.components.animated_sprite import AnimatedSprite
-        import os
-        
-        format_name = self.dcom_battle_format or "DM"
-        runtime_globals.game_console.log(f"[DComView] ===== STARTING {format_name} COMMUNICATION PHASE (NO MINIGAME) =====")
-        self.phase = "communicating"
-        self.dcom_communicating = True
-        self.dcom_comm_start_time = time.time()
-        self.dcom_comm_timeout = 60.0
-        self.dcom_response_packets = []
-        self.dcom_status_count = 0
-        self.dcom_last_status_time = time.time()
-        self._last_comm_log_time = time.time()
-        
-        self.status_label.set_text("Waiting for device...")
-        self.cancel_button.visible = True
-        
-        # Generate battle packets - DM and DMC protocols don't use minigame
-        pet = self.selected_pets[0] if self.selected_pets else None
-        if not pet:
-            runtime_globals.game_console.log("[DComView] ERROR: No pet selected!")
-            self.status_label.set_text("Error: No pet selected")
-            return
-        
-        digimon = self._convert_pet_to_digimon(pet)
-        digimon.mini_game = 0  # No minigame, boost comes from pills (default 0)
-        
-        # Generate packets based on format
-        if self.dcom_battle_format == 'DM':
-            # DM original uses 2 packets
-            from battle.sim.battle_simulator import DMDevice
-            device = DMDevice(digimon)
-            self.dcom_player_packets = device.generate_all_packets()
-        elif self.dcom_battle_format == 'DMC':
-            # DMC uses DMXDevice format (6 packets) with COLOR protocol
-            from battle.sim.battle_simulator import DMXDevice
-            device = DMXDevice(digimon)
-            packets = [
-                device.generate_packet1(),
-                device.generate_packet2(),
-                device.generate_packet3(),
-                device.generate_packet4(),
-                device.generate_packet5(),
-            ]
-            # Generate packet 6 with optimistic hits pattern
-            device.hits = 0x1F  # All 5 rounds hit
-            cou3 = 0
-            eol = 0xE
-            hits = 0x1F
-            checksum = 0
-            for pkt in packets:
-                for byte in pkt:
-                    checksum += (byte >> 4) & 0x0F
-                    checksum += byte & 0x0F
-            byte1_without_check = (cou3 << 1) | (hits >> 4)
-            byte2 = ((hits & 0x0F) << 4) | eol
-            checksum += byte1_without_check & 0x0F
-            checksum += (byte2 >> 4) & 0x0F
-            checksum += byte2 & 0x0F
-            check = (8 - (checksum % 16)) % 16
-            byte1 = (check << 4) | byte1_without_check
-            import struct
-            packets.append(struct.pack(">BB", byte1, byte2))
-            self.dcom_player_packets = packets
-        
-        runtime_globals.game_console.log(f"[DComView] Generated {len(self.dcom_player_packets)} {format_name} packets (no minigame)")
-        
-        # Load battle animation sprite
-        battle_sprite_path = "assets/ui/animations/play_battle.png"
-        if os.path.exists(battle_sprite_path):
-            runtime_globals.game_console.log("[DComView] Loading battle animation sprite...")
-            try:
-                self.dcom_battle_sprite = AnimatedSprite(
-                    battle_sprite_path,
-                    frame_width=240,
-                    frame_height=240,
-                    frame_count=13,
-                    fps=10,
-                    loop=True
-                )
-                self.dcom_battle_sprite.play()
-            except Exception as e:
-                runtime_globals.game_console.log(f"[DComView] Warning: Failed to load battle sprite: {e}")
-                self.dcom_battle_sprite = None
-        else:
-            self.dcom_battle_sprite = None
-        
-        # Send V2 command (listen-and-reply mode)
-        self._send_dcom_packets()
-        runtime_globals.game_console.log(f"[DComView] {format_name} communication started - waiting for device")
-    
-    def _send_dcom_packets(self):
-        """Send V2 command with player packets to DCom device (listen-and-reply mode)."""
-        runtime_globals.game_console.log("[DComView] ===== SENDING PACKETS TO DCOM =====")
-        runtime_globals.game_console.log(f"[DComView] Sending {len(self.dcom_player_packets)} packets:")
-        for i, packet in enumerate(self.dcom_player_packets, 1):
-            hex_str = " ".join(f"{b:02X}" for b in packet)
-            runtime_globals.game_console.log(f"[DComView]   Packet {i}: {hex_str}")
+        # Start on the line the selected pet's own module belongs to.
+        pet_module = self._pet_battle_protocol()
+        if pet_module in protocol_constants.BATTLE_FORMATS:
+            self.protocol_menu.selected_index = protocol_constants.BATTLE_FORMATS.index(pet_module)
+
+    def _pet_battle_protocol(self):
+        """The battle_protocol of the selected pet's module, or None."""
         try:
-            hex_packets = [pkt.hex().upper() for pkt in self.dcom_player_packets]
-            command = f"V2-" + "-".join(hex_packets)
-            
-            runtime_globals.game_console.log(f"[DComView] Sending V2 command (listen-and-reply): {command[:80]}...")
-            runtime_globals.game_console.log("[DComView] DCom will wait for DM20 to send first, then reply with our packets")
+            from utils.module_utils import get_module
+            module = get_module(getattr(self.pet, 'module', ''))
+            return getattr(module, 'battle_protocol', None) if module else None
+        except Exception:
+            return None
+
+    def _on_protocol_select(self, index):
+        """Device line selected from menu."""
+        self._close_menu('protocol_menu')
+
+        if index >= len(self.format_menu):
+            self._on_cancel()
+            return
+
+        self.battle_format = self.format_menu[index][0]
+        self.simulator = DComBattleSimulator(self.dcom_controller,
+                                             battle_format=self.battle_format)
+        runtime_globals.game_console.log(
+            f"[DComView] Battle format: {self.battle_format}")
+        self._start_minigame()
+
+    # ------------------------------------------------------------------
+    # Charge minigame
+    # ------------------------------------------------------------------
+
+    def _start_minigame(self):
+        """Play the charge minigame this device line uses, if it has one."""
+        name = self.simulator.minigame
+        if name == "None":
+            # No charge to make: the boost comes from items on these devices.
+            self.minigame_result = 0
+            self._start_communication()
+            return
+
+        self.phase = "minigame"
+        self.minigame = MinigameSession(name, self.ui_manager, self.pet)
+        self.cancel_button.visible = False
+        if self.start_button:
+            self.start_button.visible = False
+
+    def _finish_minigame(self):
+        """Take the charge value and move on after a short settle."""
+        # The wire decides what the charge means: a raw 0-14 meter on the
+        # DM20 line, a 0-3 quality on the DMX one.
+        self.minigame_result = self.simulator.charge_value(self.minigame)
+        runtime_globals.game_console.log(
+            f"[DComView] Charge complete: {self.minigame_result}")
+        self.minigame = None
+        # A short pause so the last press of a mashed minigame cannot fall
+        # through onto whatever is drawn next.
+        self._minigame_settle_at = time.time() + 0.5
+
+    # ------------------------------------------------------------------
+    # Serial exchange
+    # ------------------------------------------------------------------
+
+    def _start_communication(self):
+        """Send our packets and start listening for the toy's reply."""
+        runtime_globals.game_console.log(
+            f"[DComView] ===== {self.battle_format} EXCHANGE =====")
+        self.phase = "communicating"
+        self.communicating = True
+        self.comm_start_time = time.time()
+        self.response_packets = []
+        self.status_counts = {}
+        self.empty_reads = 0
+        self.turn = 1 if PacketExchange.cable_opens(self.battle_format) else 2
+        self.simulator.opening = self.turn == 1
+        self.enemy_first = self.turn != 1
+        self._turn_swapped = False
+        self._version_retried = False
+        self._device_answered = False
+        self._last_status_log = time.time()
+        self._last_comm_log = time.time()
+
+        self.status_label.set_text("Waiting for device...")
+        self.cancel_button.visible = True
+        self._arm_start_button()
+
+        if not self.pet:
+            runtime_globals.game_console.log("[DComView] ERROR: No pet selected!")
+            self.status_label.set_text("Error: No pet selected")
+            self.communicating = False
+            return
+
+        if not self._build_and_send():
+            return
+
+        runtime_globals.game_console.log(
+            f"[DComView] {COMM_TIMEOUT_SECONDS:.0f}s window open - "
+            + ("hold your device to the adapter now!" if self.simulator.goes_first
+               else "press START to begin, or start it on your device"))
+
+    def _build_and_send(self) -> bool:
+        """Build this turn's packets and hand them to the adapter.
+
+        The packets depend on the turn: whoever opens the exchange carries
+        Order 1, so swapping turns means regenerating, not just resending.
+        """
+        digimon = pet_to_digimon(self.pet, self.battle_format, self.minigame_result)
+        self.exchange = PacketExchange(self.battle_format, digimon,
+                                       opens=self.turn == 1, peer=False,
+                                       simulator=self.simulator)
+        self.player_packets = self.exchange._planned
+        if not self.player_packets:
+            self.status_label.set_text("Error: could not build packets")
+            self.communicating = False
+            return False
+        self._send_packets()
+        return True
+
+    def _swap_turn(self):
+        """Keep the stock adapter in its supported role after an idle wait."""
+        self._turn_swapped = True
+        # Stock firmware cannot calculate our final outcome mid-exchange.
+        # Keep the role whose reply can be encoded, rather than send a
+        # placeholder merely because the peer has not answered yet.
+        self.status_label.set_text('Start battle on the device, then connect it.')
+
+    def _arm_start_button(self):
+        """Offer the button, ready to be pressed, and take the focus.
+
+        Focused because it is the one thing to do on this screen -- the
+        alternative is a player hunting for it while the sixty-second window
+        runs down.
+        """
+        if not self.start_button:
+            return
+        self.start_button.set_text("START")
+        self.start_button.set_enabled(True)
+        self.start_button.visible = True
+        self.ui_manager.set_focused_component(self.start_button)
+
+    def _on_start(self):
+        """START pressed: open the exchange, and say that we did.
+
+        The button goes to LOADING and stops accepting input, because a
+        turn-1 command can take several seconds to echo and several more to
+        complete. Nothing visibly happening is what makes people press again,
+        and a second press was never going to help.
+        """
+        if self.start_button:
+            self.start_button.set_text("LOADING")
+            self.start_button.set_enabled(False)
+        runtime_globals.game_sound.play("menu")
+        self._open_exchange()
+
+    def _open_exchange(self):
+        """Open only when the adapter can send this protocol role without guessing a result."""
+        if not PacketExchange.cable_opens(self.battle_format):
+            self.status_label.set_text('Start battle on the device. This adapter must answer.')
+            return
+        if self.turn == protocol_constants.DCOM_TURN_GO_FIRST and \
+                self.simulator.opening:
+            return
+        self.turn = protocol_constants.DCOM_TURN_GO_FIRST
+        self.simulator.opening = True
+        self._turn_swapped = True      # do not let the timer swap us back
+        self._opened_at = time.time()
+        # **We opened, so we strike first.** A DCom battle is presented with
+        # the toy attacking first because the toy is normally the one that
+        # opens; when it is us, the order follows.
+        self.enemy_first = False
+        runtime_globals.game_console.log(
+            "[DComView] START pressed: opening the exchange ourselves "
+            "(turn 1, and Player 1 where the wire has roles)")
+        self.status_label.set_text("Opening the battle - hold your device "
+                                   "to the adapter")
+        self._build_and_send()
+
+    def _send_packets(self):
+        """Send the exchange command with our packets."""
+        try:
+            command = self.exchange.cable_command()
+            runtime_globals.game_console.log(f"[DComView] TX: {command}")
             self.dcom_controller._send_raw(command + '\r')
-            self.dcom_last_send_time = time.time()
-            runtime_globals.game_console.log("[DComView] V2 command sent - DCom is now listening for DM20...")
+        except OSError as e:
+            # The port went away mid-write. Not an error to abort on: the
+            # recovery below reopens it and sends these same packets again.
+            self._on_port_lost(e)
         except Exception as e:
-            runtime_globals.game_console.log(f"[DComView] Error sending packets: {e}")
             import traceback
+            runtime_globals.game_console.log(f"[DComView] Error sending packets: {e}")
             runtime_globals.game_console.log(f"Traceback:\n{traceback.format_exc()}")
             self.status_label.set_text(f"Error: {str(e)}")
-    
-    def _check_dcom_response(self):
-        """Check for packets from DCom device (V2 listen-and-reply mode)."""
-        import re
-        try:
-            if not hasattr(self, 'dcom_response_packets'):
-                self.dcom_response_packets = []
+            self.communicating = False
 
-            # Ensure controller and port are valid
-            if not self.dcom_controller or not getattr(self.dcom_controller, 'serial_port', None):
+    def _check_dcom_response(self) -> bool:
+        """Drain the adapter; True once every packet has arrived.
+
+        Everything waiting is read each frame rather than one line per frame:
+        a real exchange arrives as a burst, and taking it a frame at a time
+        spreads ten packets over ten frames for no reason.
+        """
+        try:
+            port = getattr(self.dcom_controller, 'serial_port', None) if self.dcom_controller else None
+            if not port:
                 return False
 
-            waiting = self.dcom_controller.serial_port.in_waiting
-            if waiting > 0:
-                runtime_globals.game_console.log(f"[DComView] Data available: {waiting} bytes")
-                line = self.dcom_controller.serial_port.readline().decode('utf-8', errors='ignore').strip()
+            while port.in_waiting > 0:
+                line = port.readline().decode('utf-8', errors='ignore').strip()
                 if not line:
-                    return False
-
-                # Handle status messages (t: prefix)
-                if line.startswith('t:'):
-                    self.dcom_status_count += 1
-                    if time.time() - self.dcom_last_status_time > 2.0:
-                        runtime_globals.game_console.log(
-                            f"[DComView] DCom status: {line} (status updates: {self.dcom_status_count})"
-                        )
-                        self.dcom_last_status_time = time.time()
-                else:
-                    runtime_globals.game_console.log(f"[DComView] Received: {line}")
-
-                # Look for both r:[4 hex] (received from DM20) and s:[4 hex] (sent to DM20)
-                r_matches = re.findall(r'r:[0-9A-Fa-f]{4}', line)
-                s_matches = re.findall(r's:[0-9A-Fa-f]{4}', line)
-
-                if s_matches:
-                    for match in s_matches:
-                        hex_data = match[2:]
-                        runtime_globals.game_console.log(f"[DComView] Our packet echoed: {hex_data}")
-
-                if r_matches:
-                    for match in r_matches:
-                        hex_data = match[2:]
-                        # Filter out FF00 error/terminator packets
-                        if hex_data.upper() == 'FF00':
-                            runtime_globals.game_console.log(f"[DComView] FF00 terminator (ignored)")
-                            continue
-                        self.dcom_response_packets.append(hex_data)
-                        expected_packets = self._get_expected_packet_count()
-                        format_name = self.dcom_battle_format or 'DM20'
-                        runtime_globals.game_console.log(
-                            f"[DComView] {format_name} packet {len(self.dcom_response_packets)}/{expected_packets}: {hex_data}"
-                        )
-                        if len(self.dcom_response_packets) >= expected_packets:
-                            break
-
-                    # Check if all packets received
-                    expected_packets = self._get_expected_packet_count()
-                    if len(self.dcom_response_packets) >= expected_packets:
-                        runtime_globals.game_console.log(f"[DComView] ===== ALL {expected_packets} PACKETS RECEIVED =====")
-                        runtime_globals.game_console.log(f"[DComView] Received packets: {' '.join(self.dcom_response_packets)}")
-                        return True
-
+                    continue
+                if self._consume_line(line):
+                    return True
+            return False
+        except OSError as e:
+            # The handle itself is stale -- an unplugged or nudged connector
+            # raises this on every frame, for as long as it is held. Report it
+            # once and go and get the adapter back instead.
+            self._on_port_lost(e)
             return False
         except Exception as e:
             runtime_globals.game_console.log(f"[DComView] Error checking response: {e}")
             return False
-    
+
+    def _on_port_lost(self, error):
+        """The adapter stopped answering the OS; start trying to get it back.
+
+        The stale handle is dropped here so Windows can hand the port back
+        when the device re-enumerates, and so the poll stops raising. The
+        exchange is left running: ``_attempt_reconnect`` reopens the port and
+        resends, and the player need never know it happened.
+        """
+        if self._port_lost:
+            return
+
+        self._port_lost = True
+        self._port_lost_at = time.time()
+        self._next_reconnect_at = self._port_lost_at + RECONNECT_INTERVAL_SECONDS
+        runtime_globals.game_console.log(
+            f"[DComView] Adapter stopped responding ({error}); reconnecting")
+
+        self._release_port()
+
+        if self.status_label:
+            self.status_label.set_text("Reconnecting...")
+
+    def _release_port(self):
+        """Drop the adapter's handle, even if pyserial cannot close it.
+
+        A CH340 that vanishes mid-read can make pyserial's close() raise
+        before it reaches CloseHandle -- SetCommTimeouts on a dead handle is
+        enough to do it. The OS handle then leaks for the life of the
+        process, Windows keeps reporting the port as busy, and every
+        reconnect fails with the same "access denied" that started all this.
+        Closing it by hand is the only way back without restarting the game.
+        """
+        port = getattr(self.dcom_controller, 'serial_port', None) if self.dcom_controller else None
+        try:
+            if self.dcom_controller:
+                self.dcom_controller.disconnect()
+        except Exception:
+            pass          # the handle is already unusable, which is the point
+
+        handle = getattr(port, '_port_handle', None)
+        if not handle:
+            return        # close() got there first, which is the normal case
+        try:
+            import serial.win32 as win32
+            win32.CloseHandle(handle)
+            runtime_globals.game_console.log(
+                "[DComView] pyserial could not close the port; released the handle by hand")
+        except Exception as e:
+            runtime_globals.game_console.log(
+                f"[DComView] Could not release the port handle: {e}")
+        try:
+            port._port_handle = None
+        except Exception:
+            pass
+
+    def _attempt_reconnect(self):
+        """Reopen the adapter and resend the exchange, if it is back."""
+        now = time.time()
+        self._next_reconnect_at = now + RECONNECT_INTERVAL_SECONDS
+        self._reconnect_attempts += 1
+
+        remembered = self.dcom_selected_device[0] if self.dcom_selected_device else None
+
+        # Candidates, best first: the port it had, then anything else on the
+        # bus, since Windows can hand the adapter a different COM number when
+        # it re-enumerates. Opening a port that is not there fails before the
+        # two-and-a-half second Arduino reset, so trying the remembered one
+        # blind costs nothing and works even when the scan cannot see it yet.
+        try:
+            devices = self.dcom_controller.find_dcom_devices()
+        except Exception as e:
+            self._log_reconnect(f"could not enumerate the ports: {e}")
+            return
+
+        candidates = []
+        if remembered:
+            candidates.append((remembered, remembered))
+        candidates.extend((p, d) for p, d in devices if p != remembered)
+
+        failures = []
+        port = desc = None
+        for candidate, label in candidates:
+            try:
+                if self.dcom_controller.connect(candidate):
+                    port, desc = candidate, label
+                    break
+                failures.append(f"{candidate}: refused")
+            except Exception as e:
+                failures.append(f"{candidate}: {e}")
+
+        if port is None:
+            seen = ", ".join(p for p, _ in devices) or "none"
+            self._log_reconnect(
+                f"attempt {self._reconnect_attempts}: ports on the bus [{seen}]; "
+                + ("; ".join(failures) if failures else "nothing to try"))
+            return
+
+        outage = time.time() - self._port_lost_at
+        self._port_lost = False
+        self.dcom_selected_device = (port, desc)
+        runtime_globals.game_console.log(
+            f"[DComView] Adapter back on {port} after {outage:.1f}s; resending")
+
+        # Reopening the port resets the Arduino, so the command it was running
+        # is gone and the packets have to go out again. The turn has not
+        # changed, so they are the same packets.
+        self._send_packets()
+
+        # The player spent the outage waiting, not failing to press a button,
+        # so the time it ate is given back instead of counted against them.
+        self.comm_start_time += outage
+        self._reconnect_attempts = 0
+
+        # Reopening resets the adapter, so whatever exchange was in flight is
+        # gone -- including one the toy may have finished on its own while we
+        # were off the bus. The packets are back on the wire, but the battle
+        # has to be started again on the device.
+        runtime_globals.game_console.log(
+            "[DComView] The exchange was lost with the port; start the battle "
+            "on your device again")
+
+    def _log_reconnect(self, message):
+        """Report a failed reconnect, at most once every few seconds.
+
+        Quiet enough not to become the flood this whole path exists to stop,
+        loud enough that a recovery which never lands says so.
+        """
+        now = time.time()
+        if self._reconnect_attempts > 1 and now - self._last_reconnect_log < 5.0:
+            return
+        self._last_reconnect_log = now
+        runtime_globals.game_console.log(f"[DComView] Reconnect: {message}")
+
+    #: What a CircuitPython prompt says when our command reaches it instead
+    #: of the firmware. The adapter drops here if code.py stops -- a crash, a
+    #: Ctrl-C during boot -- and then every DigiROM we send is typed at a
+    #: Python prompt, which answers with a SyntaxError and nothing else.
+    #: Without this the symptom is a silent minute and "No response from the
+    #: adapter", which points at the toy rather than at the adapter.
+    REPL_MARKERS = (">>>", "Traceback (most recent call last)",
+                    'File "<stdin>"', "SyntaxError:", "NameError:")
+
+    @classmethod
+    def _looks_like_repl(cls, line: str) -> bool:
+        stripped = line.strip()
+        return any(stripped.startswith(marker) or marker in stripped
+                   for marker in cls.REPL_MARKERS)
+
+    def _consume_line(self, line: str) -> bool:
+        """Handle one line from the adapter; True when the exchange is done."""
+        if self._looks_like_repl(line):
+            if not self._repl_seen:
+                self._repl_seen = True
+                runtime_globals.game_console.log(
+                    "[DComView] The adapter answered as a Python prompt, not "
+                    "as firmware: it has dropped to the CircuitPython REPL. "
+                    "Reset it (Ctrl-D at the prompt, or unplug and replug) so "
+                    "code.py runs again -- nothing will answer until it does.")
+            runtime_globals.game_console.log(f"[DComView] RX: {line}")
+            return False
+
+        status = describe_status(line)
+        if status:
+            # These arrive several times a second for as long as nothing is
+            # connected, so they are tallied and only logged occasionally.
+            code, explanation = status
+            count, _ = self.status_counts.get(code, (0, explanation))
+            self.status_counts[code] = (count + 1, explanation)
+            if time.time() - self._last_status_log > 2.0:
+                runtime_globals.game_console.log(
+                    f"[DComView] DCom status: {line} -> {explanation} "
+                    f"({count + 1} so far)")
+                self._last_status_log = time.time()
+            return False
+
+        runtime_globals.game_console.log(f"[DComView] RX: {line}")
+
+        # Data got through, so whatever the adapter reported up to now was
+        # just the wait, not a fault worth telling the player about.
+        self.status_counts.clear()
+
+        # ONE LINE IS ONE EXCHANGE ATTEMPT. The adapter prints a whole
+        # attempt and ends it with a newline, so a line that carries fewer
+        # packets than the format needs is a failed attempt, not the first
+        # part of a good one. Accumulating across lines turned six failed
+        # attempts -- each one packet long -- into "six packets received",
+        # six copies of the same packet that then failed validation.
+        expected = self.simulator.expected_packet_count
+        received = []
+        aborted = False
+        for hex_data in self.simulator.response_pattern().findall(line):
+            if hex_data.upper() == 'FF00':
+                # Not a terminator: the device sends this to abort, having
+                # objected to something we sent it.
+                aborted = True
+                runtime_globals.game_console.log(
+                    "[DComView] Device sent FF00 - it rejected the exchange")
+                continue
+            if hex_data.upper() == EMPTY_PACKET:
+                # A read that came back empty; the device sent nothing, so
+                # counting it as data would only fail validation later.
+                self.empty_reads += 1
+                runtime_globals.game_console.log(
+                    f"[DComView] empty read (ignored, {self.empty_reads} so far)")
+                continue
+            received.append(hex_data)
+
+        if not received:
+            return False
+
+        # The device is talking to us, whatever else is wrong.
+        self._device_answered = True
+
+        if len(received) == expected and not aborted:
+            sent = re.findall(r's:([0-9A-Fa-f]{%d})(?![0-9A-Fa-f])' % self.simulator.packet_hex_length, line)
+            if len(sent) != expected:
+                self.status_label.set_text('Incomplete adapter transcript. Retry the connection.')
+                return False
+            self.player_packets = [bytes.fromhex(p) for p in sent]
+            self.response_packets = received
+            runtime_globals.game_console.log(
+                f"[DComView] ===== ALL {expected} PACKETS RECEIVED =====")
+            runtime_globals.game_console.log(
+                f"[DComView] {' '.join(self.response_packets)}")
+            return True
+
+        runtime_globals.game_console.log(
+            f"[DComView] Exchange {'refused' if aborted else 'stopped'} after "
+            f"{len(received)}/{expected} packet(s): {' '.join(received)}")
+        if aborted:
+            self.status_label.set_text("Device refused the battle. Retrying...")
+        self._learn_from_partial(received)
+        return False
+
+    def _learn_from_partial(self, received):
+        """Use a broken-off exchange to correct what we are sending.
+
+        The device announces its own version in its first packet. If ours
+        says something else it can simply stop answering, which looks exactly
+        like a dead connection -- so the version it told us is adopted and
+        the packets rebuilt. It retries every few seconds, so the corrected
+        reply is waiting for the next attempt.
+        """
+        if not received:
+            return
+
+        # Outcome data from an earlier attempt must never determine the next
+        # exchange. Only compatibility version negotiation survives a retry.
+        if is_oem_pet(self.pet, self.battle_format):
+            return
+
+        if self._version_retried:
+            return
+        try:
+            theirs = self.simulator.peek_version(received[0])
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[DComView] Could not read their version: {exc}")
+            return
+        if theirs is None or theirs == self.simulator.sent_version:
+            return
+
+        self._version_retried = True
+        runtime_globals.game_console.log(
+            f"[DComView] Device reports version {theirs}, we sent "
+            f"{self.simulator.sent_version}; matching it and retrying")
+        self.simulator.force_version = theirs
+        self._build_and_send()
+
+    def _connection_diagnosis(self) -> str:
+        """The adapter's own account of why nothing arrived."""
+        if self._port_lost:
+            return "Adapter disconnected - check the USB cable."
+        if self._repl_seen:
+            return ("Adapter is at the CircuitPython REPL - reset it so "
+                    "code.py runs.")
+        if not self.status_counts:
+            return "No response from the adapter."
+        # The code it reported most is the one describing the connection.
+        _, explanation = max(self.status_counts.values(), key=lambda entry: entry[0])
+        return explanation
+
     def _update_dcom_communication(self):
         """Update loop for DCom communication phase."""
         current_time = time.time()
-        elapsed = current_time - self.dcom_comm_start_time
-        
-        # Log every 5 seconds to show we're actively checking
-        if current_time - self._last_comm_log_time >= 5.0:
-            runtime_globals.game_console.log(f"[DComView] Still communicating... elapsed: {elapsed:.1f}s, packets: {len(getattr(self, 'dcom_response_packets', []))}")
-            self._last_comm_log_time = current_time
-        
-        # Check for timeout
-        if elapsed >= self.dcom_comm_timeout:
-            runtime_globals.game_console.log("[DComView] ===== DCOM COMMUNICATION TIMEOUT =====")
-            runtime_globals.game_console.log(f"[DComView] Received {len(getattr(self, 'dcom_response_packets', []))} packets before timeout")
-            self.status_label.set_text("Timeout! No response from device.")
-            self.dcom_communicating = False
+
+        # Nothing else can run while the adapter is off the bus: the poll
+        # would only raise again, and swapping the turn or timing out would
+        # blame the player for a cable.
+        if self._port_lost:
+            lost_for = current_time - self._port_lost_at
+            if lost_for >= RECONNECT_WINDOW_SECONDS:
+                runtime_globals.game_console.log(
+                    "[DComView] ===== ADAPTER DID NOT COME BACK =====")
+                self.status_label.set_text("Adapter disconnected - check the cable")
+                self.communicating = False
+                return
+            if current_time >= self._next_reconnect_at:
+                self._attempt_reconnect()
+            if self._port_lost:
+                self.status_label.set_text(
+                    f"Reconnecting... ({int(RECONNECT_WINDOW_SECONDS - lost_for)}s)")
+                return
+            # Reopening cost a couple of seconds of wall clock, and the window
+            # was moved to match, so both are re-read.
+            current_time = time.time()
+
+        elapsed = current_time - self.comm_start_time
+
+        if current_time - self._last_comm_log >= 5.0:
+            runtime_globals.game_console.log(
+                f"[DComView] Still listening... {elapsed:.1f}s, "
+                f"{len(self.response_packets)} packet(s), "
+                f"adapter says: {self._connection_diagnosis()}")
+            self._last_comm_log = current_time
+
+        if elapsed >= COMM_TIMEOUT_SECONDS:
+            runtime_globals.game_console.log("[DComView] ===== EXCHANGE TIMED OUT =====")
+            runtime_globals.game_console.log(
+                f"[DComView] {len(self.response_packets)} packet(s), "
+                f"{self.empty_reads} empty read(s) before timeout")
+            for code, (count, explanation) in sorted(self.status_counts.items()):
+                runtime_globals.game_console.log(
+                    f"[DComView]   {code}: {count}x - {explanation}")
+            self.status_label.set_text(self._connection_diagnosis())
+            self.communicating = False
             if self.dcom_controller:
                 self.dcom_controller.disconnect()
             return
-        
-        # Update status label with remaining time
-        remaining = int(self.dcom_comm_timeout - elapsed)
-        self.status_label.set_text(f"Waiting... ({remaining}s)")
-        
-        # Check for device response
+
+        # The adapter reports a failed read several times a second for as
+        # long as nothing is connected, and those reports are perfectly
+        # normal while the player is still walking over to press the button.
+        # So the wait says only that it is waiting; the codes become a
+        # diagnosis at the timeout, when nothing did arrive.
+        remaining = int(COMM_TIMEOUT_SECONDS - elapsed)
+        # Nothing at all half way through: the toy may be waiting to be
+        # spoken to rather than opening the exchange itself. Try it the other
+        # way round before giving up -- but only in silence. Once the device
+        # has answered, the turn is evidently right and swapping it would
+        # abandon an exchange that is part way through.
+        if (not self._turn_swapped and not self._device_answered
+                and elapsed >= TURN_SWAP_SECONDS):
+            self._swap_turn()
+
+        self.status_label.set_text(f"Waiting for device... ({remaining}s)")
+
         if self._check_dcom_response():
-            runtime_globals.game_console.log("[DComView] All packets received! Processing battle result...")
-            self.dcom_communicating = False
+            self.communicating = False
             self._process_battle_result()
-    
-    def _get_expected_packet_count(self) -> int:
-        """Get the expected number of packets based on battle format."""
-        if self.dcom_battle_format == 'DM':
-            return 2  # DM original uses only 2 packets
-        elif self.dcom_battle_format in ['DMX', 'PENZ']:
-            return 6  # DMX and PENZ use 6 packets
-        elif self.dcom_battle_format == 'DMC':
-            return 6  # DMC uses 6 packets (Color protocol)
-        else:
-            return 10  # DM20 and PEN20 use 10 packets
-    
-    def _convert_pet_to_digimon(self, pet):
-        """Convert GamePet to Digimon model for DCom protocol.
-        
-        OEM mode: If the pet's module battle_protocol matches the selected
-        dcom_battle_format, we send the pet's real index and version so the
-        real device can process unlocks/interactions correctly.
-        Compatibility mode: Otherwise we send 0 for both fields.
-        
-        Attack sprite IDs are offset by -1 (Omnipet is 1-based, devices are 0-based).
-        """
-        attr_map = {"Va": 0, "Vaccine": 0, "Da": 1, "Data": 1, "Vi": 2, "Virus": 2, "Fr": 3, "Free": 3}
-        pet_attr = getattr(pet, 'attribute', 'Va')
-        attribute = attr_map.get(pet_attr, 0)
-        
-        # OEM vs Compatibility mode: check if module battle_protocol matches device protocol
-        oem_mode = False
-        pet_module_name = getattr(pet, 'module', '')
-        if pet_module_name and self.dcom_battle_format:
-            from utils.module_utils import get_module
-            pet_module = get_module(pet_module_name)
-            if pet_module and getattr(pet_module, 'battle_protocol', '') == self.dcom_battle_format:
-                oem_mode = True
-        
-        if oem_mode:
-            index = getattr(pet, 'index', 0)
-            # Send the hardware device version, not the evolution-line
-            # version. Old saves fall back to their existing game version.
-            version = getattr(pet, 'device_version', getattr(pet, 'version', 1))
-            # Clamp version to the valid range for each protocol; out-of-range = special, send 0
-            _version_ranges = {
-                'DM': (1, 5), 'DM20': (1, 5), 'DMX': (1, 6), 'DMC': (1, 5),
-                'PEN': (0, 5), 'PEN20': (1, 4), 'PENZ': (0, 5), 'PENC': (0, 7),
-            }
-            v_min, v_max = _version_ranges.get(self.dcom_battle_format, (1, 5))
-            if version < v_min or version > v_max:
-                version = 0
-            runtime_globals.game_console.log(f"[DComView] OEM mode: sending index={index}, version={version}")
-        else:
-            index = 0
-            version = 0
-            runtime_globals.game_console.log(f"[DComView] Compatibility mode: sending index=0, version=0")
-        
-        # Omnipet uses 1-based attack sprite IDs (0=no sprite),
-        # real devices use 0-based IDs, so subtract 1 before sending.
-        # DMX/PENZ use 3 shots: atk_main=weak, atk_alt=strong, atk_alt_2=mega
-        # In OEM mode, apply -1 offset; in Compatibility mode, values of 0 stay 0.
-        if self.dcom_battle_format in ('DMX', 'PENZ'):
-            if oem_mode:
-                shot_w = max(0, getattr(pet, 'atk_main', 1) - 1)
-                shot_s = max(0, getattr(pet, 'atk_alt', 1) - 1)
-                shot_m = max(0, getattr(pet, 'atk_alt_2', 1) - 1)
-            else:
-                raw_w = getattr(pet, 'atk_main', 0)
-                raw_s = getattr(pet, 'atk_alt', 0)
-                raw_m = getattr(pet, 'atk_alt_2', 0)
-                shot_w = max(0, raw_w - 1) if raw_w > 0 else 0
-                shot_s = max(0, raw_s - 1) if raw_s > 0 else 0
-                shot_m = max(0, raw_m - 1) if raw_m > 0 else 0
-            shot1 = shot_s
-            shot2 = shot_w
-        else:
-            shot1 = max(0, getattr(pet, 'atk_main', 1) - 1)
-            shot2 = max(0, getattr(pet, 'atk_alt', 1) - 1)
-            shot_m = 0
-            shot_s = shot1
-            shot_w = shot2
-        
-        digimon = Digimon(
-            name=getattr(pet, 'name', 'Unknown'),
-            order=0,
-            traited=getattr(pet, 'traited', 0),
-            egg_shake=getattr(pet, 'shook', 0),
-            index=index,
-            hp=getattr(pet, 'hp', 4),
-            attribute=attribute,
-            power=getattr(pet, 'power', 50),
-            handicap=0,
-            buff=0,
-            mini_game=0,
-            level=getattr(pet, 'level', 1),
-            stage=getattr(pet, 'stage', 3),
-            sick=getattr(pet, 'sick', 0),
-            shot1=shot1,
-            shot2=shot2,
-            tag_meter=0
-        )
-        # Store version for packet generators (DM20Device, DMXDevice use getattr)
-        digimon.version = version
-        # Store medium shot for DMX/PENZ protocol
-        digimon.dmx_shot_m = shot_m
-        return digimon
-    
+
+    # ------------------------------------------------------------------
+    # Result
+    # ------------------------------------------------------------------
+
     def _process_battle_result(self):
-        """Process battle result from response packets and transition to PvP scene."""
+        """Turn the exchange into battle data and open the battle scene."""
         runtime_globals.game_console.log("[DComView] ===== PROCESSING DCOM BATTLE RESULT =====")
-        
+
         try:
-            if not self.selected_pets:
-                raise Exception("No selected pets found")
-            
-            pet = self.selected_pets[0]
-            runtime_globals.game_console.log(f"[DComView] Processing result for pet: {getattr(pet, 'name', 'Unknown')}")
-            player_digimon = self._convert_pet_to_digimon(pet)
-            
-            # Parse opponent using DComBattleSimulator
-            from battle.sim.dcom_battle_simulator import DComBattleSimulator
-            simulator = DComBattleSimulator(self.dcom_controller, self.dcom_protocol, self.dcom_battle_format)
-            runtime_globals.game_console.log(f"[DComView] Parsing {len(self.dcom_response_packets)} packets")
-            opponent_digimon = simulator._parse_opponent_packets(self.dcom_response_packets, player_digimon)
-            
-            if not opponent_digimon:
-                error_msg = "Received corrupt data from device"
-                runtime_globals.game_console.log(f"[DComView] {error_msg}")
-                self.status_label.set_text(f"ERROR: {error_msg}")
+            pet = self.pet
+            player_digimon = pet_to_digimon(pet, self.battle_format, self.minigame_result)
+
+            opponent = self.simulator.parse_opponent(self.response_packets, player_digimon)
+            if not opponent:
+                self.status_label.set_text("ERROR: corrupt data from device")
                 if self.dcom_controller:
                     self.dcom_controller.disconnect()
                 return
-            
-            runtime_globals.game_console.log(f"[DComView] Opponent: {opponent_digimon.name}, HP={opponent_digimon.hp}, Power={opponent_digimon.power}")
-            
-            # Build battle result
-            result = simulator._build_battle_result(
-                player_digimon, opponent_digimon,
-                self.dcom_player_packets, self.dcom_response_packets
-            )
-            
+
+            exchange = PacketExchange.from_transcript(
+                self.battle_format, player_digimon, self.player_packets,
+                self.response_packets, simulator=self.simulator)
+            result = exchange.result()
             if not result:
                 raise Exception("Battle result is None")
-            
-            runtime_globals.game_console.log(f"[DComView] Battle result: Winner={result.winner}")
-            runtime_globals.game_console.log(f"[DComView] Battle log has {len(result.battle_log)} turns")
-            
-            # Print battle log and DCom code
-            simulator.internal_simulator.print_battle_log(result)
-            simulator._print_dcom_code(result)
-            
-            # Create PvP battle data
-            self._create_dcom_pvp_data(pet, opponent_digimon, result)
-            
-            # Disconnect device
+
+            runtime_globals.game_console.log(
+                f"[DComView] Winner={result.winner}, {len(result.battle_log)} turn(s)")
+            self.simulator.log_battle(result)
+
+            self._create_dcom_pvp_data(pet, opponent, result)
+
             self.dcom_controller.disconnect()
-            
-            # Transition to battle scene
+
             runtime_globals.game_console.log("[DComView] Transitioning to PvP battle scene...")
             from utils.scene_utils import change_scene
             change_scene("battle_pvp")
-            
+
         except Exception as e:
             import traceback
-            error_msg = f"[DComView] Error processing battle result: {e}"
-            traceback_msg = f"[DComView] Traceback: {traceback.format_exc()}"
-            runtime_globals.game_console.log(error_msg)
-            runtime_globals.game_console.log(traceback_msg)
-            print(error_msg)
-            print(traceback_msg)
+            runtime_globals.game_console.log(f"[DComView] Error processing battle result: {e}")
+            runtime_globals.game_console.log(f"[DComView] Traceback: {traceback.format_exc()}")
             self.status_label.set_text(f"Error: {str(e)[:50]}")
             if self.dcom_controller:
                 self.dcom_controller.disconnect()
-    
-    def _is_oem_mode(self, pet):
-        """Check if pet's module battle_protocol matches the DCom battle format."""
-        pet_module_name = getattr(pet, 'module', '')
-        if pet_module_name and self.dcom_battle_format:
-            from utils.module_utils import get_module
-            pet_module = get_module(pet_module_name)
-            if pet_module and getattr(pet_module, 'battle_protocol', '') == self.dcom_battle_format:
-                return True
-        return False
-    
-    def _create_dcom_pvp_data(self, my_pet, opponent_digimon, battle_result):
+
+    def _create_dcom_pvp_data(self, my_pet, opponent, battle_result):
         """Create PvP battle data from DCom battle result."""
-        from core import runtime_globals
         runtime_globals.game_console.log("[DComView] Creating PvP battle data...")
-        
-        # My pet data
+
         my_pet_data = {
             "name": getattr(my_pet, "name", "Pet"),
             "stage": getattr(my_pet, "stage", 1),
             "level": getattr(my_pet, "level", 1),
-            "hp": my_pet.get_hp() if hasattr(my_pet, "get_hp") else getattr(my_pet, "hp", 100),
+            # The HP the battle was fought with belongs to the wire, not the
+            # pet: DMC, DM20 and PEN20 all fix it. Sending the pet's own left
+            # a Shoutmon on a 12 HP bar for a five-round DMC fight the log
+            # drained from 5, so the bar stopped at 7 instead of empty.
+            "hp": self.simulator.get_initial_hp(
+                pet_to_digimon(my_pet, self.battle_format, self.minigame_result)),
             "power": my_pet.get_power() if hasattr(my_pet, "get_power") else getattr(my_pet, "power", 1),
             "attribute": getattr(my_pet, "attribute", 0),
             "atk_main": getattr(my_pet, "atk_main", None),
@@ -869,42 +955,36 @@ class DComView:
             "sick": getattr(my_pet, "sick", 0) > 0,
             "traited": getattr(my_pet, "traited", False),
             "shook": getattr(my_pet, "shook", False),
-            "mini_game": getattr(my_pet, "strength", 0)
+            "mini_game": self.minigame_result,
         }
-        
-        # Get initial HP for opponent based on protocol
-        from battle.sim.dcom_battle_simulator import DComBattleSimulator
-        simulator = DComBattleSimulator(self.dcom_controller, self.dcom_protocol, self.dcom_battle_format)
-        initial_hp = simulator.get_initial_hp(opponent_digimon)
-        
-        # Opponent pet data - shot values from device are 0-based, convert to 1-based for Omnipet
+
+        # Attack sprite ids are already 1-based here: parse_opponent shifts
+        # them on the way in.
         opponent_pet_data = {
-            "name": opponent_digimon.name,
-            "stage": opponent_digimon.stage,
-            "level": opponent_digimon.level,
-            "hp": initial_hp,
-            "power": opponent_digimon.power,
-            "attribute": opponent_digimon.attribute,
-            "atk_main": opponent_digimon.shot1 + 1,
-            "atk_alt": opponent_digimon.shot2 + 1,
+            "name": opponent.name,
+            "stage": opponent.stage,
+            "level": opponent.level,
+            "hp": self.simulator.get_initial_hp(opponent),
+            "power": opponent.power,
+            "attribute": opponent.attribute,
+            "atk_main": opponent.shot1,
+            "atk_alt": opponent.shot2,
             "module": getattr(my_pet, "module", "base"),
-            "sick": bool(opponent_digimon.sick),
-            "traited": bool(opponent_digimon.traited),
-            "shook": bool(opponent_digimon.egg_shake),
-            "mini_game": opponent_digimon.mini_game
+            "sick": bool(opponent.sick),
+            "traited": bool(opponent.traited),
+            "shook": bool(opponent.egg_shake),
+            "mini_game": opponent.mini_game,
         }
-        
-        # Serialize battle result
-        battle_log_serialized = battle_result.to_dict() if hasattr(battle_result, 'to_dict') else {}
-        
+
         battle_simulation_data = {
-            "battle_log": battle_log_serialized,
+            "battle_log": battle_result.to_dict() if hasattr(battle_result, 'to_dict') else {},
             "team1": [my_pet_data],
             "team2": [opponent_pet_data],
             "module": getattr(my_pet, "module", "base"),
-            "victory_status": "Defeat" if battle_result.winner == "device1" else "Victory"
+            # device1 is the toy in a DCom result, so its win is our defeat.
+            "victory_status": "Defeat" if battle_result.winner == "device1" else "Victory",
         }
-        
+
         runtime_globals.pvp_battle_data = {
             "simulation_data": battle_simulation_data,
             "original_battle_log": battle_result,
@@ -914,265 +994,115 @@ class DComView:
             "enemy_team_data": [opponent_pet_data],
             "module": getattr(my_pet, "module", "base"),
             "my_player_name": "YOU",
-            "enemy_player_name": "DM20 DEVICE",
+            "enemy_player_name": self.battle_format,
             "is_online_mode": False,
             "is_dcom_mode": True,
-            "is_oem_mode": self._is_oem_mode(my_pet),
-            "enemy_first": True
+            "is_oem_mode": is_oem_pet(my_pet, self.battle_format),
+            "battle_format": self.battle_format,
+            "opponent_device_version": getattr(self.simulator, 'opponent_device_version', None),
+            "enemy_first": self.enemy_first,
         }
-        
+
         runtime_globals.game_console.log("[DComView] PvP battle data created")
-    
+
+    # ------------------------------------------------------------------
+    # View lifecycle
+    # ------------------------------------------------------------------
+
+    def _on_minigame_cancel(self):
+        """Backing out of the charge returns to picking a pet.
+
+        The charge is played after the line has been chosen, so cancelling it
+        is "not this battle" rather than "not any battle" -- and dropping the
+        player at the main menu makes them walk the whole flow again. It used
+        to call `_on_cancel`, which leaves the connection screen entirely.
+        """
+        runtime_globals.game_sound.play("cancel")
+        self.minigame = None
+        self._cleanup_dcom()
+        self.change_view("pet_selection", is_dcom_mode=True)
+
     def _on_cancel(self):
         """Cancel button clicked."""
         runtime_globals.game_sound.play("cancel")
         self._cleanup_dcom()
-        self.change_view("main_menu")
-    
+        self.change_view("main_menu", initial_submenu="local_battle")
+
     def _cleanup_dcom(self):
         """Cleanup DCom resources."""
-        self.dcom_communicating = False
+        self.communicating = False
         if self.dcom_controller:
             try:
                 self.dcom_controller.disconnect()
-            except:
+            except Exception:
                 pass
             self.dcom_controller = None
-    
+
     def update(self):
         """Update the view."""
-        import pygame
-        
-        # Check for minigame completion delay (prevent button spam)
-        if hasattr(self, 'waiting_after_minigame') and self.waiting_after_minigame:
-            if time.time() - self.minigame_complete_time >= 0.5:  # 500ms delay
-                self.waiting_after_minigame = False
+        if self.abort:
+            self.abort = False
+            self.change_view("main_menu", initial_submenu="local_battle")
+            return
+
+        if self._minigame_settle_at:
+            if time.time() >= self._minigame_settle_at:
+                self._minigame_settle_at = 0
                 self._start_communication()
             return
-        
-        # Minigame updates (DM20 - Dummy Charge)
-        if self.phase == "minigame" and self.dcom_minigame:
-            self.dcom_minigame.update()
-            
-            elapsed = pygame.time.get_ticks() - self.dcom_minigame_start_time
-            if elapsed >= self.dcom_minigame_duration:
-                self.dcom_minigame_result = self.dcom_minigame.strength
-                runtime_globals.game_console.log(f"[DComView] Minigame complete: {self.dcom_minigame_result}")
-                self.dcom_minigame = None
-                # Add delay to prevent button spam from clicking next view's components
-                self.minigame_complete_time = time.time()
-                self.waiting_after_minigame = True
 
-        # PEN20 minigame updates (Count Match Classic)
-        if self.phase == "minigame_pen20" and self.dcom_minigame:
-            self.dcom_minigame.update()
-            
-            elapsed = pygame.time.get_ticks() - self.dcom_minigame_start_time
-            if elapsed >= self.dcom_minigame_duration:
-                self.dcom_minigame_result = self.dcom_minigame.strength
-                runtime_globals.game_console.log(f"[DComView] PEN20 Count Match Classic complete: {self.dcom_minigame_result}")
-                self.dcom_minigame = None
-                # Add delay to prevent button spam from clicking next view's components
-                self.minigame_complete_time = time.time()
-                self.waiting_after_minigame = True
-        
-        # DMX minigame updates
-        if self.phase == "minigame_dmx":
-            if self.dcom_xai_phase == 1 and self.dcom_xai_roll:
-                self.dcom_xai_roll.update()
-                if not self.dcom_xai_roll.rolling and not self.dcom_xai_roll.stopping:
-                    # Transition to bar phase
-                    self.dcom_xai_phase = 2
-                    # Take the landed face from the roll: it stops itself after
-                    # a few seconds with no press, and that result has to reach
-                    # the bar exactly as a pressed one does.
-                    self.dcom_xai_number = self.dcom_xai_roll.get_result()
-                    from ui.minigames.xai_bar import XaiBar
-                    pet = self.selected_pets[0] if self.selected_pets else None
-                    self.dcom_xai_bar = XaiBar(
-                        x=runtime_globals.SCREEN_WIDTH // 2 - int(152 * runtime_globals.UI_SCALE) // 2,
-                        y=runtime_globals.SCREEN_HEIGHT // 2 + int(48 * runtime_globals.UI_SCALE),
-                        xai_number=self.dcom_xai_number,
-                        pet=pet
-                    )
-                    self.dcom_xai_bar.start()
-            elif self.dcom_xai_phase == 2 and self.dcom_xai_bar:
-                if self._dcom_xai_pending_stop:
-                    self._dcom_xai_pending_stop = False
-                    self._do_dcom_xai_bar_stop()
-                else:
-                    self.dcom_xai_bar.update()
-            elif self.dcom_xai_phase == 3:
-                runtime_globals.game_console.log(f"[DComView] DMX minigame complete: {self.dcom_minigame_result}")
-                # Add delay to prevent button spam from clicking next view's components
-                self.minigame_complete_time = time.time()
-                self.waiting_after_minigame = True
-                self.dcom_xai_phase = 0  # Reset phase
-                self._dcom_xai_pending_stop = False
-        
-        # PENZ minigame updates (Count Match Z)
-        if self.phase == "minigame_penz" and self.dcom_minigame:
-            self.dcom_minigame.update()
-            
-            elapsed = pygame.time.get_ticks() - self.dcom_minigame_start_time
-            if elapsed >= self.dcom_minigame_duration:
-                # Get count match Z result (0-3 based on accuracy and attribute)
-                self.dcom_minigame_result = self.dcom_minigame.calculate_result()
-                runtime_globals.game_console.log(f"[DComView] PENZ Count Match Z complete: {self.dcom_minigame_result}")
-                self.dcom_minigame = None
-                # Add delay to prevent button spam from clicking next view's components
-                self.minigame_complete_time = time.time()
-                self.waiting_after_minigame = True
-        
-        # Battle sprite animation and communication updates
-        if self.phase == "communicating":
-            if self.dcom_battle_sprite:
-                self.dcom_battle_sprite.update()
-            if self.dcom_communicating:
-                self._update_dcom_communication()
-    
+        if self.phase == "minigame" and self.minigame:
+            self.minigame.update()
+            if self.minigame.finished:
+                self._finish_minigame()
+            return
+
+        if self.phase == "communicating" and self.communicating:
+            self._update_dcom_communication()
+
     def draw(self, surface):
         """Draw view-specific elements."""
-        # Minigame draws (background already drawn by UI manager)
-        if self.phase == "minigame" and self.dcom_minigame:
-            self.dcom_minigame.draw(surface)
+        if self.phase == "minigame" and self.minigame:
+            self.minigame.draw(surface)
 
-        # PEN20 minigame draws (Count Match Classic)
-        if self.phase == "minigame_pen20" and self.dcom_minigame:
-            self.dcom_minigame.draw(surface)
-        
-        # DMX minigame draws (background already drawn by UI manager)
-        if self.phase == "minigame_dmx":
-            if self.dcom_xai_phase == 1 and self.dcom_xai_roll:
-                self.dcom_xai_roll.draw(surface)
-            elif self.dcom_xai_phase == 2 and self.dcom_xai_bar:
-                self.dcom_xai_bar.draw(surface)
-        
-        # PENZ minigame draws (Count Match Z)
-        if self.phase == "minigame_penz" and self.dcom_minigame:
-            self.dcom_minigame.draw(surface)
-        
-        # Battle sprite during communication
-        if self.phase == "communicating" and self.dcom_battle_sprite:
-            self.dcom_battle_sprite.draw(surface, 0, 0)
-    
     def handle_event(self, event):
         """Handle input events."""
         if not isinstance(event, tuple) or len(event) != 2:
             return
-        
-        event_type, event_data = event
-        
-        runtime_globals.game_console.log(f"[DComView] handle_event: type={event_type}, data={event_data}, phase={self.phase}")
-        
-        # Handle minigame input (DM20 - Dummy Charge)
-        if self.phase == "minigame" and self.dcom_minigame:
-            if event_type in ["A", "LCLICK"]:
-                # Let minigame handle the event
-                runtime_globals.game_console.log(f"[DComView] Passing {event_type} to minigame.handle_event")
-                handled = self.dcom_minigame.handle_event(event)
-                if handled:
-                    runtime_globals.game_console.log(f"[DComView] Minigame handled {event_type}, strength now: {self.dcom_minigame.strength}")
-                return
-            elif event_type in ["B", "X"]:
-                # Finish minigame and continue
-                self.dcom_minigame_result = self.dcom_minigame.strength
-                runtime_globals.game_console.log(f"[DComView] Minigame completed! Result: {self.dcom_minigame_result}")
-                runtime_globals.game_sound.play("menu")
-                self.dcom_minigame = None
-                # Add delay to prevent button spam from clicking next view's components
-                self.minigame_complete_time = time.time()
-                self.waiting_after_minigame = True
-                return
+        event_type, _ = event
 
-        # Handle PEN20 minigame input (Count Match Classic - uses SHAKE/Y)
-        if self.phase == "minigame_pen20" and self.dcom_minigame:
-            if event_type in ["Y", "SHAKE"]:
-                # Let minigame handle the event
-                runtime_globals.game_console.log(f"[DComView] Passing {event_type} to PEN20 Count Match Classic")
-                handled = self.dcom_minigame.handle_event(event)
-                if handled:
-                    runtime_globals.game_console.log(f"[DComView] PEN20 Count Match Classic handled {event_type}, strength now: {self.dcom_minigame.strength}")
-                return
-            elif event_type in ["B", "X"]:
-                # Finish minigame and continue
-                self.dcom_minigame_result = self.dcom_minigame.strength
-                runtime_globals.game_console.log(f"[DComView] PEN20 Count Match Classic completed! Result: {self.dcom_minigame_result}")
-                runtime_globals.game_sound.play("menu")
-                self.dcom_minigame = None
-                # Add delay to prevent button spam from clicking next view's components
-                self.minigame_complete_time = time.time()
-                self.waiting_after_minigame = True
-                return
-        
-        # Handle PENZ minigame input (Count Match Z - uses SHAKE/Y)
-        if self.phase == "minigame_penz" and self.dcom_minigame:
-            if event_type in ["Y", "SHAKE"]:
-                # Let minigame handle the event
-                runtime_globals.game_console.log(f"[DComView] Passing {event_type} to PENZ Count Match Z")
-                handled = self.dcom_minigame.handle_event(event)
-                if handled:
-                    runtime_globals.game_console.log(f"[DComView] Count Match Z handled {event_type}, press_counter now: {self.dcom_minigame.get_press_counter()}")
-                return
-            elif event_type in ["B", "X"]:
-                # Finish minigame and continue
-                self.dcom_minigame_result = self.dcom_minigame.calculate_result()
-                runtime_globals.game_console.log(f"[DComView] PENZ Count Match Z completed! Result: {self.dcom_minigame_result}")
-                runtime_globals.game_sound.play("menu")
-                self.dcom_minigame = None
-                # Add delay to prevent button spam from clicking next view's components
-                self.minigame_complete_time = time.time()
-                self.waiting_after_minigame = True
-                return
-        
-        # Handle DMX minigame input
-        if self.phase == "minigame_dmx":
-            if event_type in ["A", "LCLICK"]:
-                if self.dcom_xai_phase == 1 and self.dcom_xai_roll:
-                    if not self.dcom_xai_roll.rolling and not self.dcom_xai_roll.stopping:
-                        # Roll already finished — bar transition is imminent.
-                        # Buffer the press so the bar stops on its very first frame.
-                        self._dcom_xai_pending_stop = True
-                    elif self.dcom_xai_roll.rolling and not self.dcom_xai_roll.stopping:
-                        self.dcom_xai_roll.stop()
-                        self.dcom_xai_number = self.dcom_xai_roll.current_frame + 1
-                        runtime_globals.game_console.log(f"[DComView] XAI roll stopped at: {self.dcom_xai_number}")
-                    # else: stopping animation in progress — ignore input
-                elif self.dcom_xai_phase == 2 and self.dcom_xai_bar:
-                    self._do_dcom_xai_bar_stop()
-                return
-            elif event_type == "ESC":
+        if self.phase == "minigame" and self.minigame:
+            if event_type == "ESC":
                 runtime_globals.game_console.log("[DComView] Minigame cancelled")
-                runtime_globals.game_sound.play("cancel")
-                self._on_cancel()
-                return
-    
-    def _do_dcom_xai_bar_stop(self):
-        """Freeze the XAI bar, record result, and advance to the complete phase."""
-        self.dcom_xai_bar.stop()
-        strength = self.dcom_xai_bar.get_result() or 1
-        if strength <= 5:
-            self.dcom_minigame_result = 0
-        elif strength <= 10:
-            self.dcom_minigame_result = 1
-        elif strength <= 15:
-            self.dcom_minigame_result = 2
-        else:
-            self.dcom_minigame_result = 3
-        self.dcom_xai_phase = 3
-        runtime_globals.game_console.log(f"[DComView] XAI bar stopped! Strength={strength}, Attack={self.dcom_minigame_result}")
+                self._on_minigame_cancel()
+                return True
+            return self.minigame.handle_event(event)
+
+        # **A as well as START.** START is the natural name for "open the
+        # battle", but A is this game's confirm button everywhere else, and
+        # reaching for it first is the obvious mistake to make -- so it is
+        # not a mistake.
+        # The keypress still works -- some players will reach for it, and it
+        # goes through the same handler so the button changes to LOADING
+        # whichever way it was triggered.
+        if event_type in ("START", "A") and self.communicating:
+            if not (self.start_button and not self.start_button.enabled):
+                self._on_start()
+            return True
+
+        if event_type == "B":
+            self._on_cancel()
+            return True
+        return False
 
     def cleanup(self):
         """Cleanup when view is destroyed."""
         self._cleanup_dcom()
-        
-        components = [
-            self.background, self.title_scene, self.status_label,
-            self.device_menu, self.protocol_menu, self.cancel_button,
-        ]
-        
-        for comp in components:
+
+        for comp in (self.background, self.title_scene, self.status_label,
+                     self.device_menu, self.protocol_menu, self.cancel_button,
+                     self.start_button):
             if comp and comp in self.ui_manager.components:
                 self.ui_manager.remove_component(comp)
-        
+
         runtime_globals.game_console.log("[DComView] Cleanup complete")

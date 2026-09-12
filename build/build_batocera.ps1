@@ -123,6 +123,12 @@ $scenesSource = (Resolve-Path "..\src\scenes").Path
 $scenesDestination = "$TEMP_DIR\$BUILD_NAME\src\scenes"
 robocopy $scenesSource $scenesDestination /E /XD "__pycache__" /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
 
+# Copy wificom directory
+Write-Status "Copying wificom directory..."
+$wificomSource = (Resolve-Path "..\src\wificom").Path
+$wificomDestination = "$TEMP_DIR\$BUILD_NAME\src\wificom"
+robocopy $wificomSource $wificomDestination /E /XD "__pycache__" /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+
 # Copy vpet.py and src __init__.py
 Write-Status "Copying vpet.py..."
 New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\src" -Force | Out-Null

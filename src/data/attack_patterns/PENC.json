@@ -1,81 +1,434 @@
 {
-  "name": "PENC",
-  "description": "Digimon Pendulum COLOR attack patterns",
-  "patterns": [
-    {
-      "index": 0,
-      "attacks": [1, 1, 1, 1, 1, 1],
-      "description": "Pattern 0 - All weak attacks"
+  "protocol": "PENC",
+  "description": "Digimon Pendulum Color battle data. Unlike the Digital Monster Color, this line fights a real battle rather than exchanging a verdict: 'You begin each battle by shaking to get a specific color, just as you do in Training' and 'Each Digimon has 3 health points which will be reduced by 1 for a normal hit and by 2 for a super hit'.",
+  "hp": 3,
+  "turns": 5,
+  "damage": {
+    "normal": 1,
+    "super": 2,
+    "note": "Two values only. The training animation draws a Megahit as a third, triple-sprite level; that is a picture, not a damage figure, and a battle on this line never spends more than 2 in one shot."
+  },
+  "wire": {
+    "note": "Packet 2, as eight big-endian 16-bit words numbered from zero. Words 0-1 are the GDDp header, 2 the operation, 3 the attack sprite and 7 the checksum.",
+    "word_4": "In operation 0x13 only: whether the INITIATOR won. 1 won, 0 lost.",
+    "word_5": "In operation 0x13 only: the INITIATOR's hit mask, least significant bit = round 1. **It is the whole roll, made before the battle** -- see `mask_covers_rounds_never_played`.",
+    "word_6": "The attack-pattern selector, sent by both sides in their own battle packet.",
+    "result_lives_in_0x13": "The responder's final packet carries the result, which is NOT where the Digital Monster Color puts it -- that line's verdict is in operation 2, the initiator's. Sharing a packet layout does not make the battle semantics shared, and assuming it did is what made every PENC battle come out wrong.",
+    "evidence": "Verified against the Filmed annotations in utilities/DMX/battle.txt: 32 of 32 visible hit/miss observations and 14 of 14 winners. The discriminating captures are battle 56 (mask 0x0002, filmed Miss/Hit/Miss) and battle 57a (mask 0x0016, filmed Miss/Hit/Hit); 57a is also the only non-zero word 4 on record. The other nine battles are the same all-zero case repeated -- individually weak, but 20 filmed attacks landing 20 out of 20 while a much stronger device loses every time is not something a rolled battle produces.",
+    "complementary_hits_is_a_hypothesis": "One mask is read as covering both sides, the responder's hits being the initiator's inverted. The DMX document states that rule for its own wire ('Player and Opponents appear to always be inverse, and ties are not programmed into the device') and the Vital Bracelet notes repeat it, which makes it plausible and not established. The films only ever annotate the GAME's attacks, so the device's own flags have never been read directly; a two-screen capture would settle it. Borrowing another line's rule is exactly the mistake that put the verdict in the wrong packet.",
+    "mask_covers_rounds_never_played": "The mask sets bits for rounds the battle never reaches, because 3 hit points end it early. Battle 55 set bit 3 in a two-round battle, 57a and 60 set bit 4 in three-round ones, and 57b and 61 set **bit 5** -- which was on record as unexplained, and is simply the same thing one round further out. Checked across all 17 filmed battles: every bit inside the rounds actually played matches the film, and every set bit outside them is past the knockout. Zero disagreements. What is still unknown is whether a sixth round exists at all: the attack table has five values and no filmed battle has run past four, so bit 5 may be a round nobody has reached or a field wider than the battle.",
+    "five_rounds": "**Five rounds, not six.** Bit 5 of the hit mask is set in battles 57b and 61 for a round the fight never reached, which left open whether a sixth round exists. The training minigame settles it: training plays the same shots a battle does and has **no sixth pattern to play**, so there is nothing for a sixth round to throw. The only alternative would be the row repeating, which no filmed battle has run long enough to show. So the mask is a field wider than the battle, and TURNS stays 5."
+  },
+  "attack_patterns": {
+    "key": "the word 6 selector, as it appears on the wire",
+    "note": "**The selector names a row of `stage_patterns`.** Every device battle on record resolves its opponent to a roster record, which gives its stage, and each battle's heading records the colour it landed, which gives its band -- and across 18 observations no selector ever means two different (stage, band) pairs. Selector 0x000A is the strongest: four battles and two different Digimon, Hagurumon and Fujamon, both stage 3 Virus, both landing their middle colour.",
+    "this_replaced_padded_prefixes": "The rows used to be prefixes read off the Filmed blocks and padded by repeating the last value, because no filmed battle ran past three rounds. **Four of the six padded tails were wrong**: 0x0003 padded to 11222 where the device throws 11211, 0x0008 to 21111 where it throws 21211, 0x000A to 12222 where it throws 12122, and 0x000B to 21111 where it throws 21212. Every filmed prefix still matches, which is why the error survived -- a prefix cannot see a tail.",
+    "the_encoding_is_not_known": "Within a band the selector rises by exactly 1 per stage (none: stage 3 -> 2, stage 4 -> 3; middle: stage 3 -> 10, stage 4 -> 11) and `own` is 0x000E at every stage, which follows from every stage's own row being 22222. That is a pattern in two points per band, not a derived formula: no block layout tried reproduces all six selectors. So only the measured pairs are stored and nothing is extrapolated. The cheapest experiment left is a stage 3 device landing its WORST colour -- red on a Virus pet -- which should fall between 0x02 and 0x0A.",
+    "observed": {
+      "2": {
+        "stage": 3,
+        "band": "none",
+        "row": [
+          1,
+          2,
+          1,
+          1,
+          1
+        ],
+        "battles": "55, 56, 57a, 57b (Hagurumon)"
+      },
+      "3": {
+        "stage": 4,
+        "band": "none",
+        "row": [
+          1,
+          1,
+          2,
+          1,
+          1
+        ],
+        "battles": "48 (Gawappamon)"
+      },
+      "8": {
+        "stage": 4,
+        "band": "worst",
+        "row": [
+          2,
+          1,
+          2,
+          1,
+          1
+        ],
+        "battles": "46, 50 (Gawappamon)"
+      },
+      "10": {
+        "stage": 3,
+        "band": "middle",
+        "row": [
+          1,
+          2,
+          1,
+          2,
+          2
+        ],
+        "battles": "54 (Hagurumon); 58, 59, 60 (Fujamon)"
+      },
+      "11": {
+        "stage": 4,
+        "band": "middle",
+        "row": [
+          2,
+          1,
+          2,
+          1,
+          2
+        ],
+        "battles": "49 (Gawappamon)"
+      },
+      "14": {
+        "stage": null,
+        "band": "own",
+        "row": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "battles": "43, 47, 51, 52, 53 (Gawappamon)"
+      }
     },
-    {
-      "index": 1,
-      "attacks": [2, 1, 1, 1, 1, 2],
-      "description": "Pattern 1"
+    "unknown_selector": "A selector nobody has filmed falls back to all normal hits -- the weakest thing it could be, so an unknown never overstates the damage."
+  },
+  "charge_to_selector": {
+    "key": "our own stage, then the band our charge landed -> the selector we send",
+    "note": "**The selector is the row's index in the Colour family's shared pool**, and that closes this table. The pool is 15 rows in the Xros Wars firmware (`COLOUR_ROWS.json`): all 28 rows measured off a real Pendulum Color are in it, using all 15 entries, and all seven selectors read off the wire are exactly the index. So the remaining 21 pairs follow from the rows rather than needing 21 more battles.\nIt also explains what the readings could only hint at -- 'within a band the selector rises by 1 per stage' was two stages happening to sit one pool entry apart, and `own` is 14 everywhere because the Megahit is the pool's last row.",
+    "values": {
+      "1": {
+        "none": 0,
+        "worst": 1,
+        "middle": 9,
+        "own": 14
+      },
+      "2": {
+        "none": 0,
+        "worst": 1,
+        "middle": 9,
+        "own": 14
+      },
+      "3": {
+        "none": 2,
+        "worst": 5,
+        "middle": 10,
+        "own": 14
+      },
+      "4": {
+        "none": 3,
+        "worst": 8,
+        "middle": 11,
+        "own": 14
+      },
+      "5": {
+        "none": 4,
+        "worst": 7,
+        "middle": 12,
+        "own": 14
+      },
+      "6": {
+        "none": 1,
+        "worst": 6,
+        "middle": 13,
+        "own": 14
+      },
+      "7": {
+        "none": 1,
+        "worst": 6,
+        "middle": 13,
+        "own": 14
+      }
     },
-    {
-      "index": 2,
-      "attacks": [1, 2, 1, 1, 1, 1],
-      "description": "Pattern 2"
+    "measured": {
+      "3": [
+        "none",
+        "middle",
+        "own"
+      ],
+      "4": [
+        "none",
+        "worst",
+        "middle",
+        "own"
+      ]
     },
-    {
-      "index": 3,
-      "attacks": [1, 1, 2, 1, 1, 1],
-      "description": "Pattern 3"
+    "derived_from": "COLOUR_ROWS.json, cross-checked against those seven"
+  },
+  "stage_patterns": {
+    "key": "the attacker's STAGE 1-7, then the colour band its charge landed",
+    "bands": [
+      "none",
+      "worst",
+      "middle",
+      "own"
+    ],
+    "note": "Measured on a real Pendulum Color across every stage (utilities/DIGIROM/penc.txt): each colour shaken for and the five shots read off the screen. The band is the colour's PLACE in that attribute's own ranking -- `own` is the Megahit colour, `middle` the next, `worst` the last, `none` fewer than two shakes -- which is what makes the two stage 3 readings, a Virus pet and a Data pet, come out identical row for row in their own colour orders.",
+    "the_key_is_stage_and_band": "Effort, hunger and strength were maxed on several stages and not one row moved, so nothing the pet has trained reaches this table. That also retires the earlier reading that these were TRAINING rows separate from the battle's: the same table serves training, quest and versus, and the device plays a charge in all three.",
+    "super_hits_are_not_free": "The number of super hits IS the count of 2s in the row, and it follows from the stage: `none` pays 0 at stages 1-2 and 1 from stage 3 up, and `middle` pays 3 at stages 1-4 and 4 from stage 5 up. So the manual's '3-4' band is the stage speaking, not a roll -- which is what `COUNT_MATCH_PAYOUT` had been rolling -- and 4 super hits are real, which was open until stages 5-7 were read.",
+    "no_row_opens_with_its_supers": "No row that has super hits to place puts them first, which is what both the battle and the training screen threw before the device was read (`[2]*n + [1]*(5-n)`). The all-normal and all-super rows match that formula trivially and a single super has only five places to sit, so the claim is about the 2, 3 and 4 super rows -- and not one of those twelve is supers-first.",
+    "patterns": {
+      "1": {
+        "none": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "worst": [
+          2,
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        "middle": [
+          1,
+          1,
+          2,
+          2,
+          2,
+          1
+        ],
+        "own": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "2": {
+        "none": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "worst": [
+          2,
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        "middle": [
+          1,
+          1,
+          2,
+          2,
+          2,
+          1
+        ],
+        "own": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "3": {
+        "none": [
+          1,
+          2,
+          1,
+          1,
+          1,
+          1
+        ],
+        "worst": [
+          1,
+          1,
+          2,
+          2,
+          1,
+          1
+        ],
+        "middle": [
+          1,
+          2,
+          1,
+          2,
+          2,
+          1
+        ],
+        "own": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "4": {
+        "none": [
+          1,
+          1,
+          2,
+          1,
+          1,
+          1
+        ],
+        "worst": [
+          2,
+          1,
+          2,
+          1,
+          1,
+          2
+        ],
+        "middle": [
+          2,
+          1,
+          2,
+          1,
+          2,
+          2
+        ],
+        "own": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "5": {
+        "none": [
+          1,
+          1,
+          1,
+          2,
+          1,
+          1
+        ],
+        "worst": [
+          2,
+          1,
+          1,
+          2,
+          1,
+          2
+        ],
+        "middle": [
+          1,
+          2,
+          2,
+          2,
+          2,
+          1
+        ],
+        "own": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "6": {
+        "none": [
+          2,
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        "worst": [
+          1,
+          2,
+          1,
+          2,
+          1,
+          1
+        ],
+        "middle": [
+          2,
+          1,
+          2,
+          2,
+          2,
+          2
+        ],
+        "own": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      },
+      "7": {
+        "none": [
+          2,
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        "worst": [
+          1,
+          2,
+          1,
+          2,
+          1,
+          1
+        ],
+        "middle": [
+          2,
+          1,
+          2,
+          2,
+          2,
+          2
+        ],
+        "own": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      }
     },
-    {
-      "index": 4,
-      "attacks": [1, 1, 1, 2, 1, 1],
-      "description": "Pattern 4"
+    "the_attribute_only_permutes_the_colours": "The table is keyed on the band, so **all four attributes are covered at every stage** even where no such Digimon exists -- a stage 1 Vaccine has a defined row for each band because the band is the colour's place in its ranking, not the colour. Stage 3 was read twice, on a Virus pet and a Data pet, and came out identical; stages 6 and 7 were read on a Vaccine and a Virus and came out identical too.",
+    "the_sixth_round": "Rounds 1-5 of every row were read off a real Pendulum Color; round 6 comes from the family's shared pool, which those five identify uniquely -- all 28 rows land on a distinct pool entry. The charge fires five shots on screen, which is why the readings stop there; the battle has six, and this line's hit mask has twice been seen with bit 5 set."
+  },
+  "enemy_patterns": {
+    "key": "the enemy's stage 1-7 -> the band it fights at",
+    "note": "A quest enemy plays no charge, so it reads its stage and takes one of that stage's own measured rows -- the shape PENOG's and DM20's enemy tables already use, so an enemy never throws a pattern the device could not produce. **Which band is ours by construction**; nothing on a device says what an enemy shakes. The bands are chosen to reproduce the damage ramp the previous invented table had exactly (5, 6, 7, 8, 9, 10, 10 across the seven stages), so this changes which rows are thrown and not how hard a quest hits.",
+    "bands": {
+      "1": "none",
+      "2": "worst",
+      "3": "worst",
+      "4": "middle",
+      "5": "middle",
+      "6": "own",
+      "7": "own"
     },
-    {
-      "index": 5,
-      "attacks": [1, 1, 2, 2, 1, 1],
-      "description": "Pattern 5"
-    },
-    {
-      "index": 6,
-      "attacks": [1, 2, 1, 2, 1, 1],
-      "description": "Pattern 6"
-    },
-    {
-      "index": 7,
-      "attacks": [2, 1, 1, 2, 1, 2],
-      "description": "Pattern 7"
-    },
-    {
-      "index": 8,
-      "attacks": [2, 1, 2, 1, 1, 2],
-      "description": "Pattern 8"
-    },
-    {
-      "index": 9,
-      "attacks": [1, 1, 2, 2, 2, 1],
-      "description": "Pattern 9"
-    },
-    {
-      "index": 10,
-      "attacks": [1, 2, 1, 2, 2, 1],
-      "description": "Pattern 10"
-    },
-    {
-      "index": 11,
-      "attacks": [2, 1, 2, 1, 2, 2],
-      "description": "Pattern 11"
-    },
-    {
-      "index": 12,
-      "attacks": [1, 2, 2, 2, 2, 1],
-      "description": "Pattern 12"
-    },
-    {
-      "index": 13,
-      "attacks": [2, 1, 2, 2, 2, 2],
-      "description": "Pattern 13"
-    },
-    {
-      "index": 14,
-      "attacks": [2, 2, 2, 2, 2, 2],
-      "description": "Pattern 14 - All strong attacks"
-    }
-  ]
+    "the_real_data_exists_and_we_do_not_want_it": "**A Pendulum Color's quest enemies carry their own pattern in ROM** -- the DMC Modding App's layout for penc0-5 gives quest mode as 10 levels of 5 enemies, each `CharacterID, Power, Handicap, Pattern`, at `QuestModeLocation`. Handicap being in that record confirms what the quest rosters already model.\n**But a per-enemy table is not what this engine should hold.** A module is data anyone can author, and a hardcoded row per enemy breaks the moment someone adds one -- their enemy would have no pattern. Keying on the enemy's own attributes (its stage here, its stage and effort on the Xros Wars line) means every enemy has one, including enemies no real device ever shipped. So the bands below stay even if a PENC dump turns up; what a dump would be good for is checking that a stage's band lands where the device's own enemies of that stage do."
+  }
 }

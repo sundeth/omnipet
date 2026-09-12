@@ -12,7 +12,7 @@ from ui.components.title_scene import TitleScene
 from ui.components.button import Button
 from ui.components.label import Label
 from ui.components.background import Background
-from ui.components.text_panel import TextPanel
+from ui.components.tooltip_bar import TooltipBar
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals, game_globals, constants
 from utils.scene_utils import change_scene
@@ -52,12 +52,15 @@ class MainMenuView:
         self._shop_available = None
         self._wifi_available = None
         self._dcom_available = None
+        self._wificom_available = None
         
         # Periodic check timers
         self.last_wifi_check_time = 0
         self.last_dcom_check_time = 0
+        self.last_wificom_check_time = 0
         self.wifi_check_interval = 3.0
         self.dcom_check_interval = 3.0
+        self.wificom_check_interval = 3.0
         
         # UI Components (shared across all views)
         self.background = None
@@ -77,10 +80,11 @@ class MainMenuView:
         self.arena_back_button = None
         
         # Local Battle sub-menu buttons
+        self.local_wificom_button = None
         self.local_wifi_button = None
         self.local_dcom_button = None
         self.local_back_button = None
-        self.local_battle_desc_panel = None
+        self.local_battle_tooltip = None
         
         # Config sub-menu buttons
         self.config_back_button = None
@@ -286,17 +290,17 @@ class MainMenuView:
         small_button_width = 61
         small_button_heights = (main_button_height // 3) - 4
         
-        # WiFi button
-        self.local_wifi_button = Button(
+        # WiFiCom button
+        self.local_wificom_button = Button(
             left_button_x, top_row_y, main_button_width, main_button_height,
-            "", self._on_wifi_selected,
-            decorators=["Connect_LocalWifi", "Connect_Loading"],
+            "", self._on_wificom_selected,
+            decorators=["Connect_WifiCom", "Connect_Loading"],
             cut_corners={'tl': False, 'tr': True, 'bl': False, 'br': True}
         )
-        self.local_wifi_button.visible = False
-        self.local_wifi_button.enabled = False
-        self.ui_manager.add_component(self.local_wifi_button)
-        self.local_battle_submenu_components.append(self.local_wifi_button)
+        self.local_wificom_button.visible = False
+        self.local_wificom_button.enabled = False
+        self.ui_manager.add_component(self.local_wificom_button)
+        self.local_battle_submenu_components.append(self.local_wificom_button)
         
         # DCom button
         self.local_dcom_button = Button(
@@ -310,10 +314,21 @@ class MainMenuView:
         self.ui_manager.add_component(self.local_dcom_button)
         self.local_battle_submenu_components.append(self.local_dcom_button)
         
+        # WiFi button, below WiFiCom
+        self.local_wifi_button = Button(
+            left_button_x, bottom_row_y, main_button_width, main_button_height,
+            "", self._on_wifi_selected,
+            decorators=["Connect_LocalWifi", "Connect_Loading"],
+            cut_corners={'tl': False, 'tr': True, 'bl': False, 'br': True}
+        )
+        self.local_wifi_button.visible = False
+        self.local_wifi_button.enabled = False
+        self.ui_manager.add_component(self.local_wifi_button)
+        self.local_battle_submenu_components.append(self.local_wifi_button)
+        
         # Back button
-        local_back_y = top_row_y + main_button_height + vertical_gap
         self.local_back_button = Button(
-            right_button_x, local_back_y, small_button_width, small_button_heights,
+            right_button_x, bottom_row_y, small_button_width, small_button_heights,
             "BACK", self._on_local_battle_back,
             cut_corners={'tl': True, 'tr': False, 'bl': False, 'br': True}
         )
@@ -321,14 +336,12 @@ class MainMenuView:
         self.ui_manager.add_component(self.local_back_button)
         self.local_battle_submenu_components.append(self.local_back_button)
         
-        # Description panel
-        self.local_battle_desc_panel = TextPanel(
-            left_button_x, bottom_row_y, main_button_width, main_button_height
-        )
-        self.local_battle_desc_panel.set_text("")
-        self.local_battle_desc_panel.visible = False
-        self.ui_manager.add_component(self.local_battle_desc_panel)
-        self.local_battle_submenu_components.append(self.local_battle_desc_panel)
+        # Tooltip bar for the highlighted option.  It sizes and places
+        # itself along the bottom edge of the UI area.
+        self.local_battle_tooltip = TooltipBar()
+        self.local_battle_tooltip.visible = False
+        self.ui_manager.add_component(self.local_battle_tooltip)
+        self.local_battle_submenu_components.append(self.local_battle_tooltip)
     
     def _setup_config_submenu_buttons(self):
         """Setup Config sub-menu buttons and labels."""
@@ -562,6 +575,13 @@ class MainMenuView:
             component.visible = True
         
         # Reset buttons to loading state
+        self.local_wificom_button.decorators = ["Connect_WifiCom", "Connect_Loading"]
+        self.local_wificom_button.enabled = False
+        self.local_wificom_button.focusable = False
+        if hasattr(self.local_wificom_button, 'on_manager_set'):
+            self.local_wificom_button.on_manager_set()
+        self.local_wificom_button.needs_redraw = True
+        
         self.local_wifi_button.decorators = ["Connect_LocalWifi", "Connect_Loading"]
         self.local_wifi_button.enabled = False
         self.local_wifi_button.focusable = False
@@ -579,13 +599,17 @@ class MainMenuView:
         # Reset availability flags and trigger checks
         self._wifi_available = None
         self._dcom_available = None
+        self._wificom_available = None
         self.last_wifi_check_time = 0
         self.last_dcom_check_time = 0
-        runtime_globals.game_console.log("[MainMenuView] Starting WiFi and DCom availability checks...")
+        self.last_wificom_check_time = 0
+        runtime_globals.game_console.log("[MainMenuView] Starting WiFi, DCom and WiFiCom availability checks...")
         threading.Thread(target=self._check_wifi_availability_async, daemon=True).start()
         threading.Thread(target=self._check_dcom_availability_async, daemon=True).start()
+        threading.Thread(target=self._check_wificom_availability_async, daemon=True).start()
         
-        # Set initial keyboard focus on Local WiFi (first button in submenu)
+        # Set initial keyboard focus on Local WiFi.  WiFiCom sits above it
+        # but cannot be used yet, so it does not take the opening focus.
         if self.local_wifi_button:
             self.ui_manager.set_focused_component(self.local_wifi_button)
     
@@ -646,6 +670,28 @@ class MainMenuView:
             self._wifi_available = True
         except Exception:
             self._wifi_available = False
+    
+    def _check_wificom_availability_async(self):
+        """Background thread to check WiFiCom availability.
+
+        Two conditions, both of which the player can fix: the secrets
+        file from the wificom.dev webapp has to be in place, and the
+        machine has to be able to reach the internet.  Credentials are
+        re-read each time so dropping the file in is picked up without a
+        restart.
+        """
+        runtime_globals.game_console.log("[MainMenuView] Checking WiFiCom availability...")
+        try:
+            from services.wificom_service import (credentials_available,
+                                                  internet_available,
+                                                  transport_available)
+            available = (transport_available()
+                         and credentials_available()
+                         and internet_available())
+            self._wificom_available = available
+        except Exception as e:
+            runtime_globals.game_console.log(f"[MainMenuView] WiFiCom check failed: {e}")
+            self._wificom_available = False
     
     def _check_dcom_availability_async(self):
         """Background thread to check DCom availability."""
@@ -791,6 +837,15 @@ class MainMenuView:
         """Arena sub-menu back button clicked."""
         runtime_globals.game_sound.play("cancel")
         self._show_main_menu()
+    
+    def _on_wificom_selected(self):
+        """WiFiCom button clicked.
+
+        Straight to the risk notice: nothing connects until the player
+        has read it and said yes.
+        """
+        runtime_globals.game_sound.play("menu")
+        self.change_view("wificom_warning")
     
     def _on_wifi_selected(self):
         """WiFi button clicked."""
@@ -959,6 +1014,23 @@ class MainMenuView:
             self.local_dcom_button.needs_redraw = True
             self._dcom_available = None
         
+        # Handle WiFiCom availability result
+        if self._wificom_available is not None and self.local_wificom_button and self.local_wificom_button.visible:
+            runtime_globals.game_console.log(f"[MainMenuView] WiFiCom availability: {self._wificom_available}")
+            if self._wificom_available:
+                self.local_wificom_button.decorators = ["Connect_WifiCom"]
+                self.local_wificom_button.enabled = True
+                self.local_wificom_button.focusable = True
+            else:
+                self.local_wificom_button.decorators = ["Connect_WifiCom", "Connect_Offline"]
+                self.local_wificom_button.enabled = False
+                self.local_wificom_button.focusable = False
+            
+            if hasattr(self.local_wificom_button, 'on_manager_set'):
+                self.local_wificom_button.on_manager_set()
+            self.local_wificom_button.needs_redraw = True
+            self._wificom_available = None
+        
         # Handle Omninet availability result
         if self._omninet_available is not None and self.current_submenu == 'config':
             runtime_globals.game_console.log(f"[MainMenuView] Omninet availability: {self._omninet_available}")
@@ -977,24 +1049,36 @@ class MainMenuView:
                 self.last_dcom_check_time = current_time
                 threading.Thread(target=self._check_dcom_availability_async, daemon=True).start()
             
-            # Update description panel based on focus
-            if self.local_battle_desc_panel:
+            if current_time - self.last_wificom_check_time >= self.wificom_check_interval:
+                self.last_wificom_check_time = current_time
+                threading.Thread(target=self._check_wificom_availability_async, daemon=True).start()
+            
+            # Feed the tooltip bar the highlighted option's description
+            if self.local_battle_tooltip:
                 focused = None
                 if 0 <= self.ui_manager.focused_index < len(self.ui_manager.focusable_components):
                     focused = self.ui_manager.focusable_components[self.ui_manager.focused_index]
                 
-                if focused == self.local_wifi_button:
-                    self.local_battle_desc_panel.set_text(
+                if focused == self.local_wificom_button:
+                    self.local_battle_tooltip.set_text(
+                        "Connects to real devices over the internet through wificom.dev, requires an internet connection"
+                    )
+                    self.local_battle_tooltip.visible = True
+                elif focused == self.local_wifi_button:
+                    self.local_battle_tooltip.set_text(
                         "Connects to another Omnipet in the local network, requires Wifi connection"
                     )
-                    self.local_battle_desc_panel.visible = True
+                    self.local_battle_tooltip.visible = True
                 elif focused == self.local_dcom_button:
-                    self.local_battle_desc_panel.set_text(
+                    self.local_battle_tooltip.set_text(
                         "Connects to a real device using a D-Com, requires serial connection support"
                     )
-                    self.local_battle_desc_panel.visible = True
+                    self.local_battle_tooltip.visible = True
                 else:
-                    self.local_battle_desc_panel.visible = False
+                    # Clearing the text as well as hiding restarts the read
+                    # pause when the player comes back to an option.
+                    self.local_battle_tooltip.set_text("")
+                    self.local_battle_tooltip.visible = False
     
     def draw(self, surface):
         """Draw additional elements (if any)."""

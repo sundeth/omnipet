@@ -416,6 +416,15 @@ pet_list = []
 poop_list = []
 traited = []
 gcell_fragments = []
+
+#: Modules that have been renamed. A save keys almost everything by module
+#: name -- adventure progress, unlocks, victories, cards, friends, and every
+#: pet's own ``module`` -- so a rename would orphan all of it without this.
+#: Read on load and written back under the new name; the old name never
+#: reappears. Mirrors protocol_constants.LEGACY_FORMAT_NAMES, which does the
+#: same for the battle format a module declares.
+LEGACY_MODULE_NAMES = {"DM": "DMOG", "PEN": "PENOG"}
+
 unlocks = {}
 showClock = False
 battle_area = {}
@@ -451,7 +460,9 @@ friends = {}
 friend_event_pending = None
 
 # Card collection state (see utils.card_utils):
-#   card_collection: {module_name: {card_id: {"digital": n, "physical": n}}}
+#   card_collection: {module_name: {card_id:
+#                     {"digital": n, "physical": n, "shiny": n}}}
+# ``shiny`` is a subset of digital, not an additional ownership count.
 #   card_cooldowns:  {card_id: unix timestamp of last digital use}
 card_collection = {}
 card_cooldowns = {}
@@ -645,6 +656,45 @@ def save() -> None:
     except Exception as e:
         print(f"[Save] Failed to save game: {e}")
 
+def _rename_saved_modules() -> None:
+    """Move a renamed module's saved state onto its new name.
+
+    Everything a save holds about a module is keyed by its name, so renaming
+    one on disk would otherwise lose the player's adventure progress, its
+    unlocks and its card collection, and leave every pet raised on it
+    pointing at a module that no longer loads.
+
+    An entry already under the new name wins -- the player has played since
+    the rename, and that is the current state.
+    """
+    global pet_list, unlocks, battle_area, battle_round, total_victories
+    global friends, card_collection, card_cooldowns
+    global last_adventure_module, background_module_name
+
+    renamed = []
+    for old_name, new_name in LEGACY_MODULE_NAMES.items():
+        for container in (unlocks, battle_area, battle_round, total_victories,
+                          friends, card_collection, card_cooldowns):
+            if isinstance(container, dict) and old_name in container:
+                value = container.pop(old_name)
+                container.setdefault(new_name, value)
+                renamed.append(f"{old_name}->{new_name}")
+
+        for pet in (pet_list or []):
+            if getattr(pet, "module", None) == old_name:
+                pet.module = new_name
+                renamed.append(f"pet {getattr(pet, 'name', '?')}")
+
+        if last_adventure_module == old_name:
+            last_adventure_module = new_name
+        if background_module_name == old_name:
+            background_module_name = new_name
+
+    if renamed:
+        print(f"[Save] Migrated renamed modules: {len(renamed)} entry/entries "
+              f"({', '.join(sorted(set(renamed))[:6])})")
+
+
 def load() -> None:
     """
     Loads the global game state from the most recent save file, with fallback to previous saves.
@@ -779,6 +829,9 @@ def load() -> None:
                 setup_graphics = data.get("setup_graphics", True)
                 show_tutorial = data.get("show_tutorial", True)
                 game_mode = data.get("game_mode", GAME_MODE_PROGRESS)
+
+                # A module renamed on disk takes its saved state with it.
+                _rename_saved_modules()
 
                 # Verify player_id for Progress Mode saves
                 saved_player_id = data.get("player_id", None)

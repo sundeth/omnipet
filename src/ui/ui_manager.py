@@ -628,8 +628,11 @@ class UIManager:
             if event_data and "pos" in event_data:
                 self.update_mouse_focus(event_data["pos"])
         
-        # Let focused component handle the event first (priority order)
-        if self.focused_index >= 0:
+        # Let focused component handle the event first (priority order).
+        # The index is bounds-checked: a view that draws itself and registers
+        # no focusable components at all (the temporary-evolution chooser)
+        # leaves the list empty while the index still points at 0.
+        if 0 <= self.focused_index < len(self.focusable_components):
             focused_component = self.focusable_components[self.focused_index]
             if focused_component.visible and hasattr(focused_component, 'handle_event'):
                 if focused_component.handle_event(event):

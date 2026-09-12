@@ -1,5 +1,31 @@
 from core import game_globals, runtime_globals
 
+
+def _grant_card_reward(module, unlock_data):
+    """Grant an unlock's optional collection card exactly once.
+
+    Unlock rewards request a shiny copy. Soul/DigiSoul Plates remain ordinary
+    because that physical product family never has shiny variants.
+    """
+    card_id = unlock_data.get("card") if isinstance(unlock_data, dict) else None
+    if not card_id:
+        return
+    from utils.card_utils import add_card_copy, get_module_cards
+
+    collection = get_module_cards(module)
+    card = next((entry for entry in (collection or {}).get("cards", [])
+                 if entry.get("id") == card_id), None)
+    if card is None:
+        runtime_globals.game_console.log(
+            f"[Unlocks] Card reward '{card_id}' is missing from {module}; skipped")
+        return
+    shiny = add_card_copy(module, card_id, shiny=True)
+    finish = " shiny" if shiny else ""
+    runtime_globals.game_message.add_slide(
+        f"{card.get('name', 'Card')}{finish} card obtained!",
+        (255, 255, 0), 56 * runtime_globals.UI_SCALE,
+        runtime_globals.FONT_SIZE_SMALL)
+
 # Use a single list of unlocks per module, each unlock has a "type" field
 def ensure_module_key(module: str):
     if not isinstance(module, str):
@@ -43,6 +69,8 @@ def unlock_item(module: str, unlock_type: str, name: str, label: str = None):
         except Exception as exc:
             runtime_globals.game_console.log(f"[Unlocks] reward failed: {exc}")
 
+        _grant_card_reward(module, unlock_data)
+
         # --- Group unlock logic ---
         # After unlocking, check for group unlocks in this module
         for group_unlock in unlocks:
@@ -65,6 +93,7 @@ def unlock_item(module: str, unlock_type: str, name: str, label: str = None):
                             group_entry["label"] = group_label
                         game_globals.unlocks[module].append(group_entry)
                         runtime_globals.game_message.add_slide(f"{group_label} unlocked!", (255, 255, 0), 56 * runtime_globals.UI_SCALE, runtime_globals.FONT_SIZE_SMALL)
+                        _grant_card_reward(module, group_unlock)
 
 def check_encounter_unlocks(module_name: str, defeated=None):
     """Grant the unlocks a won special encounter is worth.

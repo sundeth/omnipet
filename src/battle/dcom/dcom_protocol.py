@@ -30,6 +30,48 @@ class ProtocolType(Enum):
         return names.get(self, self.value)
 
 
+#: A 16-bit read that came back empty. No wire we use can produce this as a
+#: real packet -- DM20 and DMX both end every packet with the 0xE marker, and
+#: the DM mirrors each field -- so it only ever means the adapter read the
+#: line and found nothing on it.
+EMPTY_PACKET = "0000"
+
+
+def describe_status(line: str):
+    """Explain a DCom status line, or None if it is not one.
+
+    The adapter reports why each read attempt failed. Every one of these is
+    NORMAL while waiting for the player to press the battle button -- the
+    adapter retries several times a second and reports each miss -- so they
+    are a diagnosis only once the wait has run out with nothing received.
+    They come from ``rcvPacketGet`` in the dmcomm sketch:
+
+        t            the line stayed idle: nothing is sending
+        t:-3         the line went low and did not come back in time
+        t:-2 / t:-1  the start bit was mistimed
+        t:<n>:<hex>  the packet broke off after <n> bits
+
+    Returns ``(code, explanation)``, the explanation being what to tell the
+    player if the exchange never happens at all.
+    """
+    if not line:
+        return None
+    if line == 't':
+        return ('idle', "No device detected. Check the cable and start the battle on your device.")
+    if not line.startswith('t:'):
+        return None
+
+    body = line[2:]
+    if body.startswith('-3'):
+        return ('held-low', "Device never answered. Reseat it in the adapter and try again.")
+    if body.startswith('-2') or body.startswith('-1'):
+        return ('bad-start', "Signal misread. Make sure the device is fully seated.")
+    if ':' in body:
+        bits = body.split(':', 1)[0]
+        return ('partial', f"Signal broke off after {bits} bits. Hold the device steady.")
+    return ('unknown', f"Device reported {line}.")
+
+
 class DComProtocol:
     """
     Handles DCom protocol command formatting and parsing.

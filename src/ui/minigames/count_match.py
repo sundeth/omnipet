@@ -129,6 +129,40 @@ class CountMatch:
 
         self.set_phase("ready")
 
+    #: Shakes needed to reach each colour, and the colour it reaches.
+    #: "The order of appearance for the colors is Blue, then Yellow, then
+    #: Red", and the manual's own chart names the counts: Blue at 2, Yellow
+    #: at 7, Red at 12. Colours are 1=Red 2=Yellow 3=Blue, which is why the
+    #: progression counts DOWN.
+    #:
+    #: Two rows of that chart record 6 for Yellow and 11 for Red rather than
+    #: 7 and 12; the other three say 7 and 12, so the odd ones are read as
+    #: the boundary being seen a shake early rather than as a per-attribute
+    #: threshold -- the attribute changes which colour pays what, not when
+    #: the colours arrive.
+    COLOR_THRESHOLDS = ((12, 1), (7, 2), (2, 3))
+
+    #: Shown before the first colour is reached. "If you do not shake at
+    #: least two times, you will only get 0 or 1 Super Hits" -- so under two
+    #: shakes there is no colour on screen at all, which is what this frame
+    #: is for.
+    NO_COLOR = 4
+
+    @classmethod
+    def color_for_shakes(cls, shakes):
+        """The colour *shakes* has reached, or NO_COLOR below the first.
+
+        **One pass, and it does not wrap.** This used to step one colour
+        every three shakes and then cycle 3->2->1->3->2->1, so a player who
+        kept shaking rolled past the colour they had earned and back round to
+        it -- and the counts never lined up with the device's anyway. The
+        device runs Blue, then Yellow, then Red and stops on Red.
+        """
+        for needed, color in cls.COLOR_THRESHOLDS:
+            if shakes >= needed:
+                return color
+        return cls.NO_COLOR
+
     def get_pet_attribute_ready_frame(self):
         """Ready frame for the pet's target color.
 
@@ -176,20 +210,12 @@ class CountMatch:
         
         if self.phase == "count" and event_type in ("Y", "SHAKE"):
             self.press_counter += 1
-            if self.press_counter % 3 == 0:
-                # Every 3 shakes/presses advance one color: Count4 -> Count3,
-                # then cycle 3->2->1->3->2->1...
-                if self.rotation_index == 4:
-                    self.rotation_index = 3
-                else:
-                    self.rotation_index -= 1
-                    if self.rotation_index < 1:
-                        self.rotation_index = 3  # Cycle back to 3, never 4
-            
+            self.rotation_index = self.color_for_shakes(self.press_counter)
+
             # Update animated sprite frame based on rotation_index
             if self.animated_sprite:
                 # Map rotation_index to frame index:
-                # rotation_index 4 -> frame 3 (Count4) - only at start
+                # rotation_index 4 -> frame 3 (Count4) - before any colour
                 # rotation_index 1-3 -> frame 0-2 (Count1-Count3)
                 if self.rotation_index == 4:
                     self.animated_sprite.current_frame = 3  # Count4

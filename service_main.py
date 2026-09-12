@@ -244,12 +244,24 @@ class PhaseReporter:
 # ---------------------------------------------------------------------------
 # Notification backend (pyjnius-based, with a print() fallback for desktop).
 # ---------------------------------------------------------------------------
+#: Android notifications are off.
+#
+# The background service is not working yet and its status notifications were
+# reaching players as debug noise in a release build. Nothing else about the
+# service changes — it still ticks, logs and saves — it just says nothing to
+# the status bar. Flip this back to True together with the service work.
+NOTIFICATIONS_ENABLED = False
+
+
 class AndroidNotifier:
     """Posts Android status-bar notifications via JNI.
 
     Each notification is keyed by a stable id so re-posting the same key
     updates (rather than stacks) the notification. State-change debouncing
     is handled by the caller (StateTracker.diff()).
+
+    Disabled wholesale by NOTIFICATIONS_ENABLED, in which case nothing is
+    posted and nothing is even initialised.
     """
 
     NOTIFICATION_CHANNEL_ID = "omnipet_pets"
@@ -259,6 +271,9 @@ class AndroidNotifier:
         self.enabled = False
         self._next_id = 1000
         self._key_to_id = {}
+        if not NOTIFICATIONS_ENABLED:
+            print("[Service][Notifier] Notifications disabled")
+            return
         try:
             from jnius import autoclass  # type: ignore
 

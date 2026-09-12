@@ -429,6 +429,9 @@ class SceneSleep:
             return
         
         for pet in pets:
+            # Turning the lights off during the bedtime-call window answers
+            # that call before the pet enters its nap state.
+            pet.answer_call("sleep")
             pet.set_state("nap")
             pet.sleep_start_time = now
         runtime_globals.game_console.log("[SceneSleepMenu] Pets put to sleep manually.")

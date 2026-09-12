@@ -4,6 +4,7 @@ from typing import List, Optional
 
 import pygame
 from utils.asset_utils import image_load, open_json, resolve_path
+from utils.data_compat import availability as read_availability, get_data
 
 from core import runtime_globals
 import core.constants as constants
@@ -11,6 +12,7 @@ from models.game_enemy import GameEnemy
 import copy
 
 from models.game_item import GameItem
+from battle.sim import protocol_constants
 from models.quest_event_data import QuestData, EventData
 
 
@@ -149,11 +151,11 @@ class GameModule:
 
                     self.battle_base_sick_chance_win = int(data.get("battle_base_sick_chance_win"))
                     self.battle_base_sick_chance_lose = int(data.get("battle_base_sick_chance_lose"))
-                    self.battle_atribute_advantage = int(data.get("battle_atribute_advantage", 5))
+                    self.battle_attribute_advantage = int(get_data(data, "battle_attribute_advantage", 5))
                     # The X devices add the advantage to Power before working
                     # out the hit rate rather than to the hit rate itself.
-                    self.battle_atribute_advantage_power = bool(
-                        data.get("battle_atribute_advantage_power", False))
+                    self.battle_attribute_advantage_power = bool(
+                        get_data(data, "battle_attribute_advantage_power", False))
                     self.battle_global_hit_points = int(data.get("battle_global_hit_points", 0))
                     # sequential rounds is a boolean flag in newer module.json files
                     self.battle_sequential_rounds = bool(data.get("battle_sequential_rounds", False))
@@ -170,6 +172,26 @@ class GameModule:
                     self.battle_minigame = _minigame_label_fixes.get(_minigame, _minigame)
 
                     # Battle cost configuration
+                    # Digimon Twin: Strength drains overnight, and the battle
+                    # record survives an evolution where the training count
+                    # does not. Both default off so no other module moves.
+                    self.care_needs_decay_while_sleeping = bool(
+                        data.get("care_needs_decay_while_sleeping", False))
+                    self.battle_keep_counts_on_evolution = bool(
+                        data.get("battle_keep_counts_on_evolution", False))
+                    # Event Communication: the outcome table is a list of
+                    # {outcome, item, chance, cross_version} rows.
+                    self.event_communication = bool(
+                        data.get("event_communication", False))
+                    self.event_communication_outcomes = list(
+                        data.get("event_communication_outcomes", []))
+                    # Panic: a hit can leave the pet unable to counter or
+                    # dodge next turn until the player mashes out of it. The
+                    # attribute matchup shifts the rate either way. 0 is off,
+                    # which is every module but the Twin.
+                    self.battle_panic_rate = int(data.get("battle_panic_rate", 0))
+                    self.battle_panic_attribute_bonus = int(
+                        data.get("battle_panic_attribute_bonus", 0))
                     self.battle_cost_type = data.get("battle_cost_type", "DP")
                     self.battle_cost_amount = float(data.get("battle_cost_amount", 1.0))
                     # Weight (g) shed per battle, on top of the cost resource.
@@ -208,6 +230,19 @@ class GameModule:
                     self.vital_value_base = int(data.get("vital_value_base", 50))
                     self.vital_value_loss = int(data.get("vital_value_loss", 50))
 
+                    # Reliability is an optional module-driven care stat. A
+                    # zero-filled configuration leaves older modules exactly
+                    # as they behaved before the stat existed.
+                    self.reliability_base = int(data.get("reliability_base", 0) or 0)
+                    self.reliability_becoming_full = int(data.get("reliability_becoming_full", 0) or 0)
+                    self.reliability_answering_call = int(data.get("reliability_answering_call", 0) or 0)
+                    self.reliability_ignoring_call = int(data.get("reliability_ignoring_call", 0) or 0)
+                    self.reliability_minigame_success = int(data.get("reliability_minigame_success", 0) or 0)
+                    self.reliability_two_poops = int(data.get("reliability_two_poops", 0) or 0)
+                    self.reliability_sickness_or_injury = int(data.get("reliability_sickness_or_injury", 0) or 0)
+                    self.reliability_battle_win = int(data.get("reliability_battle_win", 0) or 0)
+                    self.reliability_hourly = int(data.get("reliability_hourly", 0) or 0)
+
                     # G-Cell system configuration
                     self.use_gcells = bool(data.get("use_gcells", False))
                     self.gcell_random_encounter_win = int(data.get("gcell_random_encounter_win", 0))
@@ -220,10 +255,11 @@ class GameModule:
                     self.gcell_protein = int(data.get("gcell_protein", 0))
                     self.gcell_care_mistake = int(data.get("gcell_care_mistake", 0))
 
-                    if self.battle_global_hit_points > 0:
-                        self.battle_damage_limit = 1 + (self.battle_global_hit_points // 2)
-                    else:
-                        self.battle_damage_limit = 99
+                    # Internal combat borrows patterns, not device limits.
+                    # Modules may cap base damage explicitly; battle bonuses
+                    # are added by the internal engine after that cap.
+                    self.battle_damage_limit = max(1, int(data.get('battle_damage_limit', 99)))
+                    self.battle_max_hit_rate = max(0, min(100, int(data.get('battle_max_hit_rate', 100))))
                     
                     self.unlocks = data.get("unlocks", {
                         "eggs": [],
@@ -493,7 +529,8 @@ class GameModule:
                 amount=entry.get("amount", 0),
                 boost_time=entry.get("boost_time", 0),
                 module=module_name,
-                component_item=entry.get("component_item", "")
+                component_item=entry.get("component_item", ""),
+                weight_gain=entry.get("weight_gain")
             ))
         return items
 
@@ -543,6 +580,64 @@ class GameModule:
                 data = json.load(file)
                 for monster in data.get("monster", []):
                     if monster["name"] == name and monster["version"] == version:
+                        return monster
+        except json.JSONDecodeError:
+            runtime_globals.game_console.log(f"⚠️ Failed to parse {json_path}")
+        return None
+
+    def get_monsters_by_index(self, index: int, versions=None) -> list:
+        """Every roster record sitting at *index*, across *versions*.
+
+        An index is per-version on these devices -- "each version set has its
+        own index" -- so one index can name several different Digimon. A
+        caller with no reliable version has to see them all before it can say
+        whether the answer is unambiguous.
+        """
+        json_path = os.path.join(self.folder_path, "monster.json")
+        if not os.path.exists(resolve_path(json_path)):
+            return []
+        found = []
+        try:
+            with open_json(json_path) as file:
+                data = json.load(file)
+                for monster in data.get("monster", []):
+                    if monster.get("index") != index:
+                        continue
+                    if versions is None or monster.get("version") in versions:
+                        record = dict(monster)
+                        record["module"] = self.name
+                        found.append(record)
+        except json.JSONDecodeError:
+            runtime_globals.game_console.log(f"⚠️ Failed to parse {json_path}")
+        return found
+
+    def get_monster_by_index(self, index: int, versions=None) -> Optional[dict]:
+        """The roster record sitting at *index*, on any of *versions*.
+
+        ``index`` is the Digimon's position in a real device's own roster,
+        which is what the connection protocols put on the wire to say what
+        the toy is holding. Reading it back is how a DCom opponent gets its
+        real name and sprite instead of a generic attribute stand-in.
+
+        *versions* is a collection rather than a single number because the
+        wire's version is not always the module's -- the Colour line numbers
+        its versions from zero -- so the caller passes every module version
+        the received one could mean. None matches any version.
+        """
+        json_path = os.path.join(self.folder_path, "monster.json")
+        resolved_path = resolve_path(json_path)
+
+        if not os.path.exists(resolved_path):
+            return None
+
+        try:
+            with open_json(json_path) as file:
+                data = json.load(file)
+                for monster in data.get("monster", []):
+                    if monster.get("index") != index:
+                        continue
+                    if versions is None or monster.get("version") in versions:
+                        monster["module"] = self.name
                         return monster
         except json.JSONDecodeError:
             runtime_globals.game_console.log(f"⚠️ Failed to parse {json_path}")
@@ -655,7 +750,7 @@ class GameModule:
             # availability is "Friend"; the battle side only needs the special
             # encounter that awards it, matched by name.
             friends = {m.get("name") for m in self.get_all_monsters()
-                       if (m.get("avaliability") or "") == "Friend"}
+                       if read_availability(m) == "Friend"}
             battle_path = os.path.join(self.folder_path, "battle.json")
             out, seen = [], set()
             for entry in (self._parse_battle_json(battle_path) or []):

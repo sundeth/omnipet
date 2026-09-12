@@ -452,6 +452,14 @@ class SceneInventory:
             self._use_status_boost_item(item, targets)
         elif effect == "status_change" and status not in ["hunger", "strength"]:
             self._use_status_change_item(item, targets)
+        elif not effect and not status:
+            # Catalogued items whose authentic behavior is not implemented
+            # remain visible/grantable, but cannot be accidentally consumed
+            # as a generic food item.
+            runtime_globals.game_sound.play("cancel")
+            runtime_globals.game_console.log(
+                f"[SceneInventory] {item.game_item.name} has no implemented effect")
+            return
         else:
             self._use_feeding_item(item, targets)
     
@@ -597,7 +605,9 @@ class SceneInventory:
         
         for pet in targets:
             pet.check_disturbed_sleep()
-            accepted = pet.set_eating(food_status, food_amount)
+            accepted = pet.set_eating(
+                food_status, food_amount,
+                getattr(item.game_item, 'weight_gain', None))
             if accepted:
                 pet.animation_counter = 0
                 accepted_pets.append(pet)

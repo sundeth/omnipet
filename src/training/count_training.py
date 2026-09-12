@@ -6,6 +6,9 @@ from models.animation import PetFrame
 from training.training import Training
 from ui.ui_manager import UIManager
 from ui.minigames.count_match import CountMatch
+from ui.minigames.minigame_session import (count_match_rank,
+                                            count_match_super_hits)
+from battle.sim.battle_utils import get_penc_training_pattern
 from battle import combat_constants
 import core.constants as constants
 from utils.pygame_utils import blit_with_cache
@@ -19,6 +22,7 @@ class CountMatchTraining(Training):
         self.final_color = 3
         self.correct_color = 0
         self.super_hits = {}
+        self.color_band = 0
         self.result_text = None
         self.flash_frame = 0
         self.anim_counter = -1
@@ -99,29 +103,21 @@ class CountMatchTraining(Training):
         shakes = self.press_counter
         attr_type = getattr(pet, "attribute", "")
 
-        if shakes < 2:
-            hits = 0
-        else:
-            color = self.final_color
-            # Map rotation_index (1-4) to color (0-2): 
-            # 4->undefined (shouldn't happen), 1->0, 2->1, 3->2
-            if color == 4:
-                color_mapped = 0  # Failsafe if somehow still on Count4
-            else:
-                color_mapped = color - 1  # 1->0, 2->1, 3->2
-            correct_color = self.correct_color
-            
-            if attr_type in ("", "Va"):
-                hits = 5 if correct_color == color_mapped else random.choice([3, 4]) if abs(correct_color - color_mapped) == 1 else 2 if abs(correct_color - color_mapped) == 2 else 1
-            elif attr_type == "Da":
-                hits = 5 if correct_color == color_mapped else random.choice([3, 4]) if abs(correct_color - color_mapped) == 1 else 2 if abs(correct_color - color_mapped) == 2 else 1
-            elif attr_type == "Vi":
-                hits = 5 if correct_color == color_mapped else random.choice([3, 4]) if abs(correct_color - color_mapped) == 1 else 2 if abs(correct_color - color_mapped) == 2 else 1
-            else:
-                hits = 1
-
+        # One scorer, shared with the battle. The manual's chart is the
+        # attribute's ranking of the three colours paying 5 / 3-4 / 2, and
+        # this used to work it out from the DISTANCE between the landed
+        # colour and the target instead -- which agrees with the ranking but
+        # says nothing about it, and was a second copy either way. The battle
+        # carried the other copy and had the payouts wrong.
+        # The band is shared -- one colour was landed, ranked by the first
+        # pet's attribute -- but the ROW it selects is each pet's own, since
+        # the table is keyed on the stage as well. So a Child and an Ultimate
+        # trained together throw different patterns from the same shake, which
+        # is what the device does.
+        self.color_band = count_match_rank(self.final_color, attr_type)
         for p in pets:
-            self.super_hits[p] = hits
+            self.super_hits[p] = count_match_super_hits(
+                self.final_color, attr_type, getattr(p, "stage", 1) or 1)
 
     def prepare_attack(self):
         self.attack_phase = 0
@@ -139,7 +135,17 @@ class CountMatchTraining(Training):
             if not main_sprite:
                 continue
             count = self.super_hits.get(pet, 0)
-            pattern = [3] * 5 if count == 5 else [2] * count + [1] * (5 - count)
+            # **The measured rows, keyed on this pet's own stage.** A real
+            # Pendulum Color was shaken to every colour at every stage and the
+            # shots read off the screen; not one of the 28 rows opens with its
+            # super hits, which is what `[2] * count + [1] * (5 - count)`
+            # drew. A Megahit keeps its own triple-sprite level -- that is a
+            # training picture and not a damage value, and this line spends
+            # 1 or 2 in a battle.
+            pattern = ([3] * 5 if count == 5
+                       else get_penc_training_pattern(
+                           getattr(pet, "stage", 1) or 1,
+                           getattr(self, "color_band", 0) or 0))
             pet_y = start_y + i * spacing + runtime_globals.OPTION_ICON_SIZE // 2 - main_sprite.get_height() // 2
             for j, kind in enumerate(pattern):
                 x = runtime_globals.SCREEN_WIDTH - runtime_globals.OPTION_ICON_SIZE - (20 * s)

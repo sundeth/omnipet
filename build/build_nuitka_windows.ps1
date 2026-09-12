@@ -103,9 +103,11 @@ try {
         --include-package="src.data" `
         --include-package="src.utils" `
         --include-package="src.scenes" `
+        --include-package="src.wificom" `
         --include-package-data="src" `
         --include-module="json" `
         --include-module="psutil" `
+        --include-module="paho.mqtt.client" `
         --include-module="platform" `
         --include-module="os" `
         --include-module="sys" `

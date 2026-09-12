@@ -23,6 +23,9 @@ psutil>=5.8.0
 
 ### Optional Dependencies (Platform-specific)
 ```
+# For the WiFiCom feature (all platforms)
+paho-mqtt>=1.6.0
+
 # For GPIO support on Raspberry Pi
 RPi.GPIO>=0.7.0 (Raspberry Pi only)
 
@@ -446,3 +449,36 @@ disabled / battery icon neutral), but ship them for full functionality:
   GPIO4). Enable I2C in raspi-config.
 - **Android**: battery uses `plyer` with a `pyjnius` fallback (both in
   buildozer requirements). Phone NFC reading is not implemented yet.
+
+## WiFiCom dependencies
+
+`src/wificom/` is wificom-lib vendored into the game, so Omnipet can present
+itself to wificom.dev as a WiFiCom rather than needing one. See
+`src/wificom/UPSTREAM.md`.
+
+Its only added dependency is **paho-mqtt**, which stands in for the
+CircuitPython `adafruit_minimqtt` upstream uses:
+
+```bash
+pip install paho-mqtt
+```
+
+It degrades the same way the NFC and serial features do — without it,
+`wificom.is_available()` is False and the feature is off; nothing else in the
+game is affected.
+
+Build coverage, since a new `src/` package has to be added in every pipeline
+by hand:
+
+- **PyInstaller** (`Omnipet.spec`, `pyinstall.spec`): `src/wificom` in
+  `datas`, and `paho.mqtt.client` in `hiddenimports` — it is imported inside
+  a `try`/`except`, which the analysis does not follow.
+- **Nuitka** (`build_nuitka_windows.ps1`, `build_gamepi_nuitka.ps1`):
+  `--include-package="src.wificom"` and `--include-module="paho.mqtt.client"`.
+- **Python/Batocera/GamePi** (`build_python_desktop.ps1`,
+  `build_batocera.ps1`, `build_gamepi.ps1`): a robocopy block for
+  `src\wificom`.
+- **Android** (`build_android.ps1`, `buildozer.spec`): `src/wificom` in the
+  WSL mkdir and rsync lists, and `paho-mqtt` in buildozer `requirements`
+  (pure Python, so p4a needs no recipe). `source.include_patterns` already
+  covers it through `src/**`.

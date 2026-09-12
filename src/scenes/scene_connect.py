@@ -16,6 +16,9 @@ from scenes.connect_views import (
     WifiHostingView,
     WifiDiscoveryView,
     DComView,
+    WiFiComWarningView,
+    WiFiComView,
+    XrosView,
     DiscordView,
     LinkDialogView,
     OmninetLinkView,
@@ -227,7 +230,9 @@ class SceneConnect:
         # This ensures a clean slate for the new view
         self.ui_manager.components.clear()
         self.ui_manager.focusable_components.clear()
-        self.ui_manager.focused_index = 0
+        # Nothing is focused until a component registers; 0 would point past
+        # the end of an empty list.
+        self.ui_manager.focused_index = -1
         runtime_globals.game_console.log(f"[SceneConnect] UI manager cleared, all components removed")
         
         # Update shared state
@@ -244,6 +249,9 @@ class SceneConnect:
             "wifi_hosting": WifiHostingView,
             "wifi_discovery": WifiDiscoveryView,
             "dcom": DComView,
+            "wificom_warning": WiFiComWarningView,
+            "wificom": WiFiComView,
+            "xros": XrosView,
             "discord": DiscordView,
             "link_dialog": LinkDialogView,
             "omninet_link": OmninetLinkView,
@@ -275,7 +283,8 @@ class SceneConnect:
             }
             
             # Add selected_pets only to views that consume it (not pet_selection which generates it)
-            if view_name in ['dcom', 'wifi_hosting', 'wifi_discovery', 'battle_confirm']:
+            if view_name in ['dcom', 'wificom', 'xros', 'wifi_hosting',
+                             'wifi_discovery', 'battle_confirm']:
                 view_kwargs['selected_pets'] = self.selected_pets
 
             # Main menu's EXIT button must use the same exit routing as a B-press
@@ -331,14 +340,14 @@ class SceneConnect:
         
         event_type, event_data = event
         
-        # CRITICAL: For minigame phases, bypass UI manager completely
-        # Minigames need direct event access without UI manager interference
-        if self.current_view and self.current_view_name == "dcom":
-            if hasattr(self.current_view, 'phase') and self.current_view.phase in ["minigame", "minigame_dmx"]:
-                # Pass ALL events to the view during minigame, don't filter
-                # View will handle what it needs
-                self.current_view.handle_event(event)
-                return  # IMPORTANT: Return immediately, don't pass to UI manager
+        # A charge minigame takes every event: it is mashed with the same
+        # keys the UI manager uses for focus and buttons, so the manager must
+        # not see them at all while one is running.
+        if (self.current_view
+                and getattr(self.current_view, 'phase', None) == "minigame"
+                and getattr(self.current_view, 'minigame', None)):
+            self.current_view.handle_event(event)
+            return
         
         # Handle mouse motion for UI cursor
         if event_type == "MOUSE_MOTION":

@@ -1,6 +1,10 @@
 """
 ProtocolView - Battle protocol selection
-Shows protocol options for versus battles using Menu component
+
+Shows the device lines a versus battle can be fought under. The list comes
+from ``protocol_constants``, the same place the DCom menu takes it from, so
+the two can never drift -- this view used to carry its own literal and had
+simply never had PENZ added to it.
 """
 import pygame
 from ui.ui_manager import UIManager
@@ -9,7 +13,7 @@ from ui.components.background import Background
 from ui.components.menu import Menu
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals
-from battle.sim.models import BattleProtocol
+from battle.sim import protocol_constants
 
 
 class ProtocolView:
@@ -34,25 +38,10 @@ class ProtocolView:
         self.title_scene = None
         self.protocol_menu = None
         
-        # Protocol options mapping
-        self.protocol_options = [
-            "DM (Original)",
-            "DM20 (V-Pet/Pendulum)",
-            "PEN20 (Pendulum 20th)",
-            "DMX (Digimon X)",
-            "DMC (Color)",
-            "Cancel"
-        ]
-        
-        self.protocol_mapping = {
-            0: BattleProtocol.DM_BS,       # DM (Original)
-            1: BattleProtocol.DM20_BS,     # DM20 (V-Pet/Pendulum)
-            2: BattleProtocol.PEN20_BS,    # PEN20 (Pendulum 20th)
-            3: BattleProtocol.DMX_BS,      # DMX (Digimon X)
-            4: BattleProtocol.DMC_BS,      # DMC (Color)
-            5: None                         # Cancel
-        }
-        
+        # The shared list: [(battle_format, label), ...] in menu order.
+        self.format_menu = protocol_constants.menu_entries()
+        self.protocol_options = [label for _, label in self.format_menu] + ["Cancel"]
+
         self._setup_ui()
         
     def _setup_ui(self):
@@ -77,22 +66,20 @@ class ProtocolView:
         runtime_globals.game_console.log("[ProtocolView] UI setup complete")
     
     def _on_protocol_select(self, index):
-        """Protocol selected from menu."""
-        # Handle cancel
-        if index == 5 or index >= len(self.protocol_options):
+        """Device line selected from menu."""
+        if index >= len(self.format_menu):
             self._on_cancel()
             return
-        
-        protocol = self.protocol_mapping.get(index)
-        if protocol is None:
-            self._on_cancel()
-            return
-        
+
+        battle_format, protocol_name = self.format_menu[index]
+        # PENZ shares DMX's simulation as it shares its wire; the two differ
+        # in the charge minigame, and versus does not play one.
+        protocol = protocol_constants.versus_protocol(battle_format)
+
         runtime_globals.game_sound.play("menu")
-        
-        protocol_name = self.protocol_options[index]
-        runtime_globals.game_console.log(f"[ProtocolView] Protocol selected: {protocol_name}")
-        
+        runtime_globals.game_console.log(
+            f"[ProtocolView] {battle_format} selected ({protocol_name})")
+
         # Close menu before transitioning
         if self.protocol_menu:
             self.protocol_menu.close()
@@ -100,7 +87,10 @@ class ProtocolView:
                 self.ui_manager.active_menu = None
         
         # Change to versus battle view
-        self.change_view("versus_battle", pet1=self.pet1, pet2=self.pet2, protocol=protocol)
+        # The format travels alongside the protocol: PENZ and DMX share
+        # DMX_BS but read the level->pattern table differently.
+        self.change_view("versus_battle", pet1=self.pet1, pet2=self.pet2,
+                         protocol=protocol, battle_format=battle_format)
     
     def _on_cancel(self):
         """Handle cancel button."""

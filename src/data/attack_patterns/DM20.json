@@ -1,218 +1,960 @@
-[
-  {
-    "bar1": 0,
-    "bar2": 1,
-    "taps": [0,2],
-    "pattern": [1,2,1,1,1]
+{
+  "protocol": "DM20",
+  "description": "The Ver.20th's attack tables. `single` is measured: fifteen battles were played against a real Ver.20th, one per point of the tap meter, and what the Digimon fired each round was read off the screen (utilities/DIGIROM/dm20pattern.txt). `tag` is the older tag-battle table and is untouched.\n\nA value is the attack, and the attack is its damage: 1 single weak, 2 single strong, 3 double weak, 4 double strong. Critical is a fifth attack that only Tag Battles reach, so it never appears here.\n\nThe table this replaced held only 1s and 2s -- it recorded how many shots went out and not which sprite, so a Strong and a Double Weak were the same entry in it.",
+  "attacks": {
+    "single_weak": {
+      "value": 1,
+      "damage": 1,
+      "sprite_count": 1,
+      "sprite_type": "atk_alt"
+    },
+    "single_strong": {
+      "value": 2,
+      "damage": 2,
+      "sprite_count": 1,
+      "sprite_type": "atk_main"
+    },
+    "double_weak": {
+      "value": 3,
+      "damage": 3,
+      "sprite_count": 2,
+      "sprite_type": "atk_alt"
+    },
+    "double_strong": {
+      "value": 4,
+      "damage": 4,
+      "sprite_count": 2,
+      "sprite_type": "atk_main"
+    }
   },
-  {
-    "bar1": 0,
-    "bar2": 2,
-    "taps": [3,4],
-    "pattern": [2,1,2,1,2]
+  "sprite_note": "This line reverses the usual pairing: the WEAK attacks draw atk_alt and the STRONG ones atk_main. A pet with no atk_alt falls back to atk_main throughout, and separates the four by count instead -- 1, 2 and 3 sprites, then a single sprite at double size for 4.",
+  "fallback_sprite_counts": {
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 1
   },
-  {
-    "bar1": 0,
-    "bar2": 3,
-    "taps": [5,6],
-    "pattern": [1,1,2,2,1]
+  "fallback_scale": {
+    "4": 2.0
   },
-  {
-    "bar1": 0,
-    "bar2": 4,
-    "taps": [7,8],
-    "pattern": [2,1,2,1,2]
-  },
-  {
-    "bar1": 0,
-    "bar2": 5,
-    "taps": [9],
-    "pattern": [1,2,1,2,1]
-  },
-  {
-    "bar1": 0,
-    "bar2": 5,
-    "taps": [10],
-    "pattern": [1,2,2,3,1]
-  },
-  {
-    "bar1": 0,
-    "bar2": 6,
-    "taps": [11],
-    "pattern": [2,1,2,2,2]
-  },
-  {
-    "bar1": 0,
-    "bar2": 6,
-    "taps": [12],
-    "pattern": [2,1,2,2,2]
-  },
-  {
-    "bar1": 0,
-    "bar2": 7,
-    "taps": [13,14],
-    "pattern": [2,2,1,3,2]
-  },
-  {
-    "bar1": 1,
-    "bar2": 1,
-    "taps": [0,2],
-    "pattern": [1,2,1,1,1]
-  },
-  {
-    "bar1": 1,
-    "bar2": 2,
-    "taps": [3,4],
-    "pattern": [2,1,2,1,2]
-  },
-  {
-    "bar1": 1,
-    "bar2": 3,
-    "taps": [5,6],
-    "pattern": [1,1,2,2,1]
-  },
-  {
-    "bar1": 1,
-    "bar2": 4,
-    "taps": [7,8],
-    "pattern": [2,1,2,1,2]
-  },
-  {
-    "bar1": 1,
-    "bar2": 5,
-    "taps": [9],
-    "pattern": [1,2,1,2,1]
-  },
-  {
-    "bar1": 1,
-    "bar2": 5,
-    "taps": [10],
-    "pattern": [1,2,2,2,1]
-  },
-  {
-    "bar1": 1,
-    "bar2": 6,
-    "taps": [11],
-    "pattern": [2,1,2,2,2]
-  },
-  {
-    "bar1": 1,
-    "bar2": 6,
-    "taps": [12],
-    "pattern": [2,3,2,2,2]
-  },
-  {
-    "bar1": 1,
-    "bar2": 7,
-    "taps": [13,14],
-    "pattern": [2,2,1,3,2]
-  },
-  {
-    "bar1": 2,
-    "bar2": 1,
-    "taps": [0,2],
-    "pattern": [1,2,1,1,1]
-  },
-  {
-    "bar1": 2,
-    "bar2": 2,
-    "taps": [3,4],
-    "pattern": [2,1,2,1,2]
-  },
-  {
-    "bar1": 2,
-    "bar2": 3,
-    "taps": [5,6],
-    "pattern": [1,1,2,2,1]
-  },
-  {
-    "bar1": 2,
-    "bar2": 4,
-    "taps": [7,8],
-    "pattern": [2,1,2,1,2]
-  },
-  {
-    "bar1": 2,
-    "bar2": 5,
-    "taps": [9],
-    "pattern": [3,2,1,2,3]
-  },
-  {
-    "bar1": 2,
-    "bar2": 5,
-    "taps": [10],
-    "pattern": [1,2,2,2,1]
-  },
-  {
-    "bar1": 2,
-    "bar2": 6,
-    "taps": [11],
-    "pattern": [3,1,2,2,2]
-  },
-  {
-    "bar1": 2,
-    "bar2": 6,
-    "taps": [12],
-    "pattern": [3,1,2,2,3]
-  },
-  {
-    "bar1": 2,
-    "bar2": 7,
-    "taps": [13,14],
-    "pattern": [2,2,1,2,2]
-  },
-  {
-    "bar1": 3,
-    "bar2": 1,
-    "taps": [0,2],
-    "pattern": [1,2,1,1,1]
-  },
-  {
-    "bar1": 3,
-    "bar2": 2,
-    "taps": [3,4],
-    "pattern": [2,1,2,1,2]
-  },
-  {
-    "bar1": 3,
-    "bar2": 3,
-    "taps": [5,6],
-    "pattern": [1,1,2,2,1]
-  },
-  {
-    "bar1": 3,
-    "bar2": 4,
-    "taps": [7,8],
-    "pattern": [2,1,2,1,2]
-  },
-  {
-    "bar1": 3,
-    "bar2": 5,
-    "taps": [9],
-    "pattern": [1,2,1,2,1]
-  },
-  {
-    "bar1": 3,
-    "bar2": 5,
-    "taps": [10],
-    "pattern": [1,2,3,2,1]
-  },
-  {
-    "bar1": 3,
-    "bar2": 6,
-    "taps": [11],
-    "pattern": [2,1,3,2,2]
-  },
-  {
-    "bar1": 3,
-    "bar2": 6,
-    "taps": [12],
-    "pattern": [2,1,2,2,2]
-  },
-  {
-    "bar1": 3,
-    "bar2": 7,
-    "taps": [13,14],
-    "pattern": [2,2,1,2,2]
-  }
-]
+  "rounds": 5,
+  "single": [
+    {
+      "meter": 0,
+      "pattern": [
+        1,
+        1,
+        3,
+        1,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_weak",
+        "double_weak",
+        "single_weak",
+        "single_weak"
+      ]
+    },
+    {
+      "meter": 1,
+      "pattern": [
+        1,
+        1,
+        3,
+        1,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_weak",
+        "double_weak",
+        "single_weak",
+        "single_weak"
+      ]
+    },
+    {
+      "meter": 2,
+      "pattern": [
+        1,
+        2,
+        3,
+        1,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_strong",
+        "double_weak",
+        "single_weak",
+        "single_weak"
+      ]
+    },
+    {
+      "meter": 3,
+      "pattern": [
+        2,
+        3,
+        2,
+        3,
+        2
+      ],
+      "attacks": [
+        "single_strong",
+        "double_weak",
+        "single_strong",
+        "double_weak",
+        "single_strong"
+      ]
+    },
+    {
+      "meter": 4,
+      "pattern": [
+        2,
+        3,
+        2,
+        3,
+        2
+      ],
+      "attacks": [
+        "single_strong",
+        "double_weak",
+        "single_strong",
+        "double_weak",
+        "single_strong"
+      ]
+    },
+    {
+      "meter": 5,
+      "pattern": [
+        3,
+        1,
+        2,
+        4,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "single_weak",
+        "single_strong",
+        "double_strong",
+        "double_weak"
+      ]
+    },
+    {
+      "meter": 6,
+      "pattern": [
+        3,
+        1,
+        2,
+        4,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "single_weak",
+        "single_strong",
+        "double_strong",
+        "double_weak"
+      ]
+    },
+    {
+      "meter": 7,
+      "pattern": [
+        4,
+        1,
+        4,
+        1,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "single_weak",
+        "double_strong",
+        "single_weak",
+        "double_strong"
+      ]
+    },
+    {
+      "meter": 8,
+      "pattern": [
+        4,
+        1,
+        4,
+        1,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "single_weak",
+        "double_strong",
+        "single_weak",
+        "double_strong"
+      ]
+    },
+    {
+      "meter": 9,
+      "pattern": [
+        1,
+        4,
+        3,
+        4,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "double_strong",
+        "double_weak",
+        "double_strong",
+        "single_weak"
+      ]
+    },
+    {
+      "meter": 10,
+      "pattern": [
+        3,
+        2,
+        4,
+        4,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "single_strong",
+        "double_strong",
+        "double_strong",
+        "double_weak"
+      ]
+    },
+    {
+      "meter": 11,
+      "pattern": [
+        4,
+        1,
+        4,
+        4,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "single_weak",
+        "double_strong",
+        "double_strong",
+        "double_strong"
+      ]
+    },
+    {
+      "meter": 12,
+      "pattern": [
+        4,
+        3,
+        4,
+        4,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "double_weak",
+        "double_strong",
+        "double_strong",
+        "double_strong"
+      ]
+    },
+    {
+      "meter": 13,
+      "pattern": [
+        4,
+        4,
+        3,
+        4,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "double_strong",
+        "double_weak",
+        "double_strong",
+        "double_strong"
+      ]
+    },
+    {
+      "meter": 14,
+      "pattern": [
+        4,
+        4,
+        3,
+        4,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "double_strong",
+        "double_weak",
+        "double_strong",
+        "double_strong"
+      ]
+    }
+  ],
+  "tag": [
+    {
+      "bar1": 0,
+      "bar2": 1,
+      "taps": [
+        0,
+        2
+      ],
+      "pattern": [
+        1,
+        2,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "bar1": 0,
+      "bar2": 2,
+      "taps": [
+        3,
+        4
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "bar1": 0,
+      "bar2": 3,
+      "taps": [
+        5,
+        6
+      ],
+      "pattern": [
+        1,
+        1,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "bar1": 0,
+      "bar2": 4,
+      "taps": [
+        7,
+        8
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "bar1": 0,
+      "bar2": 5,
+      "taps": [
+        9
+      ],
+      "pattern": [
+        1,
+        2,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "bar1": 0,
+      "bar2": 5,
+      "taps": [
+        10
+      ],
+      "pattern": [
+        1,
+        2,
+        2,
+        3,
+        1
+      ]
+    },
+    {
+      "bar1": 0,
+      "bar2": 6,
+      "taps": [
+        11
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "bar1": 0,
+      "bar2": 6,
+      "taps": [
+        12
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "bar1": 0,
+      "bar2": 7,
+      "taps": [
+        13,
+        14
+      ],
+      "pattern": [
+        2,
+        2,
+        1,
+        3,
+        2
+      ]
+    },
+    {
+      "bar1": 1,
+      "bar2": 1,
+      "taps": [
+        0,
+        2
+      ],
+      "pattern": [
+        1,
+        2,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "bar1": 1,
+      "bar2": 2,
+      "taps": [
+        3,
+        4
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "bar1": 1,
+      "bar2": 3,
+      "taps": [
+        5,
+        6
+      ],
+      "pattern": [
+        1,
+        1,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "bar1": 1,
+      "bar2": 4,
+      "taps": [
+        7,
+        8
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "bar1": 1,
+      "bar2": 5,
+      "taps": [
+        9
+      ],
+      "pattern": [
+        1,
+        2,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "bar1": 1,
+      "bar2": 5,
+      "taps": [
+        10
+      ],
+      "pattern": [
+        1,
+        2,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "bar1": 1,
+      "bar2": 6,
+      "taps": [
+        11
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "bar1": 1,
+      "bar2": 6,
+      "taps": [
+        12
+      ],
+      "pattern": [
+        2,
+        3,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "bar1": 1,
+      "bar2": 7,
+      "taps": [
+        13,
+        14
+      ],
+      "pattern": [
+        2,
+        2,
+        1,
+        3,
+        2
+      ]
+    },
+    {
+      "bar1": 2,
+      "bar2": 1,
+      "taps": [
+        0,
+        2
+      ],
+      "pattern": [
+        1,
+        2,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "bar1": 2,
+      "bar2": 2,
+      "taps": [
+        3,
+        4
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "bar1": 2,
+      "bar2": 3,
+      "taps": [
+        5,
+        6
+      ],
+      "pattern": [
+        1,
+        1,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "bar1": 2,
+      "bar2": 4,
+      "taps": [
+        7,
+        8
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "bar1": 2,
+      "bar2": 5,
+      "taps": [
+        9
+      ],
+      "pattern": [
+        3,
+        2,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "bar1": 2,
+      "bar2": 5,
+      "taps": [
+        10
+      ],
+      "pattern": [
+        1,
+        2,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "bar1": 2,
+      "bar2": 6,
+      "taps": [
+        11
+      ],
+      "pattern": [
+        3,
+        1,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "bar1": 2,
+      "bar2": 6,
+      "taps": [
+        12
+      ],
+      "pattern": [
+        3,
+        1,
+        2,
+        2,
+        3
+      ]
+    },
+    {
+      "bar1": 2,
+      "bar2": 7,
+      "taps": [
+        13,
+        14
+      ],
+      "pattern": [
+        2,
+        2,
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "bar1": 3,
+      "bar2": 1,
+      "taps": [
+        0,
+        2
+      ],
+      "pattern": [
+        1,
+        2,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "bar1": 3,
+      "bar2": 2,
+      "taps": [
+        3,
+        4
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "bar1": 3,
+      "bar2": 3,
+      "taps": [
+        5,
+        6
+      ],
+      "pattern": [
+        1,
+        1,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "bar1": 3,
+      "bar2": 4,
+      "taps": [
+        7,
+        8
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "bar1": 3,
+      "bar2": 5,
+      "taps": [
+        9
+      ],
+      "pattern": [
+        1,
+        2,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "bar1": 3,
+      "bar2": 5,
+      "taps": [
+        10
+      ],
+      "pattern": [
+        1,
+        2,
+        3,
+        2,
+        1
+      ]
+    },
+    {
+      "bar1": 3,
+      "bar2": 6,
+      "taps": [
+        11
+      ],
+      "pattern": [
+        2,
+        1,
+        3,
+        2,
+        2
+      ]
+    },
+    {
+      "bar1": 3,
+      "bar2": 6,
+      "taps": [
+        12
+      ],
+      "pattern": [
+        2,
+        1,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "bar1": 3,
+      "bar2": 7,
+      "taps": [
+        13,
+        14
+      ],
+      "pattern": [
+        2,
+        2,
+        1,
+        2,
+        2
+      ]
+    }
+  ],
+  "enemy_patterns": [
+    {
+      "stage": 1,
+      "name": "Baby I",
+      "from_meter": 0,
+      "pattern": [
+        1,
+        1,
+        3,
+        1,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_weak",
+        "double_weak",
+        "single_weak",
+        "single_weak"
+      ]
+    },
+    {
+      "stage": 2,
+      "name": "Baby II",
+      "from_meter": 2,
+      "pattern": [
+        1,
+        2,
+        3,
+        1,
+        1
+      ],
+      "attacks": [
+        "single_weak",
+        "single_strong",
+        "double_weak",
+        "single_weak",
+        "single_weak"
+      ]
+    },
+    {
+      "stage": 3,
+      "name": "Child",
+      "from_meter": 4,
+      "pattern": [
+        2,
+        3,
+        2,
+        3,
+        2
+      ],
+      "attacks": [
+        "single_strong",
+        "double_weak",
+        "single_strong",
+        "double_weak",
+        "single_strong"
+      ]
+    },
+    {
+      "stage": 4,
+      "name": "Adult",
+      "from_meter": 7,
+      "pattern": [
+        4,
+        1,
+        4,
+        1,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "single_weak",
+        "double_strong",
+        "single_weak",
+        "double_strong"
+      ]
+    },
+    {
+      "stage": 5,
+      "name": "Perfect",
+      "from_meter": 10,
+      "pattern": [
+        3,
+        2,
+        4,
+        4,
+        3
+      ],
+      "attacks": [
+        "double_weak",
+        "single_strong",
+        "double_strong",
+        "double_strong",
+        "double_weak"
+      ]
+    },
+    {
+      "stage": 6,
+      "name": "Ultimate",
+      "from_meter": 11,
+      "pattern": [
+        4,
+        1,
+        4,
+        4,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "single_weak",
+        "double_strong",
+        "double_strong",
+        "double_strong"
+      ]
+    },
+    {
+      "stage": 7,
+      "name": "Super Ultimate",
+      "from_meter": 14,
+      "pattern": [
+        4,
+        4,
+        3,
+        4,
+        4
+      ],
+      "attacks": [
+        "double_strong",
+        "double_strong",
+        "double_weak",
+        "double_strong",
+        "double_strong"
+      ]
+    }
+  ],
+  "enemy_note": "Adventure enemies play no minigame, so they read their stage instead. Each row is one of the measured meter rows -- picked so total damage rises strictly with the stage -- so an enemy always fights with a pattern the device really produces rather than an invented one."
+}

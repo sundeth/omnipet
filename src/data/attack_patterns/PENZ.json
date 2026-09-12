@@ -1,0 +1,538 @@
+{
+  "attack_types": {
+    "SINGLE_WEAK": {
+      "value": 1,
+      "damage": 2,
+      "description": "1 sprite of pet.atk_main",
+      "sprite_count": 1,
+      "sprite_type": "atk_main",
+      "scale": 1.0
+    },
+    "SINGLE_STRONG": {
+      "value": 2,
+      "damage": 3,
+      "description": "1 sprite of pet.atk_alt if > 0, or 2 sprites of pet.atk_main",
+      "sprite_count": 1,
+      "sprite_type": "atk_alt",
+      "fallback_sprite_type": "atk_main",
+      "fallback_sprite_count": 2,
+      "scale": 1.0
+    },
+    "DOUBLE_WEAK": {
+      "value": 3,
+      "damage": 4,
+      "description": "2 sprites of pet.atk_main",
+      "sprite_count": 2,
+      "sprite_type": "atk_main",
+      "scale": 1.0
+    },
+    "DOUBLE_STRONG": {
+      "value": 4,
+      "damage": 6,
+      "description": "2 sprites of pet.atk_alt if > 0, or 3 sprites of pet.atk_main",
+      "sprite_count": 2,
+      "sprite_type": "atk_alt",
+      "fallback_sprite_type": "atk_main",
+      "fallback_sprite_count": 3,
+      "scale": 1.0
+    },
+    "CRITICAL": {
+      "value": 5,
+      "damage": 10,
+      "description": "1 sprite of pet.atk_alt2 from the crit bank if > 0, or pet.atk_alt (then pet.atk_main) at double size",
+      "sprite_count": 1,
+      "sprite_type": "atk_alt2",
+      "fallback_sprite_type": "atk_alt",
+      "fallback_sprite_count": 1,
+      "scale": 2.0,
+      "damage_note": "HP cost. Measured off the device's own HP bar across nine filmed battles; it is the sprite strength times the sprite count (atk_main 2, atk_alt 3, atk_alt2 5; a critical's double size counts as two)."
+    }
+  },
+  "note": "The Digimon Pendulum Z's attack table, and ONLY that. It shares the DMX's wire, its five attack types and its level ladder, and it does not share this table: of the sixteen blocks read off a real Pendulum Z, eight also appear in DMX.json and eight appear nowhere in it. The two that do agree at high stages do not even agree about which stage -- PENZ stage 4 lands on DMX stage 4 but PENZ stage 7 on DMX stage 6 -- so these are collisions in a small vocabulary, not a mapping. Never copy a row between the two files. Keyed on the attacker's STAGE and a three-tier band of its LEVEL, then the charge, exactly as DMX.json is; stage 1 has a single band because a Baby I has one level. Read from utilities/DIGIROM/penz.txt and cross-checked against every filmed PENZ battle in utilities/DMX/battle.txt, which reproduces all thirteen. Three middle tiers carry a `provisional` list naming the charges nobody has read; utilities/PENZ/patterns.txt holds the commands that settle them.",
+  "patterns": [
+    {
+      "id": 1,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": 2,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        3
+      ]
+    },
+    {
+      "id": 3,
+      "pattern": [
+        1,
+        3,
+        3,
+        1,
+        3
+      ]
+    },
+    {
+      "id": 4,
+      "pattern": [
+        1,
+        5,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "id": 5,
+      "pattern": [
+        1,
+        2,
+        2,
+        1,
+        4
+      ]
+    },
+    {
+      "id": 6,
+      "pattern": [
+        2,
+        4,
+        3,
+        2,
+        4
+      ]
+    },
+    {
+      "id": 7,
+      "pattern": [
+        2,
+        5,
+        4,
+        4,
+        3
+      ]
+    },
+    {
+      "id": 8,
+      "pattern": [
+        2,
+        3,
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "id": 9,
+      "pattern": [
+        3,
+        4,
+        5,
+        3,
+        3
+      ]
+    },
+    {
+      "id": 10,
+      "pattern": [
+        5,
+        4,
+        4,
+        5,
+        4
+      ]
+    },
+    {
+      "id": 11,
+      "pattern": [
+        3,
+        2,
+        2,
+        5,
+        4
+      ]
+    },
+    {
+      "id": 12,
+      "pattern": [
+        5,
+        4,
+        4,
+        2,
+        4
+      ]
+    },
+    {
+      "id": 13,
+      "pattern": [
+        3,
+        4,
+        4,
+        3,
+        3
+      ]
+    },
+    {
+      "id": 14,
+      "pattern": [
+        3,
+        3,
+        1,
+        4,
+        3
+      ]
+    },
+    {
+      "id": 15,
+      "pattern": [
+        1,
+        4,
+        3,
+        1,
+        3
+      ]
+    },
+    {
+      "id": 16,
+      "pattern": [
+        2,
+        1,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "id": 17,
+      "pattern": [
+        2,
+        3,
+        3,
+        3,
+        5
+      ]
+    },
+    {
+      "id": 18,
+      "pattern": [
+        4,
+        5,
+        4,
+        3,
+        5
+      ]
+    },
+    {
+      "id": 19,
+      "pattern": [
+        3,
+        2,
+        2,
+        5,
+        2
+      ]
+    },
+    {
+      "id": 20,
+      "pattern": [
+        2,
+        4,
+        5,
+        4,
+        5
+      ]
+    }
+  ],
+  "tiers": [
+    {
+      "stage": 1,
+      "levels": [
+        1,
+        1
+      ],
+      "patterns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "source": "LV1, read off the training minigame -- a Baby I cannot battle, so this is the only way to see its attacks."
+    },
+    {
+      "stage": 2,
+      "levels": [
+        1,
+        1
+      ],
+      "patterns": [
+        1,
+        5,
+        6,
+        7
+      ],
+      "source": "LV1, read off the device"
+    },
+    {
+      "stage": 2,
+      "levels": [
+        2,
+        2
+      ],
+      "patterns": [
+        1,
+        5,
+        6,
+        7
+      ],
+      "source": "LV2, read off the device -- identical to LV1 and LV3, so a Baby II really does draw one row at every level."
+    },
+    {
+      "stage": 2,
+      "levels": [
+        3,
+        3
+      ],
+      "patterns": [
+        1,
+        5,
+        6,
+        7
+      ],
+      "source": "LV3, read off the device"
+    },
+    {
+      "stage": 3,
+      "levels": [
+        1,
+        2
+      ],
+      "patterns": [
+        1,
+        5,
+        6,
+        7
+      ],
+      "source": "LV1, read off the device"
+    },
+    {
+      "stage": 3,
+      "levels": [
+        3,
+        3
+      ],
+      "patterns": [
+        1,
+        5,
+        6,
+        7
+      ],
+      "provisional": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "source": "Level 3 has never been read, and it has three candidates: this stage's own tier 1 (used here), its tier 3, or -- since both of those match the DMX's stage 3 tier 1 and tier 3 exactly -- that table's tier 2, a row nothing here has seen. Great and Excellent each separate all three; Bad and Good do not."
+    },
+    {
+      "stage": 3,
+      "levels": [
+        4,
+        4
+      ],
+      "patterns": [
+        8,
+        6,
+        9,
+        10
+      ],
+      "source": "LV4, read off the device"
+    },
+    {
+      "stage": 4,
+      "levels": [
+        1,
+        2
+      ],
+      "patterns": [
+        8,
+        6,
+        11,
+        12
+      ],
+      "source": "LV1, read off the device"
+    },
+    {
+      "stage": 4,
+      "levels": [
+        3,
+        5
+      ],
+      "patterns": [
+        8,
+        6,
+        11,
+        12
+      ],
+      "provisional": [
+        1,
+        3
+      ],
+      "source": "Bad and Great ARE read: filmed battles 24 and 27 put a level 3 Adult on tier 1's rows, which is why tier 1 is what this band carries. Good and Excellent have not been read."
+    },
+    {
+      "stage": 4,
+      "levels": [
+        6,
+        6
+      ],
+      "patterns": [
+        5,
+        13,
+        12,
+        10
+      ],
+      "source": "LV6, read off the device"
+    },
+    {
+      "stage": 5,
+      "levels": [
+        1,
+        3
+      ],
+      "patterns": [
+        1,
+        14,
+        11,
+        7
+      ],
+      "source": "LV1, read off the device"
+    },
+    {
+      "stage": 5,
+      "levels": [
+        4,
+        7
+      ],
+      "patterns": [
+        1,
+        14,
+        11,
+        7
+      ],
+      "provisional": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "source": "Levels 4-7 have never been read. Tier 1 is used on the strength of stage 4, the only stage whose middle tier has been read at all, where it came back as tier 1."
+    },
+    {
+      "stage": 5,
+      "levels": [
+        8,
+        8
+      ],
+      "patterns": [
+        15,
+        9,
+        12,
+        10
+      ],
+      "source": "LV8, read off the device"
+    },
+    {
+      "stage": 6,
+      "levels": [
+        1,
+        4
+      ],
+      "patterns": [
+        5,
+        13,
+        11,
+        12
+      ],
+      "source": "LV1, read off the device"
+    },
+    {
+      "stage": 6,
+      "levels": [
+        5,
+        9
+      ],
+      "patterns": [
+        16,
+        17,
+        7,
+        18
+      ],
+      "source": "LV5, read off the device"
+    },
+    {
+      "stage": 6,
+      "levels": [
+        10,
+        10
+      ],
+      "patterns": [
+        14,
+        19,
+        20,
+        10
+      ],
+      "source": "LV10, read off the device. Its Good row is the one cell of the map under suspicion: stages 6 and 7 are identical across all 40 cells of their first two tiers and this is the only place they differ. Kept as transcribed until it is re-read."
+    },
+    {
+      "stage": 7,
+      "levels": [
+        1,
+        4
+      ],
+      "patterns": [
+        5,
+        13,
+        11,
+        12
+      ],
+      "source": "LV1, read off the device"
+    },
+    {
+      "stage": 7,
+      "levels": [
+        5,
+        9
+      ],
+      "patterns": [
+        16,
+        17,
+        7,
+        18
+      ],
+      "source": "LV5, read off the device"
+    },
+    {
+      "stage": 7,
+      "levels": [
+        10,
+        10
+      ],
+      "patterns": [
+        14,
+        11,
+        20,
+        10
+      ],
+      "source": "LV10, read off the device"
+    }
+  ]
+}

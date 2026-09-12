@@ -488,7 +488,7 @@ class DigidexList(UIComponent):
             blit_with_shadow(surface, info_text, (list_x + left_padding + icon_size + int(5 * ui_scale), y_pos + int(28 * ui_scale)))
 
             # Friend pets carry a small tag in the top-right of the row
-            if getattr(pet, 'avaliability', 'Normal') == 'Friend':
+            if getattr(pet, 'availability', 'Normal') == 'Friend':
                 tag_text = small_font.render("Friend", True, (120, 220, 120))
                 blit_with_shadow(surface, tag_text,
                                  (list_x + list_width - tag_text.get_width() - int(6 * ui_scale),

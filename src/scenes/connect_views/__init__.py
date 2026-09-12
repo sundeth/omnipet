@@ -8,6 +8,9 @@ from .pet_selection_view import PetSelectionView
 from .wifi_hosting_view import WifiHostingView
 from .wifi_discovery_view import WifiDiscoveryView
 from .dcom_view import DComView
+from .wificom_warning_view import WiFiComWarningView
+from .wificom_view import WiFiComView
+from .xros_view import XrosView
 from .discord_view import DiscordView
 from .link_dialog_view import LinkDialogView
 from .omninet_link_view import OmninetLinkView
@@ -30,6 +33,9 @@ __all__ = [
     'WifiHostingView',
     'WifiDiscoveryView',
     'DComView',
+    'WiFiComWarningView',
+    'WiFiComView',
+    'XrosView',
     'DiscordView',
     'LinkDialogView',
     'OmninetLinkView',
@@ -43,4 +49,6 @@ __all__ = [
     'ArenaView',
     'ArenaRulesView',
     'ArenaHistoryView',
+    'ArenaTeamCreationView',
+    'ArenaReclaimView',
 ]

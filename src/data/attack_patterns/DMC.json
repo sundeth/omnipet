@@ -6,11 +6,797 @@
   "patterns": {
     "winner": {
       "description": "Winner attacks: 3 normal hits (1 damage each) then 1 strong hit (2 damage)",
-      "pattern": [1, 1, 1, 2]
+      "pattern": [
+        1,
+        1,
+        1,
+        2
+      ]
     },
     "loser": {
       "description": "Loser attacks: 4 normal hits (1 damage each)",
-      "pattern": [1, 1, 1, 1]
+      "pattern": [
+        1,
+        1,
+        1,
+        1
+      ]
     }
+  },
+  "levels": {
+    "note": "The pre-measurement (level, charge) table, kept verbatim. It lived in PENZ.json because both lines read it before either was measured; the Pendulum Z has its own (stage, tier) table now and this is the only consumer left, so it moved here rather than staying under another line's name. Nothing about it has been read off a Digital Monster Color -- it is what this line has always drawn, unchanged, and it is what the DMC work will start from when that line is picked up.",
+    "attack_types": {
+      "SINGLE_WEAK": {
+        "value": 1,
+        "damage": 2,
+        "description": "1 sprite of pet.atk_main",
+        "sprite_count": 1,
+        "sprite_type": "atk_main",
+        "scale": 1.0
+      },
+      "SINGLE_STRONG": {
+        "value": 2,
+        "damage": 3,
+        "description": "1 sprite of pet.atk_alt if > 0, or 2 sprites of pet.atk_main",
+        "sprite_count": 1,
+        "sprite_type": "atk_alt",
+        "fallback_sprite_type": "atk_main",
+        "fallback_sprite_count": 2,
+        "scale": 1.0
+      },
+      "DOUBLE_WEAK": {
+        "value": 3,
+        "damage": 4,
+        "description": "2 sprites of pet.atk_main",
+        "sprite_count": 2,
+        "sprite_type": "atk_main",
+        "scale": 1.0
+      },
+      "DOUBLE_STRONG": {
+        "value": 4,
+        "damage": 6,
+        "description": "2 sprites of pet.atk_alt if > 0, or 3 sprites of pet.atk_main",
+        "sprite_count": 2,
+        "sprite_type": "atk_alt",
+        "fallback_sprite_type": "atk_main",
+        "fallback_sprite_count": 3,
+        "scale": 1.0
+      },
+      "CRITICAL": {
+        "value": 5,
+        "damage": 10,
+        "description": "1 sprite of pet.atk_alt2 from the crit bank if > 0, or pet.atk_alt (then pet.atk_main) at double size",
+        "sprite_count": 1,
+        "sprite_type": "atk_alt2",
+        "fallback_sprite_type": "atk_alt",
+        "fallback_sprite_count": 1,
+        "scale": 2.0,
+        "damage_note": "HP cost. Measured off the device's own HP bar across nine filmed battles; it is the sprite strength times the sprite count (atk_main 2, atk_alt 3, atk_alt2 5; a critical's double size counts as two)."
+      }
+    },
+    "patterns": [
+      {
+        "id": 1,
+        "pattern": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "comment": "All SINGLE_WEAK (damage 1 each)"
+      },
+      {
+        "id": 2,
+        "pattern": [
+          1,
+          4,
+          3,
+          1,
+          3
+        ],
+        "comment": "SINGLE_WEAK, DOUBLE_STRONG, DOUBLE_WEAK, SINGLE_WEAK, DOUBLE_WEAK"
+      },
+      {
+        "id": 3,
+        "pattern": [
+          3,
+          4,
+          4,
+          3,
+          3
+        ],
+        "comment": "DOUBLE_WEAK, DOUBLE_STRONG, DOUBLE_STRONG, DOUBLE_WEAK, DOUBLE_WEAK"
+      },
+      {
+        "id": 4,
+        "pattern": [
+          5,
+          4,
+          4,
+          2,
+          4
+        ],
+        "comment": "CRITICAL, DOUBLE_STRONG, DOUBLE_STRONG, SINGLE_STRONG, DOUBLE_STRONG"
+      },
+      {
+        "id": 5,
+        "pattern": [
+          1,
+          2,
+          2,
+          1,
+          4
+        ],
+        "comment": "SINGLE_WEAK, SINGLE_STRONG, SINGLE_STRONG, SINGLE_WEAK, DOUBLE_STRONG"
+      },
+      {
+        "id": 6,
+        "pattern": [
+          2,
+          4,
+          3,
+          2,
+          4
+        ],
+        "comment": "SINGLE_STRONG, DOUBLE_STRONG, DOUBLE_WEAK, SINGLE_STRONG, DOUBLE_STRONG"
+      },
+      {
+        "id": 7,
+        "pattern": [
+          2,
+          5,
+          4,
+          4,
+          3
+        ],
+        "comment": "SINGLE_STRONG, CRITICAL, DOUBLE_STRONG, DOUBLE_STRONG, DOUBLE_WEAK"
+      },
+      {
+        "id": 8,
+        "pattern": [
+          2,
+          1,
+          1,
+          2,
+          1
+        ],
+        "comment": "SINGLE_STRONG, SINGLE_WEAK, SINGLE_WEAK, SINGLE_STRONG, SINGLE_WEAK"
+      },
+      {
+        "id": 9,
+        "pattern": [
+          2,
+          3,
+          3,
+          3,
+          5
+        ],
+        "comment": "SINGLE_STRONG, DOUBLE_WEAK, DOUBLE_WEAK, DOUBLE_WEAK, CRITICAL"
+      },
+      {
+        "id": 10,
+        "pattern": [
+          2,
+          3,
+          2,
+          1,
+          1
+        ],
+        "comment": "SINGLE_STRONG, DOUBLE_WEAK, SINGLE_STRONG, SINGLE_WEAK, SINGLE_WEAK"
+      },
+      {
+        "id": 11,
+        "pattern": [
+          3,
+          4,
+          5,
+          3,
+          3
+        ],
+        "comment": "DOUBLE_WEAK, DOUBLE_STRONG, CRITICAL, DOUBLE_WEAK, DOUBLE_WEAK"
+      },
+      {
+        "id": 12,
+        "pattern": [
+          5,
+          4,
+          4,
+          5,
+          4
+        ],
+        "comment": "CRITICAL, DOUBLE_STRONG, DOUBLE_STRONG, CRITICAL, DOUBLE_STRONG"
+      },
+      {
+        "id": 13,
+        "pattern": [
+          2,
+          4,
+          5,
+          4,
+          5
+        ],
+        "comment": "SINGLE_STRONG, DOUBLE_STRONG, CRITICAL, DOUBLE_STRONG, CRITICAL"
+      },
+      {
+        "id": 14,
+        "pattern": [
+          4,
+          5,
+          4,
+          3,
+          5
+        ],
+        "comment": "DOUBLE_STRONG, CRITICAL, DOUBLE_STRONG, DOUBLE_WEAK, CRITICAL"
+      },
+      {
+        "id": 15,
+        "pattern": [
+          3,
+          3,
+          1,
+          4,
+          3
+        ],
+        "comment": "DOUBLE_WEAK, DOUBLE_WEAK, SINGLE_WEAK, DOUBLE_STRONG, DOUBLE_WEAK"
+      },
+      {
+        "id": 16,
+        "pattern": [
+          3,
+          2,
+          2,
+          5,
+          4
+        ],
+        "comment": "DOUBLE_WEAK, SINGLE_STRONG, SINGLE_STRONG, CRITICAL, DOUBLE_STRONG"
+      }
+    ],
+    "assignments": [
+      {
+        "level": 1,
+        "mini-game": 0,
+        "pattern_id": 1,
+        "comment": "Level 1, Bad"
+      },
+      {
+        "level": 1,
+        "mini-game": 1,
+        "pattern_id": 2,
+        "comment": "Level 1, Good"
+      },
+      {
+        "level": 1,
+        "mini-game": 2,
+        "pattern_id": 3,
+        "comment": "Level 1, Great"
+      },
+      {
+        "level": 1,
+        "mini-game": 3,
+        "pattern_id": 4,
+        "comment": "Level 1, Excellent"
+      },
+      {
+        "level": 2,
+        "mini-game": 0,
+        "pattern_id": 1,
+        "comment": "Level 2, Bad"
+      },
+      {
+        "level": 2,
+        "mini-game": 1,
+        "pattern_id": 5,
+        "comment": "Level 2, Good"
+      },
+      {
+        "level": 2,
+        "mini-game": 2,
+        "pattern_id": 6,
+        "comment": "Level 2, Great"
+      },
+      {
+        "level": 2,
+        "mini-game": 3,
+        "pattern_id": 7,
+        "comment": "Level 2, Excellent"
+      },
+      {
+        "level": 3,
+        "mini-game": 0,
+        "pattern_id": 8,
+        "comment": "Level 3, Bad"
+      },
+      {
+        "level": 3,
+        "mini-game": 1,
+        "pattern_id": 2,
+        "comment": "Level 3, Good"
+      },
+      {
+        "level": 3,
+        "mini-game": 2,
+        "pattern_id": 9,
+        "comment": "Level 3, Great"
+      },
+      {
+        "level": 3,
+        "mini-game": 3,
+        "pattern_id": 4,
+        "comment": "Level 3, Excellent"
+      },
+      {
+        "level": 4,
+        "mini-game": 0,
+        "pattern_id": 10,
+        "comment": "Level 4, Bad"
+      },
+      {
+        "level": 4,
+        "mini-game": 1,
+        "pattern_id": 6,
+        "comment": "Level 4, Good"
+      },
+      {
+        "level": 4,
+        "mini-game": 2,
+        "pattern_id": 11,
+        "comment": "Level 4, Great"
+      },
+      {
+        "level": 4,
+        "mini-game": 3,
+        "pattern_id": 12,
+        "comment": "Level 4, Excellent"
+      },
+      {
+        "level": 5,
+        "mini-game": 0,
+        "pattern_id": 10,
+        "comment": "Level 5, Bad"
+      },
+      {
+        "level": 5,
+        "mini-game": 1,
+        "pattern_id": 6,
+        "comment": "Level 5, Good"
+      },
+      {
+        "level": 5,
+        "mini-game": 2,
+        "pattern_id": 11,
+        "comment": "Level 5, Great"
+      },
+      {
+        "level": 5,
+        "mini-game": 3,
+        "pattern_id": 13,
+        "comment": "Level 5, Excellent"
+      },
+      {
+        "level": 6,
+        "mini-game": 0,
+        "pattern_id": 5,
+        "comment": "Level 6, Bad"
+      },
+      {
+        "level": 6,
+        "mini-game": 1,
+        "pattern_id": 3,
+        "comment": "Level 6, Good"
+      },
+      {
+        "level": 6,
+        "mini-game": 2,
+        "pattern_id": 4,
+        "comment": "Level 6, Great"
+      },
+      {
+        "level": 6,
+        "mini-game": 3,
+        "pattern_id": 12,
+        "comment": "Level 6, Excellent"
+      },
+      {
+        "level": 7,
+        "mini-game": 0,
+        "pattern_id": 10,
+        "comment": "Level 7, Bad"
+      },
+      {
+        "level": 7,
+        "mini-game": 1,
+        "pattern_id": 6,
+        "comment": "Level 7, Good"
+      },
+      {
+        "level": 7,
+        "mini-game": 2,
+        "pattern_id": 7,
+        "comment": "Level 7, Great"
+      },
+      {
+        "level": 7,
+        "mini-game": 3,
+        "pattern_id": 13,
+        "comment": "Level 7, Excellent"
+      },
+      {
+        "level": 8,
+        "mini-game": 0,
+        "pattern_id": 8,
+        "comment": "Level 8, Bad"
+      },
+      {
+        "level": 8,
+        "mini-game": 1,
+        "pattern_id": 9,
+        "comment": "Level 8, Good"
+      },
+      {
+        "level": 8,
+        "mini-game": 2,
+        "pattern_id": 11,
+        "comment": "Level 8, Great"
+      },
+      {
+        "level": 8,
+        "mini-game": 3,
+        "pattern_id": 14,
+        "comment": "Level 8, Excellent"
+      },
+      {
+        "level": 9,
+        "mini-game": 0,
+        "pattern_id": 8,
+        "comment": "Level 9, Bad"
+      },
+      {
+        "level": 9,
+        "mini-game": 1,
+        "pattern_id": 9,
+        "comment": "Level 9, Good"
+      },
+      {
+        "level": 9,
+        "mini-game": 2,
+        "pattern_id": 11,
+        "comment": "Level 9, Great"
+      },
+      {
+        "level": 9,
+        "mini-game": 3,
+        "pattern_id": 14,
+        "comment": "Level 9, Excellent"
+      },
+      {
+        "level": 10,
+        "mini-game": 0,
+        "pattern_id": 15,
+        "comment": "Level 10, Bad"
+      },
+      {
+        "level": 10,
+        "mini-game": 1,
+        "pattern_id": 16,
+        "comment": "Level 10, Good"
+      },
+      {
+        "level": 10,
+        "mini-game": 2,
+        "pattern_id": 13,
+        "comment": "Level 10, Great"
+      },
+      {
+        "level": 10,
+        "mini-game": 3,
+        "pattern_id": 12,
+        "comment": "Level 10, Excellent"
+      }
+    ]
+  },
+  "pve": {
+    "note": "Re-key the Colour adventure table on STAGE and EFFORT.\n\nThe charge was the wrong second axis. It is what the player just played,\nwhich says nothing about the Digimon, and on **DMC it does not vary at all**:\nthat module's `battle_minigame` is \"None\", which scores a flat 2 every\nbattle. So the column it played was the only column it could ever play.\n\nStage and effort are both properties of the pet, and between them they are\nwhat it has grown into and what its training bought:\n\n    stage   1-7, clamped\n    effort  0-16, drawn as four hearts at four points, so effort // 4\n\n35 rows of six rounds. `strong = round((stage - 1 + hearts) * 5 / 10)`, so\nthe two axes weigh almost evenly and the top is **five** doubles out of six,\nnever all of them -- a maxed pet still mixes its shots, which is the thing\nthat read wrong on the version this replaces.\n\n**An enemy needs no table of its own.** It has a stage and no effort at all,\nso it reads (its stage, 0 hearts) through the same door -- which is why the\nseparate `enemy_by_stage` block is gone rather than rebuilt.",
+    "pattern_length": 6,
+    "key": "the attacker's stage (1-7), then effort // 4 (0-4 hearts)",
+    "rows": {
+      "1": {
+        "0": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "1": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "2": [
+          1,
+          2,
+          1,
+          1,
+          1,
+          1
+        ],
+        "3": [
+          1,
+          1,
+          2,
+          2,
+          1,
+          1
+        ],
+        "4": [
+          1,
+          2,
+          1,
+          2,
+          1,
+          1
+        ]
+      },
+      "2": {
+        "0": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "1": [
+          1,
+          2,
+          1,
+          1,
+          1,
+          1
+        ],
+        "2": [
+          2,
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        "3": [
+          1,
+          1,
+          2,
+          2,
+          1,
+          1
+        ],
+        "4": [
+          1,
+          2,
+          1,
+          2,
+          1,
+          1
+        ]
+      },
+      "3": {
+        "0": [
+          1,
+          1,
+          1,
+          2,
+          1,
+          1
+        ],
+        "1": [
+          2,
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        "2": [
+          1,
+          1,
+          2,
+          2,
+          1,
+          1
+        ],
+        "3": [
+          1,
+          2,
+          1,
+          2,
+          1,
+          1
+        ],
+        "4": [
+          2,
+          1,
+          2,
+          1,
+          1,
+          2
+        ]
+      },
+      "4": {
+        "0": [
+          1,
+          1,
+          2,
+          2,
+          1,
+          1
+        ],
+        "1": [
+          1,
+          2,
+          1,
+          2,
+          1,
+          1
+        ],
+        "2": [
+          2,
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        "3": [
+          2,
+          1,
+          2,
+          1,
+          1,
+          2
+        ],
+        "4": [
+          2,
+          1,
+          2,
+          1,
+          2,
+          2
+        ]
+      },
+      "5": {
+        "0": [
+          2,
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        "1": [
+          1,
+          1,
+          2,
+          2,
+          1,
+          1
+        ],
+        "2": [
+          2,
+          1,
+          2,
+          1,
+          1,
+          2
+        ],
+        "3": [
+          2,
+          1,
+          2,
+          1,
+          2,
+          2
+        ],
+        "4": [
+          2,
+          1,
+          2,
+          1,
+          2,
+          2
+        ]
+      },
+      "6": {
+        "0": [
+          1,
+          1,
+          2,
+          2,
+          1,
+          1
+        ],
+        "1": [
+          2,
+          1,
+          1,
+          2,
+          1,
+          2
+        ],
+        "2": [
+          1,
+          2,
+          2,
+          2,
+          2,
+          1
+        ],
+        "3": [
+          2,
+          1,
+          2,
+          1,
+          2,
+          2
+        ],
+        "4": [
+          2,
+          1,
+          2,
+          1,
+          2,
+          2
+        ]
+      },
+      "7": {
+        "0": [
+          1,
+          2,
+          1,
+          2,
+          2,
+          1
+        ],
+        "1": [
+          2,
+          1,
+          2,
+          1,
+          2,
+          2
+        ],
+        "2": [
+          1,
+          2,
+          2,
+          2,
+          2,
+          1
+        ],
+        "3": [
+          2,
+          1,
+          2,
+          1,
+          2,
+          2
+        ],
+        "4": [
+          2,
+          1,
+          2,
+          2,
+          2,
+          2
+        ]
+      }
+    },
+    "every_row_is_one_the_hardware_produces": "**The arrangements are no longer invented.** Each cell keeps the damage it always spent -- the ramp is unchanged, so a quest hits exactly as hard as before -- but the row itself is now one of the Colour family's own 15 (COLOUR_ROWS.json, read out of the Xros Wars firmware). 28 of the 35 were arrangements no Colour device produces.\n**What is still ours is the choice**: which stage and heart count gets which row. The Digital Monster Color's real quest table has not been found and may not exist in this shape -- see `why_not_measured`.",
+    "why_not_measured": "**The Digital Monster Color has no attack-pattern data at all**, and that is now a finding rather than a gap. The DMC Modding App (dmc-mod-app.pages.dev) carries a per-device ROM layout for dmc1-5, penc0-5 and the Monster Hunter edition, and it lists exactly three tables per device -- stats, quest mode and animation. On this line a quest enemy is `CharacterID, Power` and nothing else, over 8 levels of 5; the stat table has an AttackSprite and no pattern field. There is no third table for either.\n**A Pendulum Color's quest enemy is `CharacterID, Power, Handicap, Pattern`** over 10 levels of 5 -- so that line does carry a per-enemy pattern, and this one deliberately does not.\nIt fits everything else: the DMC plays **no charge** (`battle_minigame: None`), so there is no band to key a table on, and its manual describes the battle outright -- 'the first three hits of a Connection Battle, which are always guaranteed' and then a super hit, which is 1+1+1+2 against exactly its 5 HP. The likeliest truth is that a DMC quest battle throws that same fixed shape and rolls only whether each lands.",
+    "so_this_table_is_a_gameplay_choice": "Every row is one the Colour family really produces and the damage ramp is unchanged, but **the device itself very likely has no such table**. Kept because a quest that always throws 1,1,1,2 is a thinner game than the module wants, and stated as a choice rather than a reading. Replacing it with `verdict_rounds(5)` is the change to make if fidelity should win over variety -- that is a gameplay decision, not a data fix."
   }
 }

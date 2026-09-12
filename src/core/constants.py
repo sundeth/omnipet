@@ -143,6 +143,12 @@ ATTR_COLORS = {
 MOVE_SPEED = 0.5  # Movement speed in subpixels/frame
 IDLE_PROBABILITY = 0.2  # 20% chance of idle vs. moving
 CLEANING_SPEED = 6  # Speed of cleaning animation
+RELIABILITY_MIN = 0
+RELIABILITY_MAX = 31
+DIGISOUL_DNA_TYPES = (
+    "Beast", "Bird", "Machine", "Water",
+    "Dragon", "Insect", "Holy", "Dark",
+)
 SLEEP_RECOVERY_HOURS = 8  # Hours needed to fully recover
 SLEEP_MANUAL_DURATION_HOURS = 1  # Duration when manually sleeping
 SLEEP_DISTURBANCE_THRESHOLD_SECONDS = 7200  # 2 hours threshold for disturbance detection
@@ -172,6 +178,42 @@ ATK_LEVEL = {
     7: 5,   # Super Ultimate (20 // 4 = 5)
     8: 5    # Extra stage (20 // 4 = 5)
 }
+
+# Digimon Mini "terahit": the B-button count that produces the strongest
+# attack pattern, out of a maximum of 31. The Mini's whole battle is a mash
+# whose count picks Single (attack 1), Double (2), Triple (3) or Hyper (6);
+# with every Digimon on a flat 6 HP a Hyper lands as a one-shot kill, so this
+# is the device's skill ceiling, and it climbs with stage.
+#
+# Source: the official Ver.2.0+3.0 playbook, printed page 102, which gives the
+# threshold per stage. Individual Digimon sit at or above their stage's figure
+# - the per-form values are tabulated in modules/DMM/DMM_RESEARCH.md - and the
+# guide stops at LEVEL 6, so stage 7 is taken from the two hidden forms, which
+# both read 29.
+#
+# NOT WIRED UP. get_minigame_strength grades the Dummy Bar on fixed 5/10/14
+# cutoffs shared by every module; honouring this table means scaling those
+# cutoffs by the pet's stage. Recorded now so the values are not lost.
+TERAHIT_COUNT = {
+    0: 0,    # Egg              - cannot battle
+    1: 0,    # Fresh            - cannot battle
+    2: 21,   # In-Training
+    3: 21,   # Rookie
+    4: 25,   # Champion
+    5: 27,   # Ultimate
+    6: 30,   # Mega
+    7: 29,   # Super Ultimate   - the hidden LEVEL 7 forms
+    8: 29    # Extra stage
+}
+TERAHIT_MAX_COUNT = 31  # the highest count the Mini's meter reads
+
+# Weight at which the "Burpmon" 99g effect turns the pet into Burpmon, and the
+# weight it has to fall back to before the pet returns to its own form. The
+# Digimon Twin - the only device with this effect - uses 80 g, so the trigger
+# is not the 99 g the field name suggests. The device also only lets a pet out
+# of it at 65 g or below; that hysteresis is documented but not modelled, so
+# the pet reverts as soon as it is back under the trigger.
+BURPMON_WEIGHT = 80
 #=====================================================================
 # UI Settings
 #=====================================================================
@@ -364,6 +406,9 @@ ORB_PATH = "assets/Orb.png"
 LIGHT_SOURCE_PATH = "assets/LightSource.png"
 LIGHT_PARTICLE_PATH = "assets/LightParticle.png"
 DNA_PATH = "assets/Dna.png"
+
+#: The adapter icon, shown in the jogress slot a real device occupies.
+SERIAL_PATH = "assets/Serial.png"
 UNKNOWN_SPRITE_PATH = "assets/Unknown.png"
 TRAITED_EGG_PATH = "assets/TraitedEgg.png"
 OMNIPET_LOGO_PATH = "assets/OmnipetLogo.png"

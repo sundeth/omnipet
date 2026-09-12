@@ -22,7 +22,7 @@ Write-Host "[1/4] Preparing build directory..." -ForegroundColor Yellow
 # physical Android devices).  We keep `.buildozer/`, `bin/`, `src/` and
 # the resource folders intact so incremental builds stay fast.
 wsl bash -c "if [ -d $WSLBuildDir ]; then find $WSLBuildDir -maxdepth 1 -mindepth 1 \( -name '.buildozer' -o -name 'bin' -o -name 'src' -o -name 'assets' -o -name 'modules' -o -name 'save' -o -name 'config' -o -name '_python_bundle' \) -prune -o -exec rm -rf {} +; fi"
-wsl bash -c "mkdir -p $WSLBuildDir/{src/core,src/models,src/ui,src/ui/components,src/ui/windows,src/ui/minigames,src/input,src/battle,src/battle/dcom,src/battle/sim,src/training,src/services,src/data,src/data/protocols,src/data/attack_patterns,src/utils,src/scenes,assets,modules,config,save}"
+wsl bash -c "mkdir -p $WSLBuildDir/{src/core,src/models,src/ui,src/ui/components,src/ui/windows,src/ui/minigames,src/input,src/battle,src/battle/dcom,src/battle/sim,src/training,src/services,src/data,src/data/protocols,src/data/attack_patterns,src/utils,src/scenes,src/wificom,assets,modules,config,save}"
 
 Write-Host "[2/4] Syncing files to WSL..." -ForegroundColor Yellow
 wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/core/ $WSLBuildDir/src/core/"
@@ -35,6 +35,7 @@ wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/
 wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/data/ $WSLBuildDir/src/data/"
 wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/utils/ $WSLBuildDir/src/utils/"
 wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/scenes/ $WSLBuildDir/src/scenes/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/wificom/ $WSLBuildDir/src/wificom/"
 wsl bash -c "cp /mnt/e/Omnipet/src/vpet.py $WSLBuildDir/src/vpet.py"
 wsl bash -c "cp /mnt/e/Omnipet/src/__init__.py $WSLBuildDir/src/__init__.py"
 wsl bash -c "rsync -avu --delete /mnt/e/Omnipet/assets/ $WSLBuildDir/assets/"

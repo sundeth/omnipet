@@ -515,6 +515,16 @@ class SceneCollection:
                 pygame.draw.rect(surface, YELLOW_BRIGHT, (screen_x, screen_y, bw, bh))
                 surface.blit(badge, (screen_x + int(2 * self.scale), screen_y))
 
+            if owned["shiny"] > 0:
+                badge = self.font_small.render(
+                    f"S{owned['shiny']}", True, (0, 0, 0))
+                bw = badge.get_width() + int(4 * self.scale)
+                bh = badge.get_height()
+                bx = screen_x + tile_w - bw
+                pygame.draw.rect(surface, (255, 220, 80),
+                                 (bx, screen_y, bw, bh))
+                surface.blit(badge, (bx + int(2 * self.scale), screen_y))
+
             # Cooldown overlay (digital use): covers the remaining fraction,
             # shrinking downward until usable again.
             if owned["digital"] > 0:
@@ -560,7 +570,12 @@ class SceneCollection:
         name = card.get("name") or "?"
         title = self.font_medium.render(name, True, YELLOW_BRIGHT)
         surface.blit(title, (self._sx(120) - title.get_width() // 2, self._sy(12)))
-        info = f"x{total}" + (f"  ({owned['physical']} physical)" if owned["physical"] else "")
+        details = []
+        if owned["physical"]:
+            details.append(f"{owned['physical']} physical")
+        if owned["shiny"]:
+            details.append(f"{owned['shiny']} shiny")
+        info = f"x{total}" + (f"  ({', '.join(details)})" if details else "")
         info_text = self.font_small.render(info, True, (220, 220, 220))
         surface.blit(info_text, (self._sx(120) - info_text.get_width() // 2, self._sy(26)))
 

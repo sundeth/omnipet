@@ -12,7 +12,8 @@ from battle.battle_encounter_versus import BattleEncounterVersus
 class VersusBattleView:
     """Versus battle encounter view."""
     
-    def __init__(self, ui_manager: UIManager, change_view_callback, pet1, pet2, protocol):
+    def __init__(self, ui_manager: UIManager, change_view_callback, pet1, pet2, protocol,
+                 battle_format=None):
         """Initialize the Versus Battle view.
         
         Args:
@@ -27,6 +28,8 @@ class VersusBattleView:
         self.pet1 = pet1
         self.pet2 = pet2
         self.protocol = protocol
+        #: The device line chosen, where that is finer than the protocol.
+        self.battle_format = battle_format
         
         # Battle background
         self.battle_background = WindowBackground()
@@ -42,7 +45,8 @@ class VersusBattleView:
         runtime_globals.game_console.log(f"[VersusBattleView] Starting battle: {self.pet1.name} vs {self.pet2.name} using {self.protocol}")
         
         # Create battle encounter
-        self.battle_encounter = BattleEncounterVersus(self.pet1, self.pet2, self.protocol)
+        self.battle_encounter = BattleEncounterVersus(
+            self.pet1, self.pet2, self.protocol, battle_format=self.battle_format)
         
         # Check sleep disturbance
         self.pet1.check_disturbed_sleep()

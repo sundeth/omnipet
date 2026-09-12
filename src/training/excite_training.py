@@ -128,7 +128,16 @@ class ExciteTraining(Training):
             self.draw_trophy_notification(surface)
 
     def prepare_attacks(self):
-        """Prepare 5 attacks from each pet based on selected_strength."""
+        """Prepare each pet's five attacks, from that pet's own table row.
+
+        The Xai bar is the Digital Monster X's charge, so this plays the
+        **DMX's** measured table -- read for each Digimon's own stage and
+        level, not one row shared by the party. The four hardcoded rows this
+        replaces (`[5, 4, 5, 4, 4]` for a full bar, and so on down) were the
+        same for a Baby II and an Omnimon alike, and were not rows the device
+        has: a real Baby II never throws a strong attack at all, let alone
+        two criticals.
+        """
         self.attack_phase = 0
         self.attack_waves = [[] for _ in range(5)]
         pets = self.pets
@@ -138,78 +147,44 @@ class ExciteTraining(Training):
         spacing = min(available_height // total_pets, runtime_globals.OPTION_ICON_SIZE + (20 * runtime_globals.UI_SCALE))
         start_y = (runtime_globals.SCREEN_HEIGHT - (spacing * total_pets)) // 2
 
-        # Determine super-hit pattern based on selected_strength
-        strength = self.xaibar.selected_strength
-        if strength == 3:
-            pattern = [5, 4, 5, 4, 4]  # megahit
-        elif strength == 2:
-            pattern = [3, 4, 3, 3, 2]  # great
-        elif strength == 1:
-            pattern = [1, 2, 1, 2, 2]  # good
-        else:
-            pattern = [1, 1, 1, 1, 1]  # fail
+        # The bar already reports 0-3, which is the wire's own Bad / Good /
+        # Great / Excellent -- so it is the charge the table is keyed on.
+        charge = self.xaibar.selected_strength
 
-        # Activate special attack animation if pattern includes strike 5
-        if 5 in pattern:
-            for pet in pets:
-                if self._is_critical_attack(pet, 5):
-                    self.special_attack_active = True
-                    break
-
-        # Store wave kinds for per-wave slide animation
-        self.attack_wave_kinds = pattern[:]
+        # A wave slides the critical in if ANY pet crits in it, so the kinds
+        # are merged across the party rather than taken from one row.
+        wave_kinds = [0] * 5
 
         s = runtime_globals.UI_SCALE
         for i, pet in enumerate(pets):
             main_sprite = self.get_attack_sprite(pet, pet.atk_main)
-            alt_sprite = self.get_attack_sprite(pet, pet.atk_alt) if getattr(pet, "atk_alt", 0) > 0 else main_sprite
-            alt2_sprite = self.get_attack_sprite(pet, pet.atk_alt_2) if getattr(pet, "atk_alt_2", 0) > 0 else None
             if not main_sprite:
                 continue
+            pattern = self.line_pattern(pet, charge, "DMX")
+            for j, kind in enumerate(pattern[:5]):
+                wave_kinds[j] = max(wave_kinds[j], kind)
+            if 5 in pattern and self._is_critical_attack(pet, 5):
+                self.special_attack_active = True
+
             pet_y = start_y + i * spacing + runtime_globals.OPTION_ICON_SIZE // 2 - main_sprite.get_height() // 2
             slot_center_y = pet_y + main_sprite.get_height() // 2
-            for j, kind in enumerate(pattern):
-                x = runtime_globals.SCREEN_WIDTH - runtime_globals.OPTION_ICON_SIZE - (20 * s)
-                y = pet_y
-                if kind == 5:
-                    # Critical attack: prefer a dedicated atk_crit sprite (no scale2x needed).
-                    # Fall back to alt2/alt/main sprite scaled 2x when no crit sprite exists.
-                    # Start crit sprites at the visibility threshold (not past it) so they are
-                    # hidden during the slide-in and only appear when move_attacks() fires them.
-                    x_crit = runtime_globals.SCREEN_WIDTH - int(90 * s)
-                    atk_alt2 = getattr(pet, "atk_alt_2", 0)
-                    crit_sprite = self.get_crit_attack_sprite(pet, atk_alt2) if atk_alt2 and atk_alt2 > 0 else None
-                    if crit_sprite:
-                        self.attack_waves[j].append((crit_sprite, x_crit, slot_center_y - crit_sprite.get_height() // 2))
-                    else:
-                        sprite = alt2_sprite or alt_sprite or main_sprite
-                        scaled = pygame.transform.scale2x(sprite)
-                        self.attack_waves[j].append((scaled, x_crit, slot_center_y - scaled.get_height() // 2))
-                elif kind == 4:
-                    # 2 atk_alt sprites, fallback 3 atk_main sprites
-                    if getattr(pet, "atk_alt", 0) > 0:
-                        offsets = [(0, 0), (-int(20 * s), -int(10 * s))]
-                        combined = self._combine_sprites(alt_sprite, offsets)
-                    else:
-                        offsets = [(0, 0), (-int(20 * s), -int(10 * s)), (-int(40 * s), int(10 * s))]
-                        combined = self._combine_sprites(main_sprite, offsets)
-                    self.attack_waves[j].append((combined, x, y))
-                elif kind == 3:
-                    # 1 atk_alt sprite, fallback 3 atk_main sprites
-                    if getattr(pet, "atk_alt", 0) > 0:
-                        self.attack_waves[j].append((alt_sprite, x, y))
-                    else:
-                        offsets = [(0, 0), (-int(20 * s), -int(10 * s)), (-int(40 * s), int(10 * s))]
-                        combined = self._combine_sprites(main_sprite, offsets)
-                        self.attack_waves[j].append((combined, x, y))
-                elif kind == 2:
-                    # 2 atk_main sprites
-                    offsets = [(0, 0), (-int(20 * s), -int(10 * s))]
-                    combined = self._combine_sprites(main_sprite, offsets)
-                    self.attack_waves[j].append((combined, x, y))
+            for j, kind in enumerate(pattern[:5]):
+                sprite, is_crit = self.ladder_sprite(pet, kind)
+                if sprite is None:
+                    continue
+                if is_crit:
+                    # Crit sprites start at the visibility threshold rather
+                    # than past it, so they stay hidden through the slide-in
+                    # and only appear when move_attacks() fires them.
+                    x = runtime_globals.SCREEN_WIDTH - int(90 * s)
+                    y = slot_center_y - sprite.get_height() // 2
                 else:
-                    # 1 atk_main sprite
-                    self.attack_waves[j].append((main_sprite, x, y))
+                    x = runtime_globals.SCREEN_WIDTH - runtime_globals.OPTION_ICON_SIZE - (20 * s)
+                    y = pet_y
+                self.attack_waves[j].append((sprite, x, y))
+
+        # Store wave kinds for per-wave slide animation
+        self.attack_wave_kinds = wave_kinds
 
     def get_attack_count(self):
         # The Xai bar already reports 0-3, which is exactly the Digital

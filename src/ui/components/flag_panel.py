@@ -4,6 +4,10 @@ Flag Panel Component - Shows pet attribute and status flags from right to left
 
 import pygame
 from ui.components.component import UIComponent
+from ui.components.digisoul_icon import (
+    load_digisoul_sprite,
+    normalize_digisoul,
+)
 from core import runtime_globals
 from utils.pygame_utils import blit_with_cache
 
@@ -52,14 +56,23 @@ class FlagPanel(UIComponent):
         if not self.manager:
             return None
         
-        # Try to load with preferred scale first
-        sprite = self.manager.load_sprite_integer_scaling("Status", flag_name, "")
+        if flag_name.startswith("DigiSoul:"):
+            # DigiSoul art lives outside the Status sprite sheet and is 28px
+            # square. Fit it to this 20px-tall row before the common flag
+            # layout runs, so it does not shrink every other flag with it.
+            digisoul = flag_name.split(":", 1)[1]
+            sprite = load_digisoul_sprite(
+                digisoul, self.manager.scale_value(self.base_rect.height))
+        else:
+            # Try to load with preferred scale first
+            sprite = self.manager.load_sprite_integer_scaling(
+                "Status", flag_name, "")
 
         self.flag_sprites[flag_name] = sprite
         return sprite
         
                 
-    def set_pet_flags(self, pet, additional_flags=None):
+    def set_pet_flags(self, pet, additional_flags=None, digisoul=None):
         """Update the flags based on pet attributes and status"""
         if not pet:
             self.flags = []
@@ -80,6 +93,10 @@ class FlagPanel(UIComponent):
         else:
             # Fallback for unknown attributes
             flags.append(('Free', f'Attribute: {attribute}'))
+
+        digisoul = normalize_digisoul(digisoul)
+        if digisoul:
+            flags.append((f'DigiSoul:{digisoul}', f'DigiSoul: {digisoul}'))
             
         # Status flags (only show if true)
         if getattr(pet, 'edited', False):

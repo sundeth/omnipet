@@ -14,6 +14,7 @@ from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals
 import core.constants as constants
 from models.game_digidex import is_pet_unlocked, load_digidex
+from utils.data_compat import availability as read_availability
 from models.game_digidex_entry import GameDigidexEntry
 from utils.pygame_utils import  sprite_load_percent
 from ui.windows.window_background import WindowBackground
@@ -55,7 +56,7 @@ class SceneDigidex:
         self.all_pets = self.pets.copy()  # Store unfiltered list for filtering
 
         # Scope chosen at the module view: which module (None = All) and
-        # whether the Friends list (avaliability == "Friend") is shown
+        # whether the Friends list (availability == "Friend") is shown
         # instead of the album.
         self.scope_module = None
         self.scope_friends = False
@@ -190,7 +191,7 @@ class SceneDigidex:
             self._set_scope(module_name, False)
 
     def _module_has_friends(self, module_name) -> bool:
-        return any(getattr(p, 'avaliability', 'Normal') == 'Friend'
+        return any(getattr(p, 'availability', 'Normal') == 'Friend'
                    for p in self.all_pets if p.module == module_name)
 
     def _set_scope(self, module_name, friends: bool):
@@ -222,8 +223,8 @@ class SceneDigidex:
 
             for monster in monsters:
                 # Unobtainable pets never appear in the digidex.
-                avaliability = monster.get("avaliability") or "Normal"
-                if avaliability == "Unobtainable":
+                availability = read_availability(monster)
+                if availability == "Unobtainable":
                     continue
 
                 name = monster["name"]
@@ -231,7 +232,7 @@ class SceneDigidex:
                 attribute = monster.get("attribute", "")
                 stage = monster.get("stage", 0)
                 name_format = module.name_format
-                if avaliability == "Friend":
+                if availability == "Friend":
                     # Friend pets are discovered by battling their
                     # Friend-flagged enemy, tracked in the save's friend list.
                     if module_friends is None:
@@ -250,7 +251,7 @@ class SceneDigidex:
                     sprite = None
 
                 entry = GameDigidexEntry(name, attribute, stage, module.name, version, sprite, known, name_format)
-                entry.avaliability = avaliability
+                entry.availability = availability
                 all_entries.append(entry)
 
             known_count_by_module[module.name] = module_known_count
@@ -446,10 +447,10 @@ class SceneDigidex:
         want_friends = self.scope_friends or self.active_filters.get("friend")
         if want_friends:
             filtered_pets = [p for p in filtered_pets
-                             if getattr(p, 'avaliability', 'Normal') == 'Friend']
+                             if getattr(p, 'availability', 'Normal') == 'Friend']
         else:
             filtered_pets = [p for p in filtered_pets
-                             if getattr(p, 'avaliability', 'Normal') != 'Friend']
+                             if getattr(p, 'availability', 'Normal') != 'Friend']
 
         # Apply module filter
         if self.active_filters["module"] is not None:

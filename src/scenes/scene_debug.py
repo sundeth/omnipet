@@ -10,15 +10,19 @@ import time
 from ui.ui_manager import UIManager
 from ui.components.background import Background
 from ui.components.button import Button
+from ui.components.menu import Menu
 from ui.components.title_scene import TitleScene
 from ui.components.pet_selector import PetSelector
 from ui.ui_constants import BASE_RESOLUTION
 from ui.windows.window_background import WindowBackground
 from core import game_globals, runtime_globals
+from models.game_digidex import register_digidex_entry
+from models.game_pet import GamePet
 from utils.scene_utils import change_scene
-from utils.pet_utils import get_selected_pets
+from utils.pet_utils import distribute_pets_evenly, get_selected_pets, refresh_pet_sizes
 from utils.module_utils import get_module
 from utils.quest_event_utils import force_complete_quest, generate_daily_quests, get_hourly_random_event
+from utils.utils_unlocks import is_unlocked
 
 
 #=====================================================================
@@ -29,6 +33,9 @@ class SceneDebug:
     Debug scene with various testing options for pets and game systems.
     Refactored to use UI system with button grid and page navigation.
     """
+
+    # Rows the Add Pet picker shows at once; the rest are scrolled to.
+    MENU_MAX_VISIBLE = 8
 
     def __init__(self) -> None:
         """
@@ -77,8 +84,20 @@ class SceneDebug:
             ("Quest Reset", self._reset_quests, "Reset daily quests"),
             ("Complete Quests", self._complete_quests, "Complete all available quests"),
             ("Try Event", self._try_event, "Attempt to trigger an event"),
-            ("+All Items", self._add_all_items, "Add 1 of each item from all modules")
+            ("+All Items", self._add_all_items, "Add 1 of each item from all modules"),
+            ("Add Pet", self._add_pet, "Pick any pet from any module and add it to the party")
         ]
+
+        # "Add Pet" picker state. The Menu closes itself right after a
+        # callback runs, so each step is queued and opened on the next update.
+        self.menu = None
+        self.pending_menu = None
+        self.picker_modules = []
+        self.picker_module_index = 0
+        self.picker_versions = []
+        self.picker_version_index = 0
+        self.picker_monsters = []
+        self.picker_monster_index = 0
         
         # Initialize counters
         for option_name, _, _ in self.debug_options:
@@ -181,7 +200,17 @@ class SceneDebug:
         self.pet_selector.set_pets(get_selected_pets())  # Set selected pets
         self.pet_selector.selected_pets = []  # No selection highlighting needed
         self.ui_manager.add_component(self.pet_selector)
-        
+
+        # Add Pet picker menu. Kept out of the UI manager's component list (as
+        # the freezer box does) so its events are not processed twice; the
+        # manager still renders it and routes to it as the active modal.
+        self.menu = Menu(width=180)
+        self.menu.visible = False
+        self.menu.manager = self.ui_manager
+        if not self.menu.base_rect:
+            self.menu.base_rect = self.menu.rect.copy()
+        self.menu.rect = self.ui_manager.scale_rect(self.menu.base_rect)
+
         # Update button texts for first page
         self._update_button_texts()
         
@@ -258,6 +287,13 @@ class SceneDebug:
 
     def update(self) -> None:
         """Updates the debug scene."""
+        # A Menu closes itself right after its callback returns, so the next
+        # step of the Add Pet picker is opened here instead of inside it.
+        if self.pending_menu:
+            open_next_step = self.pending_menu
+            self.pending_menu = None
+            open_next_step()
+
         # Update pet selector with current selected pets
         if self.pet_selector:
             current_pets = get_selected_pets()
@@ -625,3 +661,129 @@ class SceneDebug:
         
         runtime_globals.game_console.log(f"[SceneDebug] Added {items_added} items to inventory.")
         return items_added > 0
+
+    # Add Pet picker: module -> version -> pet
+    def _add_pet(self) -> bool:
+        """Open the picker that adds any module's pet to the party."""
+        if not runtime_globals.game_modules:
+            return False
+
+        self._open_module_menu()
+        return True
+
+    def _open_picker_menu(self, options, on_select, on_cancel, selected_index):
+        """Open one step of the picker, restoring where its cursor was."""
+        self.menu.open(options, on_select, on_cancel, max_visible=self.MENU_MAX_VISIBLE)
+        self.menu.set_selected_index(selected_index)
+        self.ui_manager.set_active_menu(self.menu)
+
+    def _open_module_menu(self):
+        """Step 1: every installed module."""
+        self.picker_modules = sorted(runtime_globals.game_modules.keys())
+        self._open_picker_menu(self.picker_modules, self._on_picker_module,
+                               self._on_picker_cancel, self.picker_module_index)
+
+    def _open_version_menu(self):
+        """Step 2: the versions of that module that have a hatchable egg."""
+        options = [f"Ver. {version}" for version in self.picker_versions]
+        self._open_picker_menu(options, self._on_picker_version,
+                               self._open_module_menu_later, self.picker_version_index)
+
+    def _open_pet_menu(self):
+        """Step 3: every pet on the chosen version."""
+        options = [monster["name"] for monster in self.picker_monsters]
+        self._open_picker_menu(options, self._on_picker_monster,
+                               self._open_version_menu_later, self.picker_monster_index)
+
+    def _open_module_menu_later(self):
+        self.pending_menu = self._open_module_menu
+
+    def _open_version_menu_later(self):
+        self.pending_menu = self._open_version_menu
+
+    def _on_picker_cancel(self):
+        """Backing out of the first step closes the picker."""
+        self.pending_menu = None
+
+    def _on_picker_module(self, index):
+        if not 0 <= index < len(self.picker_modules):
+            return
+        self.picker_module_index = index
+        module = get_module(self.picker_modules[index])
+        self.picker_versions = self._get_hatchable_versions(module)
+        if not self.picker_versions:
+            # Nothing to pick — fall back to the module list rather than
+            # opening an empty menu.
+            runtime_globals.game_console.log(
+                f"[SceneDebug] {module.name} has no hatchable eggs")
+            runtime_globals.game_sound.play("cancel")
+            self.pending_menu = self._open_module_menu
+            return
+        self.picker_version_index = 0
+        self.pending_menu = self._open_version_menu
+
+    def _on_picker_version(self, index):
+        if not 0 <= index < len(self.picker_versions):
+            return
+        self.picker_version_index = index
+        version = self.picker_versions[index]
+        module = get_module(self.picker_modules[self.picker_module_index])
+        self.picker_monsters = [monster for monster in module.get_all_monsters()
+                                if monster.get("version") == version]
+        if not self.picker_monsters:
+            runtime_globals.game_sound.play("cancel")
+            self.pending_menu = self._open_version_menu
+            return
+        self.picker_monster_index = 0
+        self.pending_menu = self._open_pet_menu
+
+    def _on_picker_monster(self, index):
+        if not 0 <= index < len(self.picker_monsters):
+            return
+        self.picker_monster_index = index
+        self._spawn_pet(self.picker_monsters[index])
+
+    def _get_hatchable_versions(self, module) -> list:
+        """Versions of ``module`` that currently have an obtainable egg.
+
+        Same availability rules as the egg selector: a special egg only counts
+        once its unlock — or its G-Cell fragment — is held.
+        """
+        versions = []
+        for egg in module.get_monsters_by_stage(0):
+            if egg.get("special", False):
+                special_key = egg.get("special_key", "")
+                module_name = egg.get("module", module.name)
+                if special_key == "gcell_fragment":
+                    fragment_key = f"{module_name}@{egg.get('version', 1)}"
+                    if fragment_key not in getattr(game_globals, "gcell_fragments", []):
+                        continue
+                elif special_key and not is_unlocked(module_name, None, special_key):
+                    continue
+            version = egg.get("version")
+            if version is not None and version not in versions:
+                versions.append(version)
+        return sorted(versions)
+
+    def _spawn_pet(self, monster) -> None:
+        """Create the chosen monster and put it in the party."""
+        if len(game_globals.pet_list) >= game_globals.configuration.max_pets:
+            runtime_globals.game_console.log("[SceneDebug] Party is full, pet not added")
+            runtime_globals.game_sound.play("cancel")
+            return
+
+        # get_all_monsters returns the raw records, which carry no module.
+        pet_data = dict(monster)
+        pet_data["module"] = self.picker_modules[self.picker_module_index]
+
+        pet = GamePet(pet_data)
+        game_globals.pet_list.append(pet)
+        register_digidex_entry(pet.name, pet.module, pet.version)
+
+        # Pet size depends on how many are in the party, so the whole row is
+        # resized when one joins.
+        refresh_pet_sizes()
+        distribute_pets_evenly()
+
+        runtime_globals.game_console.log(
+            f"[SceneDebug] Added {pet.name} (v{pet.version}) from {pet.module}")

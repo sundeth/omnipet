@@ -45,6 +45,10 @@ class SceneBattlePvP:
                 self.enemy_player_name = pvp_data.get('enemy_player_name', 'ENEMY')
                 self.is_online_mode = pvp_data.get('is_online_mode', False)
                 self.is_dcom_mode = pvp_data.get('is_dcom_mode', False)  # DCom battle flag
+                # The device line the exchange was fought on. It decides the
+                # battle's presentation (round count, how a damage value is
+                # drawn), which belongs to the wire and not to the module.
+                self.battle_format = pvp_data.get('battle_format')
                 self.is_oem_mode = pvp_data.get('is_oem_mode', False)  # DCom OEM mode flag
                 self.enemy_first = pvp_data.get('enemy_first', False)  # Enemy attacks first flag
                 
@@ -156,7 +160,7 @@ class SceneBattlePvP:
                     complete_pet_data.setdefault("energy", 100)  # Default energy
                     complete_pet_data.setdefault("heal_doses", 1)  # Default heal doses
                     complete_pet_data.setdefault("condition_hearts", 0)  # Default condition hearts
-                    complete_pet_data.setdefault("jogress_avaliable", 0)  # Default jogress
+                    complete_pet_data.setdefault("jogress_available", 0)  # Default jogress
                     
                     # Create GamePet object using complete pet_data
                     temp_pet = GamePet(complete_pet_data)
@@ -185,6 +189,10 @@ class SceneBattlePvP:
             
             runtime_globals.game_console.log(f"[SceneBattlePvP] Setting up teams: team1_pets={len(team1_pets)}, team2_pet_data={len(team2_pet_data)}")
             # Host uses pvp_host HP bar, client uses pvp_client
+            # Only when we have one: BattleEncounterDCom reads the same value
+            # out of pvp_battle_data for itself, and None must not clobber it.
+            if getattr(self, 'battle_format', None):
+                self.battle_encounter.battle_format = self.battle_format
             self.battle_encounter.setup_pvp_teams(team1_pets, team2_pet_data, is_host=self.is_host)
             
             # Set flag for which team to show in result phase
@@ -199,6 +207,10 @@ class SceneBattlePvP:
                 # Set DCom mode flag on battle encounter for device mapping
                 self.battle_encounter.is_dcom_mode = True
                 self.battle_encounter.is_oem_mode = getattr(self, 'is_oem_mode', False)
+                # The charge minigame was played in the connection flow and
+                # its value is already inside the packets the device answered.
+                self.battle_encounter.skip_charge = True
+                self._register_xros_forms()
                 runtime_globals.game_console.log(f"[SceneBattlePvP] Set is_dcom_mode flag on battle encounter (OEM={self.battle_encounter.is_oem_mode})")
                 
                 # Apply enemy_first flag for DCom battles (enemy attacks first in V2 protocol)
@@ -213,9 +225,17 @@ class SceneBattlePvP:
                         self.battle_encounter.battle_player.phase[i] = "enemy_charge"
                     runtime_globals.game_console.log("[SceneBattlePvP] Set phases to enemy_charge for animation sequence")
                 
-                # Set the simulation data (already generated in scene_connect)
-                self.battle_encounter.global_battle_log = runtime_globals.pvp_battle_data.get('original_battle_log')
-                self.battle_encounter.victory_status = self.simulation_data.get('victory_status', 'Victory')
+                # The exchange was fought in the connection view; adopting it
+                # swaps device1/device2 into the order a battle scene reads
+                # (device1 = team1 = the player).
+                self.battle_encounter.adopt_battle_result(
+                    runtime_globals.pvp_battle_data.get('original_battle_log'))
+
+                # And it fights with the HP the two devices agreed on, not
+                # the pet module's adventure-battle HP.
+                self.battle_encounter.apply_exchange_hp(
+                    (self.my_team_data[0].get('hp') if self.my_team_data else None),
+                    (self.enemy_team_data[0].get('hp') if self.enemy_team_data else None))
                 
                 runtime_globals.game_console.log(f"[SceneBattlePvP] Victory status: {self.battle_encounter.victory_status}")
                 runtime_globals.game_console.log(f"[SceneBattlePvP] Battle log has {len(self.battle_encounter.global_battle_log.battle_log)} turns")
@@ -315,6 +335,22 @@ class SceneBattlePvP:
             runtime_globals.game_console.log(f"[SceneBattlePvP] Traceback: {traceback.format_exc()}")
             change_scene("game")
     
+    def _register_xros_forms(self):
+        """Hand any temporary evolutions to the encounter so they revert.
+
+        The connection flow chooses the DigiXros form before the exchange, so
+        the pets that arrive here can already be XrosPet stand-ins. Telling
+        the encounter about them lets the result screen's devolution flash and
+        the end-of-battle cleanup work exactly as they do in an adventure
+        battle -- nothing is written to the real pet either way.
+        """
+        forms = {pet.pet: pet for pet in self.my_pets if hasattr(pet, 'pet')}
+        if not forms:
+            return
+        self.battle_encounter.xros_forms = forms
+        runtime_globals.game_console.log(
+            f"[SceneBattlePvP] {len(forms)} temporary evolution(s) registered")
+
     def setup_alert_components(self):
         """Setup PVP alert screen with team previews and player labels."""
         try:
