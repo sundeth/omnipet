@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Items</title>
+    <link rel="stylesheet" href="module.css">
+</head>
+<body>
+    <div class="page-content">
+        <h1>Module Items</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Effect</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                    <th>Weight Gain</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            </tbody>
+        </table>
+        <div id="empty-items" class="empty-state" style="display: none;">
+            <i>📦</i>
+            <p>No items configured for this module.</p>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var tbody = document.querySelector('table tbody');
+            var emptyState = document.getElementById('empty-items');
+            var table = document.querySelector('table');
+            
+            if (!tbody || tbody.children.length === 0) {
+                table.style.display = 'none';
+                emptyState.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

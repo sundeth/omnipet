@@ -1,0 +1,8141 @@
+{
+  "monster": [
+    {
+      "name": "Bot_Egg",
+      "stage": 0,
+      "version": 1,
+      "special": true,
+      "special_key": "Bot_Egg",
+      "atk_main": 0,
+      "atk_alt": 0,
+      "time": 1,
+      "poop_timer": 3,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 0,
+      "stomach": 2,
+      "hunger_loss": 2,
+      "strength_loss": 2,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Botamon"
+        }
+      ]
+    },
+    {
+      "name": "Day",
+      "stage": 0,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "atk_main": 0,
+      "atk_alt": 0,
+      "time": 1,
+      "poop_timer": 3,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 0,
+      "stomach": 2,
+      "hunger_loss": 2,
+      "strength_loss": 2,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Agumon"
+        }
+      ]
+    },
+    {
+      "name": "Night",
+      "stage": 0,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "atk_main": 0,
+      "atk_alt": 0,
+      "time": 1,
+      "poop_timer": 3,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 0,
+      "stomach": 2,
+      "hunger_loss": 2,
+      "strength_loss": 2,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Gabumon"
+        }
+      ]
+    },
+    {
+      "name": "Botamon",
+      "stage": 1,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "20:00",
+      "wakes": "08:00",
+      "atk_main": 1,
+      "atk_alt": 0,
+      "time": 360,
+      "poop_timer": 180,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 2,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Koromon"
+        }
+      ]
+    },
+    {
+      "name": "Koromon",
+      "stage": 2,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "20:00",
+      "wakes": "08:00",
+      "atk_main": 1,
+      "atk_alt": 0,
+      "time": 1440,
+      "poop_timer": 360,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 2,
+      "hunger_loss": 200,
+      "strength_loss": 200,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Kunemon",
+          "overfeed": [
+            1,
+            999999
+          ],
+          "time_range": [
+            "23:00",
+            "05:00"
+          ]
+        },
+        {
+          "to": "Agumon",
+          "training": [
+            8,
+            999999
+          ]
+        },
+        {
+          "to": "Gabumon"
+        }
+      ]
+    },
+    {
+      "name": "Agumon",
+      "stage": 3,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 2,
+      "atk_alt": 27,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "Greymon",
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Tyrannomon",
+          "win_count": [
+            0,
+            5
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Centarumon",
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Meramon",
+          "win_count": [
+            10,
+            999999
+          ],
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Birdramon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Monochromon",
+          "win_count": [
+            0,
+            5
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            3,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Gabumon",
+      "stage": 3,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 2,
+      "atk_alt": 26,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 5,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 5,
+      "evolve": [
+        {
+          "to": "Monochromon",
+          "win_count": [
+            0,
+            5
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            3,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Centarumon",
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Tyrannomon",
+          "win_count": [
+            0,
+            5
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Drimogemon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Ogremon",
+          "win_count": [
+            15,
+            999999
+          ],
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Garurumon",
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Kunemon",
+      "stage": 3,
+      "version": 1,
+      "special": true,
+      "special_key": "Kunemon",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 5,
+      "atk_alt": 42,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 2,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 5,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "Bakemon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Kabuterimon",
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Kuwagamon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vegiemon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Airdramon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 6,
+      "atk_alt": 35,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Phoenixmon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Megadramon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            24,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bakemon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 28,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 5,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 80,
+      "strength_loss": 80,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "SkullGreymon",
+          "win_count": [
+            40,
+            999999
+          ],
+          "mistakes": [
+            10,
+            999999
+          ],
+          "trophies": [
+            25,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Giromon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            11,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Birdramon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 6,
+      "atk_alt": 18,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Phoenixmon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Airdramon",
+          "battles": [
+            10,
+            999999
+          ],
+          "win_ratio": [
+            70,
+            100
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Centarumon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 4,
+      "atk_alt": 2,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Andromon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Giromon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            11,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Drimogemon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 6,
+      "atk_alt": 12,
+      "time": 8640,
+      "poop_timer": 180,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 48,
+      "strength_loss": 48,
+      "heal_doses": 1,
+      "power": 25,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "MetalGreymon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            23,
+            999999
+          ],
+          "weigth": [
+            60,
+            70
+          ]
+        },
+        {
+          "to": "Monochromon",
+          "training": [
+            44,
+            999999
+          ],
+          "win_ratio": [
+            70,
+            100
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Garurumon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 4,
+      "atk_alt": 6,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "MegaSeadramon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "SkullGreymon",
+          "win_count": [
+            40,
+            999999
+          ],
+          "mistakes": [
+            10,
+            999999
+          ],
+          "trophies": [
+            25,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Greymon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 4,
+      "atk_alt": 26,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "MetalGreymon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            23,
+            999999
+          ],
+          "weigth": [
+            60,
+            70
+          ]
+        },
+        {
+          "to": "SkullGreymon",
+          "win_count": [
+            40,
+            999999
+          ],
+          "mistakes": [
+            10,
+            999999
+          ],
+          "trophies": [
+            25,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kabuterimon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "10:00",
+      "wakes": "19:00",
+      "atk_main": 4,
+      "atk_alt": 26,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "H-Kabuterimon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "MetalMamemon",
+          "mistakes": [
+            0,
+            15
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kuwagamon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 24,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "H-Kabuterimon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Meramon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 18,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 80,
+      "strength_loss": 80,
+      "heal_doses": 1,
+      "power": 25,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "MetalGreymon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            23,
+            999999
+          ],
+          "weigth": [
+            60,
+            70
+          ]
+        },
+        {
+          "to": "Andromon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Monochromon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 4,
+      "atk_alt": 33,
+      "time": 8640,
+      "poop_timer": 180,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 48,
+      "strength_loss": 48,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "MetalGreymon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            23,
+            999999
+          ],
+          "weigth": [
+            60,
+            70
+          ]
+        },
+        {
+          "to": "MetalMamemon",
+          "mistakes": [
+            0,
+            15
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nanimon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 80,
+      "strength_loss": 80,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "Digitamamon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ninjamon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 80,
+      "atk_alt": 91,
+      "time": 8640,
+      "poop_timer": 720,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Mamemon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            15,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "MetalMamemon",
+          "mistakes": [
+            0,
+            15
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Numemon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 6,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 6,
+      "evolve": [
+        {
+          "to": "Monzaemon",
+          "win_count": [
+            50,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ogremon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 7,
+      "atk_alt": 12,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 2,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 25,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 25,
+      "evolve": [
+        {
+          "to": "Giromon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            11,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Andromon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sukamon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 4,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 4,
+      "evolve": [
+        {
+          "to": "Etemon",
+          "win_count": [
+            50,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            10,
+            20
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tyrannomon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 4,
+      "atk_alt": 27,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 40,
+      "strength_loss": 40,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "Megadramon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            24,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "MetalGreymon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            23,
+            999999
+          ],
+          "weigth": [
+            60,
+            70
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vegiemon",
+      "stage": 4,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 720,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 45,
+      "strength_loss": 45,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Ninjamon",
+          "win_ratio": [
+            70,
+            100
+          ],
+          "win_count": [
+            50,
+            999999
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Andromon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 3,
+      "atk_alt": 13,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 59,
+      "strength_loss": 59,
+      "heal_doses": 1,
+      "power": 40,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 40,
+      "evolve": []
+    },
+    {
+      "name": "Digitamamon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 14,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 36,
+      "strength_loss": 36,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Etemon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 14,
+      "time": 10080,
+      "poop_timer": 360,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 40,
+      "evolve": []
+    },
+    {
+      "name": "Giromon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 8,
+      "atk_alt": 21,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "H-Kabuterimon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "10:00",
+      "wakes": "19:00",
+      "atk_main": 31,
+      "atk_alt": 4,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Mamemon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 8,
+      "atk_alt": 7,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "Megadramon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 3,
+      "atk_alt": 13,
+      "time": 10080,
+      "poop_timer": 144,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 50,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 60,
+      "evolve": [
+        {
+          "to": "SkullGreymon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MegaSeadramon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 58,
+      "atk_alt": 6,
+      "time": 10080,
+      "poop_timer": 240,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "MetalGreymon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 3,
+      "atk_alt": 27,
+      "time": 2160,
+      "poop_timer": 144,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 50,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": [
+        {
+          "to": "SkullGreymon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MetalMamemon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 8,
+      "atk_alt": 27,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "Monzaemon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 7,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Phoenixmon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 92,
+      "atk_alt": 23,
+      "time": 10080,
+      "poop_timer": 240,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 40,
+      "attribute": "",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 60,
+      "evolve": []
+    },
+    {
+      "name": "Piximon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 8,
+      "atk_alt": 23,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "SkullGreymon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 11,
+      "atk_alt": 3,
+      "time": 10080,
+      "poop_timer": 240,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 160,
+      "strength_loss": 160,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Vademon",
+      "stage": 5,
+      "version": 1,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 15,
+      "atk_alt": 9,
+      "time": 10080,
+      "poop_timer": 360,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Pun_Egg",
+      "stage": 0,
+      "version": 2,
+      "special": true,
+      "special_key": "Pun_Egg",
+      "atk_main": 0,
+      "atk_alt": 0,
+      "time": 1,
+      "poop_timer": 3,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 0,
+      "stomach": 2,
+      "hunger_loss": 2,
+      "strength_loss": 2,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Punimon"
+        }
+      ]
+    },
+    {
+      "name": "Punimon",
+      "stage": 1,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "20:00",
+      "wakes": "08:00",
+      "atk_main": 1,
+      "atk_alt": 0,
+      "time": 360,
+      "poop_timer": 180,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 2,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Tsunomon"
+        }
+      ]
+    },
+    {
+      "name": "Tsunomon",
+      "stage": 2,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "20:00",
+      "wakes": "08:00",
+      "atk_main": 1,
+      "atk_alt": 0,
+      "time": 1440,
+      "poop_timer": 360,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 2,
+      "hunger_loss": 200,
+      "strength_loss": 200,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Kunemon",
+          "overfeed": [
+            1,
+            999999
+          ],
+          "time_range": [
+            "23:00",
+            "05:00"
+          ]
+        },
+        {
+          "to": "Elecmon",
+          "training": [
+            8,
+            999999
+          ]
+        },
+        {
+          "to": "Penguinmon"
+        }
+      ]
+    },
+    {
+      "name": "Elecmon",
+      "stage": 3,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 5,
+      "atk_alt": 42,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 5,
+      "evolve": [
+        {
+          "to": "Leomon",
+          "win_count": [
+            10,
+            999999
+          ],
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            3,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Angemon",
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Kokatorimon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Kunemon",
+      "stage": 3,
+      "version": 2,
+      "special": true,
+      "special_key": "Kunemon",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 5,
+      "atk_alt": 42,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 2,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 5,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "Bakemon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Kabuterimon",
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Kuwagamon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vegiemon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Penguinmon",
+      "stage": 3,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 38,
+      "atk_alt": 6,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 5,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 5,
+      "evolve": [
+        {
+          "to": "Whamon",
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Shellmon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Garurumon",
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Frigimon",
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Mojyamon",
+          "win_count": [
+            0,
+            5
+          ],
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Angemon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 7,
+      "atk_alt": 23,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Andromon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Phoenixmon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Devimon",
+          "win_ratio": [
+            0,
+            50
+          ],
+          "mistakes": [
+            1,
+            999999
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bakemon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 28,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 5,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 80,
+      "strength_loss": 80,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Giromon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            11,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "SkullGreymon",
+          "win_count": [
+            40,
+            999999
+          ],
+          "mistakes": [
+            10,
+            999999
+          ],
+          "trophies": [
+            25,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Devimon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 13,
+      "time": 4320,
+      "poop_timer": 360,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Megadramon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            24,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "SkullGreymon",
+          "win_count": [
+            40,
+            999999
+          ],
+          "mistakes": [
+            10,
+            999999
+          ],
+          "trophies": [
+            25,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Frigimon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 7,
+      "atk_alt": 38,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Mamemon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "MetalMamemon",
+          "mistakes": [
+            0,
+            15
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Garurumon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 4,
+      "atk_alt": 6,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "SkullGreymon",
+          "win_count": [
+            40,
+            999999
+          ],
+          "mistakes": [
+            10,
+            999999
+          ],
+          "trophies": [
+            25,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "MegaSeadramon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kabuterimon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "10:00",
+      "wakes": "19:00",
+      "atk_main": 4,
+      "atk_alt": 26,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "H-Kabuterimon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "MetalMamemon",
+          "mistakes": [
+            0,
+            15
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kokatorimon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 4,
+      "atk_alt": 13,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 25,
+      "evolve": [
+        {
+          "to": "Phoenixmon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Phoenixmon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kuwagamon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 24,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "H-Kabuterimon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Leomon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 7,
+      "atk_alt": 12,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 25,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Andromon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Mamemon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Mojyamon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 6,
+      "atk_alt": 12,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "SkullGreymon",
+          "win_count": [
+            40,
+            999999
+          ],
+          "mistakes": [
+            10,
+            999999
+          ],
+          "trophies": [
+            25,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Mamemon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nanimon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 80,
+      "strength_loss": 80,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "Digitamamon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ninjamon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 80,
+      "atk_alt": 91,
+      "time": 8640,
+      "poop_timer": 720,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Mamemon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            15,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "MetalMamemon",
+          "mistakes": [
+            0,
+            15
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Numemon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 6,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 6,
+      "evolve": [
+        {
+          "to": "Monzaemon",
+          "win_count": [
+            50,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Shellmon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 6,
+      "atk_alt": 10,
+      "time": 8640,
+      "poop_timer": 180,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 48,
+      "strength_loss": 48,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "H-Kabuterimon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "MegaSeadramon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Coelamon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            70,
+            100
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sukamon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 4,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 4,
+      "evolve": [
+        {
+          "to": "Etemon",
+          "win_count": [
+            50,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            10,
+            20
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vegiemon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 720,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 45,
+      "strength_loss": 45,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Ninjamon",
+          "win_ratio": [
+            70,
+            100
+          ],
+          "win_count": [
+            50,
+            999999
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Whamon",
+      "stage": 4,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 10,
+      "atk_alt": 6,
+      "time": 8640,
+      "poop_timer": 180,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 48,
+      "strength_loss": 48,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 25,
+      "evolve": [
+        {
+          "to": "MegaSeadramon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Mamemon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Coelamon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            70,
+            100
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Andromon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 3,
+      "atk_alt": 13,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 59,
+      "strength_loss": 59,
+      "heal_doses": 1,
+      "power": 40,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 40,
+      "evolve": []
+    },
+    {
+      "name": "Digitamamon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 14,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 36,
+      "strength_loss": 36,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Etemon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 14,
+      "time": 10080,
+      "poop_timer": 360,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 40,
+      "evolve": []
+    },
+    {
+      "name": "Giromon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 8,
+      "atk_alt": 21,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "H-Kabuterimon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "10:00",
+      "wakes": "19:00",
+      "atk_main": 31,
+      "atk_alt": 4,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Mamemon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 8,
+      "atk_alt": 7,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "Megadramon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 3,
+      "atk_alt": 13,
+      "time": 10080,
+      "poop_timer": 144,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 50,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 60,
+      "evolve": [
+        {
+          "to": "SkullGreymon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MegaSeadramon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 58,
+      "atk_alt": 6,
+      "time": 10080,
+      "poop_timer": 240,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "MetalMamemon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 8,
+      "atk_alt": 27,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "Monzaemon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 7,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Phoenixmon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 92,
+      "atk_alt": 23,
+      "time": 10080,
+      "poop_timer": 240,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 40,
+      "attribute": "",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 60,
+      "evolve": []
+    },
+    {
+      "name": "Piximon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 8,
+      "atk_alt": 23,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "SkullGreymon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 11,
+      "atk_alt": 3,
+      "time": 10080,
+      "poop_timer": 240,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 160,
+      "strength_loss": 160,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Vademon",
+      "stage": 5,
+      "version": 2,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 15,
+      "atk_alt": 9,
+      "time": 10080,
+      "poop_timer": 360,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Poy_Egg",
+      "stage": 0,
+      "version": 3,
+      "special": true,
+      "special_key": "Poy_Egg",
+      "atk_main": 0,
+      "atk_alt": 0,
+      "time": 1,
+      "poop_timer": 3,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 0,
+      "stomach": 2,
+      "hunger_loss": 2,
+      "strength_loss": 2,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Poyomon"
+        }
+      ]
+    },
+    {
+      "name": "Poyomon",
+      "stage": 1,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "20:00",
+      "wakes": "08:00",
+      "atk_main": 1,
+      "atk_alt": 0,
+      "time": 360,
+      "poop_timer": 180,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 2,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Tokomon"
+        }
+      ]
+    },
+    {
+      "name": "Tokomon",
+      "stage": 2,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "20:00",
+      "wakes": "08:00",
+      "atk_main": 1,
+      "atk_alt": 0,
+      "time": 1440,
+      "poop_timer": 360,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 2,
+      "hunger_loss": 200,
+      "strength_loss": 200,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Kunemon",
+          "overfeed": [
+            1,
+            999999
+          ],
+          "time_range": [
+            "23:00",
+            "05:00"
+          ]
+        },
+        {
+          "to": "Patamon",
+          "training": [
+            8,
+            999999
+          ]
+        },
+        {
+          "to": "Biyomon"
+        }
+      ]
+    },
+    {
+      "name": "Biyomon",
+      "stage": 3,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 2,
+      "atk_alt": 6,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 2,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 5,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 5,
+      "evolve": [
+        {
+          "to": "Unimon",
+          "win_count": [
+            10,
+            999999
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Kabuterimon",
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Airdramon",
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            3,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Birdramon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Kokatorimon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Kunemon",
+      "stage": 3,
+      "version": 3,
+      "special": true,
+      "special_key": "Kunemon",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 5,
+      "atk_alt": 42,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 2,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 5,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "Bakemon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Kabuterimon",
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Kuwagamon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vegiemon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Patamon",
+      "stage": 3,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 2,
+      "atk_alt": 13,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 5,
+      "evolve": [
+        {
+          "to": "Leomon",
+          "win_count": [
+            10,
+            999999
+          ],
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            3,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Angemon",
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Drimogemon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Ogremon",
+          "win_count": [
+            15,
+            999999
+          ],
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Unimon",
+          "win_count": [
+            10,
+            999999
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Tyrannomon",
+          "win_count": [
+            0,
+            5
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Airdramon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 6,
+      "atk_alt": 35,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Megadramon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            24,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "Phoenixmon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Angemon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 7,
+      "atk_alt": 23,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Andromon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Phoenixmon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Devimon",
+          "win_ratio": [
+            0,
+            50
+          ],
+          "mistakes": [
+            1,
+            999999
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bakemon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 28,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 5,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 80,
+      "strength_loss": 80,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Giromon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            11,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "SkullGreymon",
+          "win_count": [
+            40,
+            999999
+          ],
+          "mistakes": [
+            10,
+            999999
+          ],
+          "trophies": [
+            25,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Birdramon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 6,
+      "atk_alt": 18,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Phoenixmon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Airdramon",
+          "battles": [
+            10,
+            999999
+          ],
+          "win_ratio": [
+            70,
+            100
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Devimon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 13,
+      "time": 4320,
+      "poop_timer": 360,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Megadramon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            24,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "SkullGreymon",
+          "win_count": [
+            40,
+            999999
+          ],
+          "mistakes": [
+            10,
+            999999
+          ],
+          "trophies": [
+            25,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Drimogemon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 6,
+      "atk_alt": 12,
+      "time": 8640,
+      "poop_timer": 180,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 48,
+      "strength_loss": 48,
+      "heal_doses": 1,
+      "power": 25,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "MetalGreymon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            23,
+            999999
+          ],
+          "weigth": [
+            60,
+            70
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kabuterimon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "10:00",
+      "wakes": "19:00",
+      "atk_main": 4,
+      "atk_alt": 26,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "H-Kabuterimon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "MetalMamemon",
+          "mistakes": [
+            0,
+            15
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kokatorimon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 4,
+      "atk_alt": 13,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 25,
+      "evolve": [
+        {
+          "to": "Phoenixmon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Phoenixmon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kuwagamon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 24,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "H-Kabuterimon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Leomon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 7,
+      "atk_alt": 12,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 25,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Andromon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Mamemon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nanimon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 80,
+      "strength_loss": 80,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "Digitamamon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ninjamon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 80,
+      "atk_alt": 91,
+      "time": 8640,
+      "poop_timer": 720,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Mamemon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            15,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "MetalMamemon",
+          "mistakes": [
+            0,
+            15
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Numemon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 6,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 6,
+      "evolve": [
+        {
+          "to": "Monzaemon",
+          "win_count": [
+            50,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ogremon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 7,
+      "atk_alt": 12,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 2,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 25,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 25,
+      "evolve": [
+        {
+          "to": "Andromon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Giromon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            11,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sukamon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 4,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 4,
+      "evolve": [
+        {
+          "to": "Etemon",
+          "win_count": [
+            50,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            10,
+            20
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tyrannomon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 4,
+      "atk_alt": 27,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 40,
+      "strength_loss": 40,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "Megadramon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            24,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "MetalGreymon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            23,
+            999999
+          ],
+          "weigth": [
+            60,
+            70
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Unimon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 4,
+      "atk_alt": 26,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "Giromon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            11,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Phoenixmon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vegiemon",
+      "stage": 4,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 720,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 45,
+      "strength_loss": 45,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Ninjamon",
+          "win_ratio": [
+            70,
+            100
+          ],
+          "win_count": [
+            50,
+            999999
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Andromon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 3,
+      "atk_alt": 13,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 59,
+      "strength_loss": 59,
+      "heal_doses": 1,
+      "power": 40,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 40,
+      "evolve": []
+    },
+    {
+      "name": "Digitamamon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 14,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 36,
+      "strength_loss": 36,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Etemon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 14,
+      "time": 10080,
+      "poop_timer": 360,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 40,
+      "evolve": []
+    },
+    {
+      "name": "Giromon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 8,
+      "atk_alt": 21,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "H-Kabuterimon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "10:00",
+      "wakes": "19:00",
+      "atk_main": 31,
+      "atk_alt": 4,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Mamemon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 8,
+      "atk_alt": 7,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "Megadramon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 3,
+      "atk_alt": 13,
+      "time": 10080,
+      "poop_timer": 144,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 50,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 60,
+      "evolve": [
+        {
+          "to": "SkullGreymon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MetalGreymon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 3,
+      "atk_alt": 27,
+      "time": 2160,
+      "poop_timer": 144,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 50,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": [
+        {
+          "to": "SkullGreymon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MetalMamemon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 8,
+      "atk_alt": 27,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "Monzaemon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 7,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Phoenixmon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 92,
+      "atk_alt": 23,
+      "time": 10080,
+      "poop_timer": 240,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 40,
+      "attribute": "",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 60,
+      "evolve": []
+    },
+    {
+      "name": "Piximon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 8,
+      "atk_alt": 23,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "SkullGreymon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 11,
+      "atk_alt": 3,
+      "time": 10080,
+      "poop_timer": 240,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 160,
+      "strength_loss": 160,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Vademon",
+      "stage": 5,
+      "version": 3,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 15,
+      "atk_alt": 9,
+      "time": 10080,
+      "poop_timer": 360,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Yur_Egg",
+      "stage": 0,
+      "version": 4,
+      "special": true,
+      "special_key": "Yur_Egg",
+      "atk_main": 0,
+      "atk_alt": 0,
+      "time": 1,
+      "poop_timer": 3,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 0,
+      "stomach": 2,
+      "hunger_loss": 2,
+      "strength_loss": 2,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Yuramon"
+        }
+      ]
+    },
+    {
+      "name": "Yuramon",
+      "stage": 1,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "20:00",
+      "wakes": "08:00",
+      "atk_main": 1,
+      "atk_alt": 0,
+      "time": 360,
+      "poop_timer": 180,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 2,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Tanemon"
+        }
+      ]
+    },
+    {
+      "name": "Tanemon",
+      "stage": 2,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "20:00",
+      "wakes": "08:00",
+      "atk_main": 1,
+      "atk_alt": 0,
+      "time": 1440,
+      "poop_timer": 360,
+      "energy": 0,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 2,
+      "hunger_loss": 200,
+      "strength_loss": 200,
+      "heal_doses": 1,
+      "power": 0,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 0,
+      "evolve": [
+        {
+          "to": "Kunemon",
+          "overfeed": [
+            1,
+            999999
+          ],
+          "time_range": [
+            "23:00",
+            "05:00"
+          ]
+        },
+        {
+          "to": "Palmon",
+          "sleep_disturbances": [
+            3,
+            999999
+          ]
+        },
+        {
+          "to": "Betamon"
+        }
+      ]
+    },
+    {
+      "name": "Betamon",
+      "stage": 3,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 5,
+      "atk_alt": 32,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 5,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "Seadramon",
+          "win_count": [
+            0,
+            5
+          ],
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Coelamon",
+          "win_count": [
+            0,
+            5
+          ],
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Shellmon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Whamon",
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Kunemon",
+      "stage": 3,
+      "version": 4,
+      "special": true,
+      "special_key": "Kunemon",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 5,
+      "atk_alt": 42,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 2,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 5,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "Bakemon",
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            15,
+            25
+          ]
+        },
+        {
+          "to": "Kabuterimon",
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Kuwagamon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vegiemon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Nanimon",
+          "training": [
+            0,
+            1
+          ],
+          "battles": [
+            0,
+            1
+          ],
+          "win_ratio": [
+            0,
+            1
+          ],
+          "mistakes": [
+            1,
+            15
+          ]
+        },
+        {
+          "to": "Bakemon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Palmon",
+      "stage": 3,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 5,
+      "atk_alt": 43,
+      "time": 4320,
+      "poop_timer": 240,
+      "energy": 2,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 4,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 5,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 5,
+      "evolve": [
+        {
+          "to": "Coelamon",
+          "win_count": [
+            0,
+            5
+          ],
+          "mistakes": [
+            3,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Kuwagamon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            4,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Ninjamon",
+          "win_count": [
+            15,
+            999999
+          ],
+          "mistakes": [
+            0,
+            1
+          ],
+          "trophies": [
+            3,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Vegiemon",
+          "mistakes": [
+            5,
+            15
+          ],
+          "trophies": [
+            1,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Whamon",
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            2,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Sukamon",
+          "mistakes": [
+            16,
+            999999
+          ]
+        },
+        {
+          "to": "Numemon"
+        }
+      ]
+    },
+    {
+      "name": "Airdramon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 6,
+      "atk_alt": 35,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 120,
+      "strength_loss": 120,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Phoenixmon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            3
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Megadramon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            24,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bakemon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 28,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 5,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 80,
+      "strength_loss": 80,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Giromon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            11,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "SkullGreymon",
+          "win_count": [
+            40,
+            999999
+          ],
+          "mistakes": [
+            10,
+            999999
+          ],
+          "trophies": [
+            25,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Coelamon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 6,
+      "atk_alt": 42,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "MegaSeadramon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kabuterimon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "10:00",
+      "wakes": "19:00",
+      "atk_main": 4,
+      "atk_alt": 26,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "H-Kabuterimon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "MetalMamemon",
+          "mistakes": [
+            0,
+            15
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kuwagamon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 7,
+      "atk_alt": 24,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "H-Kabuterimon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nanimon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 80,
+      "strength_loss": 80,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 10,
+      "evolve": [
+        {
+          "to": "Digitamamon",
+          "win_count": [
+            100,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            5,
+            15
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ninjamon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 80,
+      "atk_alt": 91,
+      "time": 8640,
+      "poop_timer": 720,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 20,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Mamemon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            15,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "MetalMamemon",
+          "mistakes": [
+            0,
+            15
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Numemon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 360,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 6,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 6,
+      "evolve": [
+        {
+          "to": "Monzaemon",
+          "win_count": [
+            50,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            35,
+            45
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Seadramon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 6,
+      "atk_alt": 15,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "Megadramon",
+          "win_count": [
+            30,
+            999999
+          ],
+          "mistakes": [
+            0,
+            10
+          ],
+          "trophies": [
+            24,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "MegaSeadramon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Airdramon",
+          "battles": [
+            10,
+            999999
+          ],
+          "win_ratio": [
+            70,
+            100
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Shellmon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 6,
+      "atk_alt": 10,
+      "time": 8640,
+      "poop_timer": 180,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 48,
+      "strength_loss": 48,
+      "heal_doses": 1,
+      "power": 15,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 20,
+      "evolve": [
+        {
+          "to": "H-Kabuterimon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            21,
+            999999
+          ],
+          "weigth": [
+            50,
+            60
+          ]
+        },
+        {
+          "to": "MegaSeadramon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Coelamon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            70,
+            100
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sukamon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 240,
+      "energy": 1,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 4,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 4,
+      "evolve": [
+        {
+          "to": "Etemon",
+          "win_count": [
+            50,
+            999999
+          ],
+          "mistakes": [
+            0,
+            0
+          ],
+          "trophies": [
+            18,
+            999999
+          ],
+          "weigth": [
+            10,
+            20
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vegiemon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 16,
+      "atk_alt": 16,
+      "time": 8640,
+      "poop_timer": 720,
+      "energy": 4,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 45,
+      "strength_loss": 45,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 15,
+      "evolve": [
+        {
+          "to": "Piximon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "Ninjamon",
+          "win_ratio": [
+            70,
+            100
+          ],
+          "win_count": [
+            50,
+            999999
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Whamon",
+      "stage": 4,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 10,
+      "atk_alt": 6,
+      "time": 8640,
+      "poop_timer": 180,
+      "energy": 3,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 48,
+      "strength_loss": 48,
+      "heal_doses": 1,
+      "power": 10,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 25,
+      "evolve": [
+        {
+          "to": "Mamemon",
+          "mistakes": [
+            15,
+            999999
+          ],
+          "trophies": [
+            14,
+            999999
+          ],
+          "weigth": [
+            0,
+            10
+          ]
+        },
+        {
+          "to": "MegaSeadramon",
+          "win_count": [
+            0,
+            0
+          ],
+          "mistakes": [
+            0,
+            5
+          ],
+          "trophies": [
+            17,
+            999999
+          ],
+          "weigth": [
+            25,
+            35
+          ]
+        },
+        {
+          "to": "Coelamon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            70,
+            100
+          ]
+        },
+        {
+          "to": "Vademon",
+          "win_ratio": [
+            50,
+            100
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Digitamamon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 14,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 10,
+      "stomach": 7,
+      "hunger_loss": 36,
+      "strength_loss": 36,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Etemon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 14,
+      "time": 10080,
+      "poop_timer": 360,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 20,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 40,
+      "evolve": []
+    },
+    {
+      "name": "Giromon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "02:00",
+      "wakes": "11:00",
+      "atk_main": 8,
+      "atk_alt": 21,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "H-Kabuterimon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "10:00",
+      "wakes": "19:00",
+      "atk_main": 31,
+      "atk_alt": 4,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Mamemon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 8,
+      "atk_alt": 7,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "Megadramon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 3,
+      "atk_alt": 13,
+      "time": 10080,
+      "poop_timer": 144,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 50,
+      "stomach": 7,
+      "hunger_loss": 60,
+      "strength_loss": 60,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 60,
+      "evolve": [
+        {
+          "to": "SkullGreymon",
+          "battles": [
+            1,
+            999999
+          ],
+          "win_ratio": [
+            0,
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MegaSeadramon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "22:00",
+      "wakes": "07:00",
+      "atk_main": 58,
+      "atk_alt": 6,
+      "time": 10080,
+      "poop_timer": 240,
+      "energy": 12,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "MetalMamemon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 8,
+      "atk_alt": 27,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "Monzaemon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "19:00",
+      "wakes": "04:00",
+      "atk_main": 9,
+      "atk_alt": 7,
+      "time": 10080,
+      "poop_timer": 180,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 40,
+      "stomach": 7,
+      "hunger_loss": 75,
+      "strength_loss": 75,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Va",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Piximon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "16:00",
+      "wakes": "01:00",
+      "atk_main": 8,
+      "atk_alt": 23,
+      "time": 10080,
+      "poop_timer": 720,
+      "energy": 6,
+      "min_weight": 5,
+      "evol_weight": 5,
+      "stomach": 7,
+      "hunger_loss": 150,
+      "strength_loss": 150,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Da",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 30,
+      "evolve": []
+    },
+    {
+      "name": "SkullGreymon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 11,
+      "atk_alt": 3,
+      "time": 10080,
+      "poop_timer": 240,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 30,
+      "stomach": 7,
+      "hunger_loss": 160,
+      "strength_loss": 160,
+      "heal_doses": 1,
+      "power": 60,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    },
+    {
+      "name": "Vademon",
+      "stage": 5,
+      "version": 4,
+      "special": false,
+      "special_key": "",
+      "sleeps": "07:00",
+      "wakes": "16:00",
+      "atk_main": 15,
+      "atk_alt": 9,
+      "time": 10080,
+      "poop_timer": 360,
+      "energy": 10,
+      "min_weight": 5,
+      "evol_weight": 15,
+      "stomach": 7,
+      "hunger_loss": 100,
+      "strength_loss": 100,
+      "heal_doses": 1,
+      "power": 50,
+      "attribute": "Vi",
+      "condition_hearts": 0,
+      "jogress_avaliable": false,
+      "hp": 50,
+      "evolve": []
+    }
+  ]
+}

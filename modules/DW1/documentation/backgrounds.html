@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Backgrounds</title>
+    <link rel="stylesheet" href="module.css">
+    <style>
+        .background-sprites {
+            padding: 20px;
+            position: relative;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            min-height: 200px;
+            border-radius: 8px;
+            transition: background-image 0.3s ease;
+        }
+        
+        .sprite-image {
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .sprite-image:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        .sprite-container:hover .sprite-image {
+            border-color: #667eea;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+        }
+        
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: auto;
+        }
+        
+        .modal img {
+            max-width: 100%;
+            height: auto;
+            image-rendering: pixelated;
+            border-radius: 8px;
+        }
+        
+        .close-modal {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+        
+        .close-modal:hover {
+            color: #000;
+        }
+        
+        .modal-title {
+            margin: 0 0 15px 0;
+            color: #333;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-content">
+        <h1>Module Backgrounds</h1>
+        <div class="backgrounds-grid">
+                <div class="background-card">
+      <div class="background-header">
+        <h3 class="background-name">File Island</h3>
+      </div>
+      <div class="background-info">
+        <span class="background-type daynight">Day/Night Cycle</span>
+      </div>
+      <div class="background-sprites">
+        <div class="sprite-section">
+          <h4>DAY</h4>
+          <div class="sprite-row">
+            <div class="sprite-container">
+              <img src="../backgrounds/bg_file_island_day.png" alt="file_island day" class="sprite-image" onerror="this.parentElement.innerHTML='&lt;div class=&quot;sprite-missing&quot;&gt;Missing&lt;br&gt;Standard&lt;/div&gt;'; this.parentElement.classList.add('missing');">
+              <div class="sprite-label">Standard</div>
+            </div>
+            <div class="sprite-container">
+              <img src="../backgrounds/bg_file_island_day_high.png" alt="file_island day High" class="sprite-image" onerror="this.parentElement.innerHTML='&lt;div class=&quot;sprite-missing&quot;&gt;Missing&lt;br&gt;High Res&lt;/div&gt;'; this.parentElement.classList.add('missing');">
+              <div class="sprite-label">High Res</div>
+            </div>
+          </div>
+        </div>
+        <div class="sprite-section">
+          <h4>DUSK</h4>
+          <div class="sprite-row">
+            <div class="sprite-container">
+              <img src="../backgrounds/bg_file_island_dusk.png" alt="file_island dusk" class="sprite-image" onerror="this.parentElement.innerHTML='&lt;div class=&quot;sprite-missing&quot;&gt;Missing&lt;br&gt;Standard&lt;/div&gt;'; this.parentElement.classList.add('missing');">
+              <div class="sprite-label">Standard</div>
+            </div>
+            <div class="sprite-container">
+              <img src="../backgrounds/bg_file_island_dusk_high.png" alt="file_island dusk High" class="sprite-image" onerror="this.parentElement.innerHTML='&lt;div class=&quot;sprite-missing&quot;&gt;Missing&lt;br&gt;High Res&lt;/div&gt;'; this.parentElement.classList.add('missing');">
+              <div class="sprite-label">High Res</div>
+            </div>
+          </div>
+        </div>
+        <div class="sprite-section">
+          <h4>NIGHT</h4>
+          <div class="sprite-row">
+            <div class="sprite-container">
+              <img src="../backgrounds/bg_file_island_night.png" alt="file_island night" class="sprite-image" onerror="this.parentElement.innerHTML='&lt;div class=&quot;sprite-missing&quot;&gt;Missing&lt;br&gt;Standard&lt;/div&gt;'; this.parentElement.classList.add('missing');">
+              <div class="sprite-label">Standard</div>
+            </div>
+            <div class="sprite-container">
+              <img src="../backgrounds/bg_file_island_night_high.png" alt="file_island night High" class="sprite-image" onerror="this.parentElement.innerHTML='&lt;div class=&quot;sprite-missing&quot;&gt;Missing&lt;br&gt;High Res&lt;/div&gt;'; this.parentElement.classList.add('missing');">
+              <div class="sprite-label">High Res</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+        </div>
+        <div id="empty-backgrounds" class="empty-state" style="display: none;">
+            <i>🖼️</i>
+            <p>No backgrounds configured for this module.</p>
+        </div>
+    </div>
+    
+    <!-- Modal for viewing sprite images -->
+    <div id="sprite-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeSpriteModal()">&times;</span>
+            <h3 id="modal-title" class="modal-title"></h3>
+            <img id="modal-image" src="" alt="Background Sprite">
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var grid = document.querySelector('.backgrounds-grid');
+            var emptyState = document.getElementById('empty-backgrounds');
+            
+            if (!grid || grid.children.length === 0) {
+                grid.style.display = 'none';
+                emptyState.style.display = 'block';
+            }
+            
+            // Add click handlers for sprite images
+            var spriteImages = document.querySelectorAll('.sprite-image');
+            spriteImages.forEach(function(img) {
+                img.addEventListener('click', function() {
+                    var spritesContainer = this.closest('.background-sprites');
+                    if (spritesContainer) {
+                        
+                        // Also show in modal
+                        showSpriteModal(this.src, this.alt || 'Background Sprite');
+                    }
+                });
+            });
+        });
+        
+        function showSpriteModal(src, title) {
+            var modal = document.getElementById('sprite-modal');
+            var modalImg = document.getElementById('modal-image');
+            var modalTitle = document.getElementById('modal-title');
+            
+            modalImg.src = src;
+            modalTitle.textContent = title;
+            modal.style.display = 'block';
+        }
+        
+        function closeSpriteModal() {
+            document.getElementById('sprite-modal').style.display = 'none';
+        }
+        
+        // Close modal when clicking outside
+        document.getElementById('sprite-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeSpriteModal();
+            }
+        });
+        
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeSpriteModal();
+            }
+        });
+    </script>
+</body>
+</html>

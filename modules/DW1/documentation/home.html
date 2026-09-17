@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DW1 - Overview</title>
+    <link rel="stylesheet" href="module.css">
+    <style>
+        .tooltip {
+            position: relative;
+            cursor: help;
+            border-bottom: 1px dotted #666;
+        }
+        
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 350px;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -175px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+            line-height: 1.4;
+            box-shadow: 0px 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+        
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        /* Adjust tooltip positioning for edge cases */
+        .tooltip.right .tooltiptext {
+            left: 0;
+            margin-left: 0;
+        }
+        
+        .tooltip.left .tooltiptext {
+            right: 0;
+            left: auto;
+            margin-left: 0;
+        }
+        
+        /* Boolean value styling */
+        .boolean-true {
+            color: #28a745;
+            font-weight: 600;
+        }
+        
+        .boolean-false {
+            color: #dc3545;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-content">
+        <div class="module-overview">
+            <div class="module-header">
+                <div class="module-logo-container">
+                    <img src="logo.png" alt="Module Logo" class="module-logo-img" onerror="this.style.display='none'">
+                </div>
+                <div class="module-info">
+                    <h1>DW1</h1>
+                    <p class="version">Version: 0.5.3</p>
+                    <p class="author">Author: justintechnerd</p>
+                    <p class="description">A vpet interpretation of the Digimon World PS1 game. Pet data adapted from the guide by Syd Montague and Ginoshie, and from the Prima guide.</p>
+                </div>
+            </div>
+
+            <!-- Spoiler Warning -->
+            <div class="spoiler-warning">
+                <div class="spoiler-icon">⚠️</div>
+                <div class="spoiler-content">
+                    <h3>Spoiler Warning</h3>
+                    <p>This documentation contains spoilers about module content including evolution requirements, enemy data, and item effects. Proceed with caution if you want to discover these elements naturally through gameplay.</p>
+                </div>
+            </div>
+
+            <div class="attributes-grid">
+                <!-- General Settings -->
+                <div class="attribute-section">
+                    <h2>General Settings</h2>
+                    <ul class="attribute-list">
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Name Format:
+                                <span class="tooltiptext">Template string for pet folder names. '$' is replaced with the pet's name. Example: "$_dmc" creates folders like "Agumon_dmc". Used for sprite loading paths.</span>
+                            </span>
+                            <span class="attribute-value">$_dmc</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Ruleset:
+                                <span class="tooltiptext">Defines the type of mini-game used in the module's Adventure Mode and the way traited eggs are obtained. Also defines the bonuses for power.</span>
+                            </span>
+                            <span class="attribute-value">dmc</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Adventure Mode:
+                                <span class="tooltiptext">Enables or disables adventure mode gameplay features. Required to add the module's Adventure Mode to the Battle Menu.</span>
+                            </span>
+                            <span class="attribute-value boolean-true">Yes</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Condition Heart:
+                                <span class="tooltiptext">When enabled, uses condition hearts system instead of mistake counter. Each care mistake reduces condition hearts. When disabled, mistakes are counted directly for evolution requirements and death conditions.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">No</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Enable Shaken Egg:
+                                <span class="tooltiptext">Allows eggs to be "shaken" (shake_counter >= 99) for evolution bonuses. It can provide a power bonus.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">No</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Flush Disturbance Sleep:
+                                <span class="tooltiptext">When enabled, using the flush/toilet function while the pet is sleeping will count as a sleep disturbance. When disabled, flushing won't disturb sleep.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">No</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Back to Sleep Time:
+                                <span class="tooltiptext">Minutes before pet automatically returns to sleep after being woken up during sleep hours. Prevents pets from staying awake when they should be sleeping.</span>
+                            </span>
+                            <span class="attribute-value ">1</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Disturbance Penalty Max:
+                                <span class="tooltiptext">Maximum penalty from sleep disturbances that affects battle sick chance. Each disturbance adds 2 to penalty. Higher values increase chance of getting sick after losing battles.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Care - Meat Settings -->
+                <div class="attribute-section">
+                    <h2>Care - Meat Settings</h2>
+                    <ul class="attribute-list">
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Weight Gain:
+                                <span class="tooltiptext">Weight increase when feeding meat/hunger food. Applied only to pets above stage 1 and below 99 weight. Higher values make pets gain weight faster from eating.</span>
+                            </span>
+                            <span class="attribute-value ">1</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Hunger Gain:
+                                <span class="tooltiptext">Amount of hunger restored per meat feeding. Pets can't eat when hunger equals stomach capacity or during overfeed timer. Higher values fill hunger faster per feeding.</span>
+                            </span>
+                            <span class="attribute-value ">1</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Care Mistake Time:
+                                <span class="tooltiptext">Minutes of empty hunger before triggering a care mistake. Timer resets when pet is fed. Used in death condition calculations and evolution requirements.</span>
+                            </span>
+                            <span class="attribute-value 120 CLASS">120</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Overfeed Timer:
+                                <span class="tooltiptext">Minutes pet refuses food after trying to overfeed. During this time, pet will display 'nope' animation when offered food. Prevents immediate re-feeding attempts.</span>
+                            </span>
+                            <span class="attribute-value ">1</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Can Eat Sleeping:
+                                <span class="tooltiptext">Allows pets to eat food while in nap state. When disabled, feeding attempts during sleep hours will fail and pet shows 'nope' animation.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">No</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Care - Protein Settings -->
+                <div class="attribute-section">
+                    <h2>Care - Protein Settings</h2>
+                    <ul class="attribute-list">
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Weight Gain:
+                                <span class="tooltiptext">Weight increase when feeding protein/strength food. Applied only to pets above stage 1 and below 99 weight. Works similarly to meat weight gain.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Strength Gain:
+                                <span class="tooltiptext">Amount of strength restored per protein feeding. Also added when training. Strength depletes over time and empty strength triggers care mistakes.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">DP Gain:
+                                <span class="tooltiptext">DP is your stamina, gained every 4th protein feeding, if current DP is below maximum energy. DP is consumed during battles and affects battle participation.</span>
+                            </span>
+                            <span class="attribute-value ">4</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Care Mistake Time:
+                                <span class="tooltiptext">Minutes of empty strength before triggering a care mistake. Timer resets when pet receives protein. Critical for death conditions and evolution paths.</span>
+                            </span>
+                            <span class="attribute-value ">120</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Overdose Max:
+                                <span class="tooltiptext">Maximum protein overdose counter that affects battle sick chance. Each protein feeding increases overdose. Higher overdose increases sick probability after losing battles.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                            <li class="attribute-item">
+                            <span class="attribute-label tooltip">Protein Penalty:
+                                <span class="tooltiptext">Protein Penalty affects battle sick chance. Determines the amount of each penalty for Protein Overdose in percent.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Sleep Care Mistake Timer:
+                                <span class="tooltiptext">Minutes before triggering a care mistake for sleep neglect. Timer resets when pet gets proper sleep. Important for maintaining good care quality.</span>
+                            </span>
+                            <span class="attribute-value ">540</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Care - Vital Values Settings -->
+                <div class="attribute-section">
+                    <h2>Care - Vital Values Settings</h2>
+                    <ul class="attribute-list">
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Vital Value Base:
+                                <span class="tooltiptext">Minimum value of Vital Values that a pet will gain per hour if well fed and not sick. This represents the natural recovery rate when the pet is in good health.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Vital Value Loss:
+                                <span class="tooltiptext">Amount of Vital Values lost per minute if hungry or sick. Higher values make pets deteriorate faster when not properly cared for.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Battle Settings -->
+                <div class="attribute-section">
+                    <h2>Battle Settings</h2>
+                    <ul class="attribute-list">
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Base Sick Chance Win:
+                                <span class="tooltiptext">Base percentage chance of getting sick after winning a battle. Modified by protein overdose and disturbance penalties. Minimum 5%, maximum 50%.</span>
+                            </span>
+                            <span class="attribute-value ">1</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Base Sick Chance Lose:
+                                <span class="tooltiptext">Base percentage chance of getting sick after losing a battle. Modified by protein overdose (+10% per overdose) and disturbance penalties. Higher risk than winning.</span>
+                            </span>
+                            <span class="attribute-value ">10</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Attribute Advantage:
+                                <span class="tooltiptext">Percentage advantage when pet's attribute matches favorably against enemy (Data > Virus > Vaccine > Data). Applied as damage multiplier in battle calculations.</span>
+                            </span>
+                            <span class="attribute-value ">12</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Global Hit Points:
+                                <span class="tooltiptext">When > 0, make the module ignore pets individual Health Points. It's also used to cap the possible damage taken. This attribute is mostly obsolete with the protocol battle system.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Sequential Rounds:
+                                <span class="tooltiptext">Controls battle area progression mechanics. When enabled, battles progress through rounds sequentially rather than allowing random round selection.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">No</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Traited Egg Starting Level:
+                                <span class="tooltiptext">Initial level for pets hatched from traited eggs. Higher levels provide stat bonuses including increased HP, power, and attack values. Maximum depends on stage.</span>
+                            </span>
+                            <span class="attribute-value ">1</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Training Settings -->
+                <div class="attribute-section">
+                    <h2>Training Settings</h2>
+                    <ul class="attribute-list">
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Strength Win:
+                                <span class="tooltiptext">Effort points gained when winning training sessions. At 16+ effort, pets gain significant power bonuses. Critical for unlocking evolution paths and combat effectiveness.</span>
+                            </span>
+                            <span class="attribute-value ">1</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Strength Lose:
+                                <span class="tooltiptext">Strength increase from training sessions when losing. Usually less than winning gain. Helps maintain strength levels even when training performance is poor.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Strength Multiplier:
+                                <span class="tooltiptext">Multiplier applied to strength gains from training based on performance. Higher performance in training yields extra strength points.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Weight Win:
+                                <span class="tooltiptext">Weight loss when winning training. Helps manage pet weight and body condition. High weight can make a pet sick.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Weight Lose:
+                                <span class="tooltiptext">Weight loss when losing training. Usually less than winning loss. Provides alternative weight management even when training performance is poor.</span>
+                            </span>
+                            <span class="attribute-value ">1</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Reverse Attack Frames:
+                                <span class="tooltiptext">Swaps attack animation frames (ATK1↔ATK2, TRAIN1↔TRAIN2) during sprite loading. Used for visual variety or correcting animation sequences in sprite sets.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">No</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Death Settings -->
+                <div class="attribute-section">
+                    <h2>Death Settings</h2>
+                    <ul class="attribute-list">
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Max Injuries:
+                                <span class="tooltiptext">Maximum injuries before death. Injuries are gained from sickness, poop neglect, and battle losses. Represents cumulative health damage over pet's lifetime.</span>
+                            </span>
+                            <span class="attribute-value ">100</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Care Mistake:
+                                <span class="tooltiptext">Total care mistakes before death. Includes hunger, strength, sleep, and sickness mistakes. Primary death condition for neglectful care patterns.</span>
+                            </span>
+                            <span class="attribute-value ">100</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Sick Timer:
+                                <span class="tooltiptext">Minutes of continuous sickness before death. Timer only counts while sick status is active. Emphasizes importance of healing sick pets promptly.</span>
+                            </span>
+                            <span class="attribute-value ">360</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Hunger Timer:
+                                <span class="tooltiptext">Minutes of empty hunger before death. Death occurs after continuous hunger neglect exceeding this threshold. Works alongside care mistake system.</span>
+                            </span>
+                            <span class="attribute-value ">720</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Starvation Count:
+                                <span class="tooltiptext">Number of hunger depletion cycles before death. Each cycle occurs when hunger reaches 0 and isn't refilled. Represents severe malnutrition effects.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Strength Timer:
+                                <span class="tooltiptext">Minutes of empty strength before death. Similar to hunger timer but for strength stat. Represents weakness from lack of protein/training.</span>
+                            </span>
+                            <span class="attribute-value ">720</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Stage 4-5 Mistake:
+                                <span class="tooltiptext">Mistakes threshold for stage 4-5 pets after evolution time expires. Only applies after normal evolution window passes. Represents adult-stage care requirements.</span>
+                            </span>
+                            <span class="attribute-value ">100</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Stage 6-7 Mistake:
+                                <span class="tooltiptext">Mistakes threshold for stage 6+ pets after 48 hours of age. Represents ultimate-level pets requiring expert care to survive long-term.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">0</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Save by B Press:
+                                <span class="tooltiptext">Enables death prevention by B button press. When enabled, gives 1 minute frame window to save pet from death conditions. Adds player interaction element to death mechanics.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">No</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Save by Shake:
+                                <span class="tooltiptext">Enables death prevention by device shaking. When enabled, gives 1 minute frame window to save pet through physical interaction. Alternative to button-based saving.</span>
+                            </span>
+                            <span class="attribute-value boolean-false">No</span>
+                        </li>
+                        <li class="attribute-item">
+                            <span class="attribute-label tooltip">Death by Old Age:
+                                <span class="tooltiptext">Days of pet's life before death from old age. When set to 0, old age death is disabled. Higher values allow pets to live longer before dying of natural causes.</span>
+                            </span>
+                            <span class="attribute-value ">19</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
