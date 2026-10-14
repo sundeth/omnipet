@@ -35,8 +35,8 @@ if (-not (Test-Path "..\omnipet.pygame")) {
     exit 1
 }
 
-if (-not (Test-Path "..\utilities\input_test")) {
-    Write-Error-Message "utilities\input_test folder not found"
+if (-not (Test-Path "batocera\input_test")) {
+    Write-Error-Message "build\batocera\input_test folder not found"
     exit 1
 }
 
@@ -53,11 +53,8 @@ New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME" -Force | Out-Null
 Write-Status "Copying assets..."
 Copy-Item -Recurse "..\assets" "$TEMP_DIR\$BUILD_NAME\"
 
-# Copy and rename config files
-Write-Status "Copying configuration files..."
-New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\config" -Force | Out-Null
-Copy-Item "..\config\config_batocera.json" "$TEMP_DIR\$BUILD_NAME\config\config.json"
-Copy-Item "..\config\input_config_batocera.json" "$TEMP_DIR\$BUILD_NAME\config\input_config.json"
+# Settings live in the save (GameConfiguration): the config/ folder
+# these builds used to copy was removed in 1.0 (e09369e8).
 
 # Copy documentation
 Write-Status "Copying documentation..."
@@ -152,9 +149,9 @@ Copy-Item "..\LICENSE.txt" "$TEMP_DIR\$BUILD_NAME\"
 Copy-Item "..\main.py" "$TEMP_DIR\$BUILD_NAME\"
 Copy-Item "..\omnipet.pygame" "$TEMP_DIR\$BUILD_NAME\"
 
-# Copy input_test folder from utilities
+# Copy the input test (versioned in build/batocera/)
 Write-Status "Copying input test utilities..."
-Copy-Item -Recurse "..\utilities\input_test" "$TEMP_DIR\$BUILD_NAME\"
+Copy-Item -Recurse "batocera\input_test" "$TEMP_DIR\$BUILD_NAME\"
 
 # Create the ZIP file
 Write-Status "Creating ZIP archive..."

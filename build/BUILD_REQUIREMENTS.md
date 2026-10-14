@@ -275,7 +275,7 @@ git config --global core.eol lf
 If you encounter shell script execution errors:
 ```bash
 # Convert CRLF to LF for shell scripts
-dos2unix launch.sh utilities/setup.sh
+dos2unix launch.sh build/gamepi/setup.sh
 
 # Or use Git to normalize line endings
 git add --renormalize .
@@ -328,7 +328,6 @@ Omnipet/
 ├── omnipet.pygame         # Batocera package metadata
 ├── assets/                # Game assets (sprites, sounds)
 ├── modules/               # Game modules (DMC, etc.)
-├── config/                # Configuration files
 ├── game/                  # Python game source code
 ├── utilities/             # Platform-specific utilities
 └── build/                 # Build scripts
@@ -454,7 +453,7 @@ disabled / battery icon neutral), but ship them for full functionality:
 
 `src/wificom/` is wificom-lib vendored into the game, so Omnipet can present
 itself to wificom.dev as a WiFiCom rather than needing one. See
-`src/wificom/UPSTREAM.md`.
+`utilities/wificom/UPSTREAM.md`.
 
 Its only added dependency is **paho-mqtt**, which stands in for the
 CircuitPython `adafruit_minimqtt` upstream uses:

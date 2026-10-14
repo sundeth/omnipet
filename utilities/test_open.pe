@@ -1,3 +1,0 @@
-Open("ProggySmall.ttf") 
-Print("Font opened successfully") 
-Quit() 
