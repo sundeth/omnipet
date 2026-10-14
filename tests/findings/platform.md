@@ -56,7 +56,7 @@ Bugs and gaps found by `tests/platform/` (Linux/WSL suite and case check, Raspbe
 - **Where**: `src/utils/document_utils.py:21`: the template path is `game/core/utils/module-guide_template.html`, and there is no `game/` folder. Every start prints "Template not found: .../game/core/utils/module-guide_template.html" (`main.py:237-238`), and `Documentation/pages/module-guide.html` is never rebuilt.
 - **Fix**: point it at the template's current location, or drop the start-up build.
 
-### P-08 `build_gamepi.ps1` needs an unversioned file; setup.sh is stale (BLD-01, low)
+### P-08 `build_gamepi.ps1` needs an unversioned file; setup.sh is stale (BLD-01, low) — partly fixed 2026-10-14: `setup.sh` and `input_test` moved to `build/gamepi/` and `build/batocera/` (versioned; utilities/ is no longer tracked); setup.sh's Omnimon names, icon path and update hint are still to fix
 
 - `build/build_gamepi.ps1:33-36` stops when `utilities/setup.sh` is missing, and `utilities/` is gitignored. A clean checkout therefore cannot build the GamePi package.
 - `utilities/setup.sh` still says "Omnimon" in its messages, installs `omnimon.service` and an `Omnimon.desktop` whose icon is `resources/icon.png` (no such file), and points to `./update.sh` (no such file). It also runs `sudo apt-get upgrade -y`.
