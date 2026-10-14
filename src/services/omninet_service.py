@@ -11,6 +11,18 @@ from typing import Optional, Tuple, Dict, Any
 
 from core import runtime_globals, constants
 
+#: What the player reads when Omninet answers with something that is not its
+#: JSON (an HTML error page from a proxy, a cut-off body): the parser's own
+#: text ("Expecting value: line 1 column 1") meant nothing to anyone.
+UNREADABLE_ANSWER = "Omninet is not answering properly, try again later"
+
+
+def _readable(exc):
+    """A message for the player from an exception caught around a request."""
+    if isinstance(exc, ValueError):          # json.JSONDecodeError and kin
+        return UNREADABLE_ANSWER
+    return "Omninet request failed, try again later"
+
 
 class OmninetService:
     """API client for Omninet server communication."""
@@ -77,7 +89,7 @@ class OmninetService:
         main_url = getattr(constants, 'OMNINET_MAIN_URL', None)
         if main_url:
             return main_url.rstrip('/')
-        return 'https://omnipet.app.br'
+        return 'https://dev.omnipet.app.br'
     
     def _load_credentials(self) -> None:
         """Load saved device credentials from file."""
@@ -167,8 +179,10 @@ class OmninetService:
                 
                 return True, data.get('message', 'Device linked successfully!'), None
             else:
-                error_data = response.json()
-                error_msg = error_data.get('detail', 'Invalid or expired code')
+                try:
+                    error_msg = response.json().get('detail', 'Invalid or expired code')
+                except ValueError:
+                    error_msg = UNREADABLE_ANSWER
                 runtime_globals.game_console.log(f"[OmninetService] Pairing failed: {error_msg}")
                 return False, error_msg, None
                 
@@ -180,7 +194,7 @@ class OmninetService:
             return False, "Cannot connect to server", None
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Error: {e}")
-            return False, str(e), None
+            return False, _readable(e), None
     
     def validate_device(self) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
@@ -223,11 +237,16 @@ class OmninetService:
                 runtime_globals.game_console.log(f"[OmninetService] Logged in as: {self._user_info.get('nickname')}")
                 return True, "Device validated", self._user_info
             else:
-                # Invalid credentials, clear them
-                error_data = response.json()
-                error_msg = error_data.get('detail', 'Device validation failed')
+                try:
+                    error_msg = response.json().get('detail', 'Device validation failed')
+                except ValueError:
+                    error_msg = UNREADABLE_ANSWER
                 runtime_globals.game_console.log(f"[OmninetService] Validation failed: {error_msg}")
-                self._clear_credentials()
+                # Only a refused key is forgotten: a server error (500, a
+                # restart) used to log the player out and send them through
+                # the e-mailed code again.
+                if response.status_code in (401, 403):
+                    self._clear_credentials()
                 return False, error_msg, None
                 
         except requests.exceptions.Timeout:
@@ -236,7 +255,7 @@ class OmninetService:
             return False, "Cannot connect to server", None
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Error: {e}")
-            return False, str(e), None
+            return False, _readable(e), None
     
     def logout(self) -> bool:
         """
@@ -310,7 +329,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Register error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def verify_registration(self, email: str, code: str) -> Tuple[bool, str]:
         """
@@ -347,7 +366,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] VerifyReg error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def login_request(self, email: str, password: str) -> Tuple[bool, str]:
         """
@@ -379,7 +398,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Login error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def verify_login(self, email: str, code: str,
                      clear_devices: bool = False) -> Tuple[bool, str]:
@@ -423,7 +442,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] VerifyLogin error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def resend_code(self, email: str) -> Tuple[bool, str]:
         """
@@ -450,7 +469,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Resend error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def is_logged_in(self) -> bool:
         """Check if device is linked and has valid credentials."""
@@ -523,7 +542,10 @@ class OmninetService:
                 return False, f"Unsupported method: {method}"
             
             if response.status_code == 200:
-                return True, response.json()
+                try:
+                    return True, response.json()
+                except ValueError:
+                    return False, UNREADABLE_ANSWER
             else:
                 # Handle error responses
                 try:
@@ -551,7 +573,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Request error: {e}")
-            return False, str(e)
+            return False, _readable(e)
     
     def get_shop_modules(self, category: str = None) -> Tuple[bool, list]:
         """Get list of modules available in shop.
@@ -617,6 +639,11 @@ class OmninetService:
         })
         
         if success and isinstance(data, dict):
+            # A refused purchase (not enough coins, already owned) is HTTP 200
+            # with success false: it used to be booked as bought, the coins
+            # taken and the item granted locally.
+            if data.get('success', True) is False:
+                return False, data.get('message') or 'Purchase refused'
             return True, data.get('message', 'Purchase successful')
         return False, data if isinstance(data, str) else 'Purchase failed'
     
@@ -675,7 +702,7 @@ class OmninetService:
         except Exception as e:
             runtime_globals.game_console.log(
                 f"[OmninetService] download_module_zip error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def get_module_sprite(self, module_id: str, sprite_type: str):
         """Fetch a module sprite image ('icon' or 'logo'). Returns a pygame.Surface or None."""
@@ -749,8 +776,15 @@ class OmninetService:
     # ------------------------------------------------------------------
 
     def get_current_season(self) -> Tuple[bool, Any]:
-        """Fetch the current ACTIVE season (auto-creates a weekly one if none)."""
+        """Fetch the running season (404 between seasons)."""
         return self._make_request('GET', '/api/v1/seasons/current', require_auth=False)
+
+    def get_arena_modules(self) -> Tuple[bool, Any]:
+        """Modules installed on the server for this season's battles.
+
+        Pets from any other module cannot join an arena team.
+        """
+        return self._make_request('GET', '/api/v1/arena/modules', require_auth=False)
 
     def get_user_teams(self, include_past: bool = False) -> Tuple[bool, Any]:
         """List the player's teams (current season + any with unclaimed rewards)."""
@@ -758,6 +792,12 @@ class OmninetService:
             return False, "Not logged in"
         endpoint = f'/api/v1/teams?include_past={"true" if include_past else "false"}'
         return self._make_request('GET', endpoint)
+
+    def get_team(self, team_id: str) -> Tuple[bool, Any]:
+        """One of the player's teams with its pets (any season)."""
+        if not self._device_key:
+            return False, "Not logged in"
+        return self._make_request('GET', f'/api/v1/teams/{team_id}')
 
     def get_current_team(self) -> Tuple[bool, Any]:
         """Get the player's team for the current season (or 404 if none)."""
@@ -770,10 +810,10 @@ class OmninetService:
         Create an arena team.
 
         Args:
-            pets: list of dicts with the GamePet fields the server expects
-                  (name, module_name, module_version, pet_version, stage,
-                  level, atk_main, atk_alt, atk_alt2, power, attribute,
-                  hp, star, critical_turn, extra_data).
+            pets: one dict per pet naming the species (name, module_name,
+                  module_version, pet_version) and carrying its care
+                  ``status``. The server rebuilds stage, attribute, power,
+                  HP and attacks from its own copy of the module.
             team_name: optional display name for the team.
         """
         if not self._device_key:

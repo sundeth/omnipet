@@ -193,12 +193,16 @@ class SceneConnect:
         
         # If a caller set runtime_globals.scene_connect_initial_view, jump
         # directly to that view (e.g. "shop_modules" after login when the
-        # player hasn't bought any modules yet).  Consumed once.
+        # player hasn't bought any modules yet).  Consumed once. It may also
+        # be a (view, kwargs) pair, which is how an arena replay returns.
         initial = getattr(runtime_globals, 'scene_connect_initial_view', None)
         runtime_globals.scene_connect_initial_view = None
         if initial:
             try:
-                self._change_view(initial)
+                if isinstance(initial, tuple):
+                    self._change_view(initial[0], **(initial[1] or {}))
+                else:
+                    self._change_view(initial)
             except Exception as exc:
                 runtime_globals.game_console.log(
                     f"[SceneConnect] Failed to open initial view '{initial}': {exc}; "
@@ -333,6 +337,10 @@ class SceneConnect:
                 runtime_globals.game_console.log(f"[SceneConnect] Error drawing view: {e}")
                 runtime_globals.game_console.log(f"Traceback:\n{traceback.format_exc()}")
     
+    def plays_own_input_sounds(self):
+        """A view running a charge minigame reads presses as play."""
+        return getattr(self.current_view, "phase", None) == "minigame"
+
     def handle_event(self, event) -> None:
         """Handle input events."""
         if not isinstance(event, tuple) or len(event) != 2:

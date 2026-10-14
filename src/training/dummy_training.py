@@ -112,7 +112,7 @@ class DummyTraining(Training):
 
         if self.strength == 14:
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Dummy training perfect score achieved! Trophy awarded.")
 
     def draw_charge(self, surface):

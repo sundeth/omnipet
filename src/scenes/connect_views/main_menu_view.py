@@ -639,27 +639,10 @@ class MainMenuView:
         """Background thread to check OmniNet availability."""
         runtime_globals.game_console.log("[MainMenuView] Checking OmniNet availability...")
         
-        available = False
-        local_url = getattr(constants, 'OMNINET_LOCAL_URL', None)
-        if local_url:
-            try:
-                response = requests.get(urljoin(local_url, '/health'), timeout=2)
-                if response.status_code == 200:
-                    available = True
-            except Exception:
-                pass
-        
-        if not available:
-            main_url = getattr(constants, 'OMNINET_MAIN_URL', None)
-            if main_url:
-                try:
-                    response = requests.get(urljoin(main_url, '/health'), timeout=2)
-                    if response.status_code == 200:
-                        available = True
-                except Exception:
-                    pass
-        
-        self._shop_available = available
+        # The server the shop will talk to: OmninetService's (production, or
+        # OMNIPET_OMNINET_URL). Probing the dev server first could report the
+        # shop open while production was down (BLD-04).
+        self._shop_available = omninet_service.check_availability()
     
     def _check_wifi_availability_async(self):
         """Background thread to check WiFi availability."""
@@ -681,6 +664,10 @@ class MainMenuView:
         restart.
         """
         runtime_globals.game_console.log("[MainMenuView] Checking WiFiCom availability...")
+        if not (constants.WIFICOM_BATTLES_RELEASED
+                or getattr(game_globals.configuration, "debug_mode", False)):
+            self._wificom_available = False
+            return
         try:
             from services.wificom_service import (credentials_available,
                                                   internet_available,
@@ -906,7 +893,7 @@ class MainMenuView:
             # Progress Mode: redirect to SceneLogin for full login flow
             if game_globals.is_progress_mode():
                 runtime_globals.game_console.log(
-                    "[MainMenuView] Progress Mode â€” redirecting to SceneLogin")
+                    "[MainMenuView] Progress Mode - redirecting to SceneLogin")
                 change_scene("login")
             else:
                 # Free Mode: use inline pairing code view
@@ -919,29 +906,9 @@ class MainMenuView:
         
         available = False
         
-        # First check if server is available
-        local_url = getattr(constants, 'OMNINET_LOCAL_URL', 'http://localhost:8000')
-        try:
-            runtime_globals.game_console.log(f"[MainMenuView] Trying Omninet at {local_url}/health")
-            response = requests.get(urljoin(local_url, '/health'), timeout=2)
-            runtime_globals.game_console.log(f"[MainMenuView] Response status: {response.status_code}")
-            if response.status_code == 200:
-                available = True
-                runtime_globals.game_console.log(f"[MainMenuView] Omninet available at {local_url}")
-        except Exception as e:
-            runtime_globals.game_console.log(f"[MainMenuView] Connection failed: {e}")
-        
-        # Try main URL if local failed
-        if not available:
-            main_url = getattr(constants, 'OMNINET_MAIN_URL', None)
-            if main_url:
-                try:
-                    response = requests.get(urljoin(main_url, '/health'), timeout=2)
-                    if response.status_code == 200:
-                        available = True
-                        runtime_globals.game_console.log(f"[MainMenuView] Omninet available at {main_url}")
-                except Exception:
-                    pass
+        # The server every Omninet call uses (BLD-04: no dev-server probe).
+        available = omninet_service.check_availability()
+        runtime_globals.game_console.log(f"[MainMenuView] Omninet available: {available}")
         
         # If server is available and we have saved credentials, try auto-login
         if available and omninet_service.has_saved_credentials():

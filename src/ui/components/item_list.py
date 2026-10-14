@@ -24,6 +24,7 @@ class ItemList(BaseList):
         
         # Visual settings for cut rectangles
         self.cut_width = 10     # Width of the cut section
+        self.amount_cuts = 3    # Amount block width, in cut widths (a shop's prices need 4)
 
         # Animation settings for text scrolling
         self.text_scroll_speed = 20 * (30 / (runtime_globals.FRAME_RATE if hasattr(runtime_globals, 'FRAME_RATE') else 30))
@@ -83,7 +84,7 @@ class ItemList(BaseList):
 
         left_x = self.items_rect.x
         scaled_cut_width = self.manager.scale_value(self.cut_width)
-        amount_width = scaled_cut_width * 3  # Width for amount section
+        amount_width = scaled_cut_width * self.amount_cuts  # Width for amount section
         item_width = self.items_rect.width - amount_width
 
         for i in range(first_visible, last_visible):
@@ -140,19 +141,28 @@ class ItemList(BaseList):
                 pygame.draw.polygon(surface, fill_color, item_points)
                 pygame.draw.polygon(surface, border_color, item_points, border_size)
 
-            # Draw amount text
-            if hasattr(item, 'quantity') and item.quantity != 0:
-                amount = item.quantity
-            else:
-                amount = get_inventory_value(item.id) if hasattr(item, 'id') else 0
-
+            # Draw amount text. An item may bring its own (a shop's price).
             font = self.get_font("text", custom_size=24 * self.manager.ui_scale)
             alternate_font = font
-            if amount < 0 or amount > 999:  # Infinite or very large amount
-                amount_text = "∞"
-                alternate_font = self.get_font("text", custom_size=56 * self.manager.ui_scale)
+            amount_text = getattr(item, 'amount_text', None)
+            if amount_text is not None:
+                # Shrink a long one ("9990P") to fit its block.
+                size = 16
+                alternate_font = self.get_font("text", custom_size=size * self.manager.ui_scale)
+                while (alternate_font and size > 9
+                       and alternate_font.size(amount_text)[0] > amount_width - scaled_cut_width):
+                    size -= 1
+                    alternate_font = self.get_font("text", custom_size=size * self.manager.ui_scale)
             else:
-                amount_text = f"{amount}x"
+                if hasattr(item, 'quantity') and item.quantity != 0:
+                    amount = item.quantity
+                else:
+                    amount = get_inventory_value(item.id) if hasattr(item, 'id') else 0
+                if amount < 0 or amount > 999:  # Infinite or very large amount
+                    amount_text = "∞"
+                    alternate_font = self.get_font("text", custom_size=56 * self.manager.ui_scale)
+                else:
+                    amount_text = f"{amount}x"
 
             if font:
                 amount_surface = alternate_font.render(amount_text, True, text_color)

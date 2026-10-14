@@ -20,7 +20,7 @@ the tested code (e.g. DM20 fixed HP 4 vs the tested 5).
 Packet layouts live as documented bit-packing in the device classes in
 ``battle_simulator.py`` (DM20Device, PEN20Device, DMXDevice, DMCDevice,
 DMDevice); the parsing/validation mirrors live in
-``dcom_battle_simulator``. ``tests/test_battle_protocols.py`` round-trips
+``dcom_battle_simulator``. ``utilities/claude/tests/test_battle_protocols.py`` round-trips
 generation through the tested parsers to keep the two in sync.
 
 Reference document (bit layouts, checksum targets):
@@ -479,12 +479,13 @@ class PENOG:
     MAX_EFFORT = 40
     #: Constant in packet 3's second field on every code on record.
     PACKET3_COU = 0b100
-    #: One sprite per point of damage, as on the Digital Monster -- a weak
-    #: shot is one, a strong shot two -- but the strong pair is drawn with
-    #: `atk_alt` where the Digimon has one, falling back to `atk_main`. Two
-    #: attack levels and two sprites for them, which is what the wire says
-    #: and all it says: there is no critical here.
-    ATTACK_ANIMATION = "count_alt"
+    #: One sprite per point of damage, as on the Digital Monster: a weak
+    #: shot is one `atk_main` and a strong shot two of the same. The device
+    #: has **one attack sprite per Digimon** -- a 1998 guide lists the whole
+    #: bank, one per Digimon -- so there is no alternate to draw the strong
+    #: round with. This used to be "count_alt", preferring `atk_alt` for the
+    #: strong pair, on a reading the guide disproves. No critical either.
+    ATTACK_ANIMATION = "count"
     #: The **raw shake meter**, 0-14, not the banded 0-3 quality. Count Match
     #: Classic fills the same field for DM20 and PEN20 and they read it whole;
     #: this wire took the band, and that band collapses eleven of the fifteen
@@ -499,17 +500,37 @@ class PENOG:
     #: against themselves -- so both sides take this. Ten of forty: not the
     #: weakest, not the strongest, and enough for a strong round.
     VERSUS_CHARGE = 10
-    #: One attack sprite for every Digimon in a **connection** battle, the
-    #: same as the Digital Monster. Watched on a Pendulum 20th in legacy
-    #: Pendulum mode: whatever either side is holding, the shot drawn is
-    #: sprite 2. The wire does carry a Shot id, but it is the device's own
-    #: numbering and lands outside anything we ship -- a real one announced
-    #: 223 against the 117 sprites Omnipet has.
+    #: **No forced sprite: this wire names one.** Packet 4 is
+    #: `Check(4) | Shot(8) | EOL(4)`, and the protocol document's Common
+    #: Values define Shot as "the value that determines which sprite gets
+    #: used for attacks". So a connection battle draws each side's own shots
+    #: -- ours from the pet, the device's from its packet -- and the
+    #: ATTACK_ANIMATION rule above picks between weak and strong.
     #:
-    #: Only a connection battle. An adventure battle on this line has no
-    #: `battle_format`, so it keeps each pet's own sprites and the
-    #: ATTACK_ANIMATION rule above picks between them.
-    FORCED_ATTACK_SPRITE = 2
+    #: The Digital Monster is the opposite case and keeps its
+    #: `FORCED_ATTACK_SPRITE`: its two packets carry Boost, Slot, Version and
+    #: Outcome and nothing else, so there is no id to read. PENOG used to
+    #: inherit that treatment, which made the ATTACK_ANIMATION above
+    #: unreachable in every connection battle and flattened the player's own
+    #: pet as well -- including in versus, where no packet is involved at
+    #: all.
+    #:
+    #: **The wire's numbering is not the bank's, and the mapping is
+    #: unknown.** Every Shot on record is past the 109 sprites the device
+    #: has: 151 for the document's Ikkakumon, 171 for wificom's punchbag, 223
+    #: for the DigiROM dump's bag and all three measured PEN20 legacy
+    #: exchanges. The one sample whose sprite we know disproves a plain
+    #: offset: Ikkakumon's harpoon is bank sprite 92 (99 in the Colour
+    #: library, where PENC draws it), 91 on a 0-based wire, and the document
+    #: says 151. So an incoming id is clamped into the bank
+    #: (`CLAMP_INCOMING_SHOT`) and an outgoing one is our bank id, which a
+    #: real Pendulum may read as a different sprite.
+    #:
+    #: 223 says nothing about the bank: with one sprite per Digimon, a PEN20
+    #: in legacy mode sending it for a Child and a Perfect alike is a
+    #: stand-in, the same shape as the documented Pendulum-versus-Digital-
+    #: Monster constant. No original Pendulum has been captured. See
+    #: `utilities/claude/docs/battle-status.md`.
     #: Percent chance each of our five rounds lands, when the packet has to
     #: be built before the opponent has spoken. **Ours, and deliberately
     #: even**: the toy rolls this from a slot matchup table that "does not
@@ -523,7 +544,710 @@ class PENOG:
     # but the index is what *chooses* the slot, so it survives to the builder
     # rather than being flattened, exactly as on the DMOG wire.
     MAX_INDEX = LAST_SLOT - SLOT_INDEX_OFFSET
+    #: **One 8-bit id.** Packet 4 is `Check(4) | Shot(8) | EOL(4)` and the
+    #: device has one attack sprite per Digimon, so there is no strong/weak
+    #: pair to split it into -- an earlier reading did, and the 1998 guide's
+    #: full list disproves it.
     MAX_SHOT = 0xFF       # one 8-bit sprite field, not a pair
+    #: The device's bank, `modules/PENOG/atk`: the 1998 guide's list, which
+    #: is the Colour library in the same order less the eight sprites the
+    #: Pendulum does not have (Colour 20, 65, 69, 71, 76, 89, 91, 112). It
+    #: caps what WE send; see the note above on what a device sends.
+    SHOT_COUNT = 109
+    #: An incoming id is clamped into that bank too. Every Shot a device has
+    #: sent is past it (151, 171, 223), and the wire-to-bank mapping is not
+    #: known yet, so an unclamped id named a sprite that does not exist.
+    #: Clamping draws a real sprite of this device instead. Remove it once
+    #: the mapping is known and incoming ids can be translated.
+    CLAMP_INCOMING_SHOT = True
+
+
+class DMM:
+    """Digimon Mini -- 4 packets on the 3-prong wire.
+
+    **No document covers this wire**, but nacatech's DigiROM analyzer
+    (battle.nacatech.es/nt/analyzer, type "Pendulum X Battle") decodes it and
+    names every field. Its layout was mapped by flipping one bit at a time of
+    a known-good code and reading what the analyzer reported, and it agrees
+    with everything read off the codes on record and a first capture of a real
+    Mini. See ``utilities/DMM/protocol.txt``.
+
+    Packets (16 bits each), one side's four:
+      1: Version(4)    | Index(8)            | EOL(4)
+      2: Projectile(4) | Power(8)            | EOL(4)
+      3: Attribute(2)  | Shot Sizes(10)      | EOL(4)
+      4: Check(4)      | ???(3) | Hit(5)     | EOL(4)
+
+    **EOL is 9** on every packet, and the sixteen digits of a side sum to
+    **4** mod 16 -- the `@4` in every code. Shot Sizes are five rounds of two
+    bits, **round 1 in the lowest pair**, each **damage - 1**; every code on
+    record decodes to a row of the Count Bar table (data/attack_patterns/
+    DMM.json), so each side sends its own pattern, which is how a Mini and a
+    device with a different table can fight. Hit is the sender's own, and the
+    reply's is its inverse, as on the DMX.
+
+    Projectile is the attack sprite, and **every Mini side on record sends 1**
+    -- the Mini's guide says it draws one projectile for its whole roster --
+    while PenX Digimon send their own (Kuwagamon X 4, Okuwamon X 14). The
+    Digivice iC very likely speaks this wire too, and the Digimon Accel battles
+    in the same style.
+    """
+    NAME = "DMM"
+    DISPLAY_NAME = "DMM (Digimon Mini)"
+    MENU_LABEL = "DMM (Digimon Mini)"
+    PACKET_COUNT = 4
+    #: 9 on every packet of every code on record.
+    EOL = 0x9
+    #: Sixteen digits summing to 4 -- the `@4` in every code on record.
+    CHECKSUM_REMAINDER = 4
+    DCOM_WIRE = "DMM"
+    #: X (3-prong) timing. Every PenX/Mini code is written `X`, and the
+    #: classic dmcomm firmware accepts it.
+    DCOM_OP = "X"
+    #: A real Mini opened the exchange in the first capture, so we listen.
+    DCOM_TURN = DCOM_TURN_LISTEN
+    #: Our packet 4 when answering: the check, the device's three flag bits
+    #: copied, and its five hits inverted. wificom's real-time host sends
+    #: `@4^3^F9`, which also flips one flag bit; every code on record has all
+    #: three clear, and copying keeps them that way against a Mini.
+    DCOM_FINAL_SEGMENT = "@4^1^F9"
+    #: Measured: filmed battle 2 (utilities/DIGIROM/battles2.txt) watched a
+    #: single 1-damage hit leave the Mini on 5. DMM_RESEARCH.md reads the
+    #: same 6 off the playbook.
+    FIXED_HP = 6
+    #: Shot Sizes' two bits a round carry a value of 1-4.
+    DAMAGE_LIMIT = 4
+    #: **A battle does not stop at round 5**: the five rounds repeat until one
+    #: side is out. Battle 17 (utilities/DIGIROM/battles2.txt) went to round 8,
+    #: exactly what repeating its rounds gives. Ten is enough for a knockout
+    #: every time -- each shot costs at least 1, so two passes deal at least
+    #: 10 between two 6 HP bars, and one side takes 6 -- and is the ceiling.
+    MAX_ROUNDS = 10
+    #: The HP each value costs. The value is also what the projectiles are
+    #: drawn from, so this is the HP bar's scale and nothing else's. **A 4 is
+    #: 6** -- the playbook's Hyper hit, a one-shot kill against this bar.
+    #: Measured in filmed battle 3: our 4 landed first, on a full Mini, and
+    #: its bar went straight to 0.
+    HIT_DAMAGE = {1: 1, 2: 2, 3: 3, 4: 6}
+    TURNS = 5
+    MINIGAME = "Count Bar"
+    #: The press count itself picks the row, so it goes on the wire whole.
+    CHARGE_SCALE = "taps"
+    #: The table's last row; anything above reads it.
+    MAX_CHARGE = 31
+    #: Mid-table, not the Megahit: count 12 is five rounds of 3.
+    VERSUS_CHARGE = 12
+    #: 1-3 are that many `atk_main`, 4 a single `atk_alt`.
+    ATTACK_ANIMATION = "count_bar"
+    #: **This wire numbers its sprites the way Omnipet does**, so neither
+    #: side shifts. Every Mini announces projectile **1** and draws its one
+    #: ordinary shot, which is the DMM module's sprite 1; read 0-based like
+    #: every other wire it came back as 2, the module's Hyper sprite, so a
+    #: Mini's every shot was drawn as its strongest. The send half has to
+    #: match or two Omnipets disagree: ours goes out unshifted too, kept
+    #: below the field's all-ones "none".
+    SHOT_IS_OMNIPET_NUMBERED = True
+    #: The Pendulum X release: 0 for PenX 1.0 **and every Digimon Mini**, 1 for
+    #: PenX 2.0, 2 for PenX 3.0 (from another developer's implementation, and
+    #: every Mini side on record does send 0). No module reproduces a PenX, so
+    #: the range stays at the Mini's single value and a pet sends 0.
+    VERSION_RANGE = (0, 0)
+    DEFAULT_VERSION = 0
+    COMPATIBILITY_VERSION = 0
+    MAX_INDEX = 0xFF
+    MAX_POWER = 0xFF
+    #: Projectile is four bits, all ones being "none" as on every other wire.
+    MAX_SHOT = 0xF
+    #: Va 0 / Da 1 / Vi 2 / Free 3 in Omnipet, **Vi 0 / Da 1 / Va 2 / Free 3**
+    #: on this wire. A real Mini Tentomon (Vaccine) sent 2 in filmed battle 1,
+    #: a Centarumon (Data) 1 in battle 19; Kuwagamon X and Okuwamon X (Virus)
+    #: send 0 and Koromon (no attribute) 3. The code on record that sends 1 is the
+    #: Accel/iC one, whose index 9 was taken for the Mini's MetalGreymon --
+    #: which that reading shows it is not.
+    ATTRIBUTE_MAP = {0: 2, 1: 1, 2: 0, 3: 3}
+    #: The standard triangle, in this wire's own encoding: Vaccine beats
+    #: Virus, Virus beats Data, Data beats Vaccine.
+    ATTRIBUTE_BEATS = {2: 0, 0: 1, 1: 2}
+    #: "A favourable attribute raises the chance of winning by 10 percentage
+    #: points", on the hit chance rather than on power (DMM_RESEARCH.md).
+    ATTRIBUTE_ADVANTAGE = 10
+    #: An outsider announces Koromon's index. Index 0 is the Mini's Botamon,
+    #: which cannot battle, and is the likelier one to be refused; index 1 is
+    #: wificom's known-good "MINI you win (koromon)" code.
+    COMPATIBILITY_INDEX = 1
+    #: **A DCom opponent's attack sprites are the line's, not the packet's:**
+    #: `(atk_main, atk_alt)`. The Mini draws ONE projectile for its whole
+    #: roster and one Hyper -- DMM's `atk/` holds exactly those two, the
+    #: playbook's ordinary shot and its double-size Hyper -- so an opponent
+    #: here is 1 and 2 whatever it announced. The Projectile field is the
+    #: ordinary shot only, and there is no field at all for the Hyper, which
+    #: is why reading the enemy's pair off the packet cannot work: it put the
+    #: one value in both slots and the Hyper drew the ordinary sprite.
+    #:
+    #: This is the enemy's alone. Our own pet keeps its module's pair and
+    #: plays the same ladder with it -- a PENC pet fighting a Mini draws its
+    #: own shots, three of `atk_main` and then one `atk_alt` at double size.
+    ENEMY_ATTACK_SPRITES = (1, 2)
+    #: **Which modules a wire version admits.** Four devices share this line
+    #: and the packet carries no other word for which one is talking, so the
+    #: Version nibble is the only separator there is -- and it does separate
+    #: them, even where it cannot name the Digimon. What each entry rests on:
+    #:
+    #: * **0** -- every Digimon Mini side ever captured, and every Pendulum X
+    #:   code on record. The Accel sits here on no reading at all: nothing
+    #:   has been read off one, and it is kept rather than excluded because
+    #:   excluding it would be the guess.
+    #: * **1** -- both Digivice iCs, a 10X and a 20X, in the compatibility
+    #:   mode (battles 36-37).
+    #:
+    #: A version with no entry admits everything, which is what an unmapped
+    #: number should do. This narrows the crossover search only; it never
+    #: invents a name.
+    MODULES_BY_WIRE_VERSION = {0: ("DMM", "PENX", "ACCEL"), 1: ("IC",)}
+    #: **This wire carries no stage.** The parser has to put something on the
+    #: opponent, and it puts a Child -- so the roster lookup must not spend it
+    #: narrowing. Filmed battles 34 and 35 are what it costs: a real Mini's
+    #: index 8 is an Adult (Numemon on Ver.1, Sukamon on Ver.2), the iC's
+    #: index 8 is a Child (Chuumon, Goblimon), and the stage filter threw the
+    #: Mini's own away and reported the iC's two instead.
+    CARRIES_STAGE = False
+
+
+class IC:
+    """Digivice iC -- the iC family's own battle, 5 packets on the IR wire.
+
+    **This is not the wire the iC uses against a Digimon Mini.** That one is
+    PENX, 4 packets on 3-prong timings, and the iC playbook p.57 describes it
+    as a mode the iC changes into ("the battle rules change to match the
+    Accel/Mini"). This is the iC talking to another iC, and it is infrared:
+    dmcomm gives it its own signal letters, `IC`, and Omnipet already ships
+    one of its codes in `tests/support/data/digiroms.txt` under "Infrared".
+
+    **What is measured**, from the six codes on record:
+
+      * **5 packets** a side, 16 bits each -- one more than DMM.
+      * **EOL is 7** on every packet of every code, and on a device.
+      * **Packet 1's top nibble is Flags(2) | Version(2)**, not a 4-bit
+        version, and the version names the device: 0 for the iC 10X, 1 for
+        the 20X, 2 for the Digivice Burst. The device numbering was in
+        `utilities/IC/IC_RESEARCH_AND_TODO.md` before the codes were read; the
+        flag split was argued from dmcomm's "iC you win" (the "Battle iC 10x"
+        code field for field, with that nibble `C` rather than `0` and only
+        its hits changed) and from the checksum exception below, each
+        explaining the other. **A real iC confirmed it on 2026-09-21**: it
+        sent nibble `C` -- flags 11, device 0 -- in both captured battles.
+        What those two bits MEAN is still unknown, and note that the device
+        sets them where the six fan-made codes mostly do not.
+
+    **Captured 2026-09-21** (battles2.txt 34-35, an iC 10X answering on the
+    infrared wire, not in the Accel/Mini compatibility mode):
+
+        C087 4C67 0167 22D7 9017
+        C087 4C67 0167 0277 21F7
+
+    **Packet 4 is NOT empty on a device.** It is `0007` on all six codes, and
+    that was taken for the wire's; the two captures put `22D` and `027` in
+    it, so it is not even a constant. What it carries is unread, and Omnipet
+    still sends zero there because there is nothing better to send -- the
+    device completed both exchanges anyway. `ICDevice.parse` reports it raw.
+
+    **What is still a reading and not a measurement**: every field POSITION
+    below except packet 1's. They are DMM's layout carried across, and the
+    captures decode plausibly under it -- index 8 is the 10X's Chuumon,
+    attribute 0 is Virus, and both are right -- but a plausible decode is not
+    a confirmed split. Power in particular reads 198 where the same device
+    sends 22 in compatibility mode, so the scale is certainly its own and the
+    4|8 split is still assumed. `utilities/IC/protocol.txt` holds the codes,
+    the captures, the working and what to capture next.
+
+    Packets (16 bits each):
+      1: Flags(2) | Version(2) | Index(8)    | EOL(4)   -- measured
+      2: Kind(4) | Power(8)                  | EOL(4)   -- MEASURED: low bit
+                                                            of Kind = Max Reliability
+      3: Weapon(4) | Mini-mode Power(8)      | EOL(4)   -- measured, 2026-09-30
+      4: ???(2) | Shot Sizes(10)             | EOL(4)   -- MEASURED: pattern
+      5: Check(4)      | ???(3) | Hit(5)     | EOL(4)   -- measured
+
+    Kind was read as a Projectile id until 2026-09-30; see the attack-kind
+    block below. Packet 3's top nibble names an equipped weapon (Beast 2,
+    Water 3, Bird 4 on one Ravemon), and a weapon of the Digimon's own
+    family raised the Power beside it.
+
+    **The iC has a field the Mini has not, and it is packet 3.** Everything
+    after it sits one packet lower than the Mini's layout put it, which is
+    why the attack pattern is in packet 4 and why reading this as "the Mini
+    with an empty packet inserted" put the pattern in the wrong place for a
+    year of notes. See OBSERVED_PACKET3_BY_INDEX.
+    """
+    NAME = "IC"
+    DISPLAY_NAME = "IC (Digivice iC / 20X / Burst)"
+    MENU_LABEL = "IC (Digivice iC)"
+    PACKET_COUNT = 5
+    #: 7 on every packet of every code on record.
+    EOL = 0x7
+    #: All five "Battle iC ..." codes sum to **3** mod 16 over their twenty
+    #: digits, which is what the `@3` on this wire would be.
+    #:
+    #: dmcomm's "iC you win", `IC1-C067-4257-0197-0007-@F007`, asks the
+    #: adapter for **F** instead -- and it is the only code with packet 1's
+    #: two high bits set. Take those two bits out of the sum (they are worth
+    #: 12 in that nibble) and it lands on 3 with the other five. So the check
+    #: looks like it covers the twenty digits **except those two flag bits**,
+    #: which is the same split the nibble's Flags(2) | Version(2) reading
+    #: wants -- two readings, each explaining the other's exception.
+    #:
+    #: It makes no difference to anything Omnipet sends, since our own flag
+    #: bits are clear and the plain digit sum is then the same number.
+    #:
+    #: **CONFIRMED 2026-09-21.** Both captured device sides sum to 15 and
+    #: reach 3 only once the flag bits come out -- a device doing what one
+    #: fan-made code had suggested, which is what the note above said would
+    #: settle it. `_validate_dmm_packets` accepts on either sum for this
+    #: reason and logs which one held.
+    CHECKSUM_REMAINDER = 3
+    DCOM_WIRE = "IC"
+    #: Infrared, and its own two-letter signal. `build_command` writes the op
+    #: straight into the command, so "IC" needs nothing special -- but
+    #: Omnipet's own DigiROM parser had to learn it, since every other signal
+    #: is one letter.
+    DCOM_OP = "IC"
+    #: **This wire needs hardware the prong adapters do not have.** Classic
+    #: dmcomm firmware dispatches on a single letter and knows V, X, Y and C
+    #: only, so an `IC2-` command falls through its parser and is refused
+    #: outright -- and even a firmware that accepted it would need an IR LED
+    #: and receiver, because the signal is infrared and not the 3-prong
+    #: line. An adapter that reports `dmcomm-original` cannot carry this.
+    #: Said out loud when the format is selected, because the failure
+    #: otherwise looks exactly like a device that is not answering: the
+    #: adapter reports no packets either way.
+    TRANSPORT_NOTE = (
+        "infrared, and a two-letter signal: needs dmcomm-python firmware "
+        "with IR hardware (a WiFiCom or a Pico build). Classic "
+        "dmcomm-original knows V/X/Y/C only and will refuse an IC command."
+    )
+    #: **The device opens.** Measured 2026-09-21: every pair in both
+    #: captured transcripts runs `r:` then `s:`, so the iC transmitted first
+    #: and our turn-2 listen was the right role. It had been the safe default
+    #: rather than a reading -- it also answers a device that opens, and
+    #: DMM's was measured that way.
+    DCOM_TURN = DCOM_TURN_LISTEN
+    #: The reply's last packet, for an adapter that can build one. It is
+    #: DMM's `@4^1^F9` moved onto this wire's EOL and remainder: `@3` asks
+    #: for the check digit that brings our TWENTY digits to 3, and `^1^F`
+    #: inverts the five hit bits of the packet being answered. The split is
+    #: the layout's, not a choice -- packet 5's third digit is the three
+    #: unnamed bits plus the hit field's top bit, so only that one bit is
+    #: flipped there, and the fourth digit carries the remaining four.
+    #:
+    #: Unverified, as everything below packet 1 is: it follows from the
+    #: field positions, and those are PENX's carried across.
+    DCOM_FINAL_SEGMENT = "@3^1^F7"
+
+    @staticmethod
+    def dcom_final_segment(packets):
+        """The reply's last packet, with the checksum target OUR flags need.
+
+        **The target is not a constant, because the check skips the flag
+        bits.** A side that sets packet 1's two high bits has a digit sum 4
+        per bit higher than the number the device checks, so asking the
+        adapter for a plain `@3` leaves the device seeing 3 + flags*4 and
+        the side fails its own checksum.
+
+        Measured the hard way on 2026-09-22: a probe sent flags 11 with `@3`
+        and the iC answered two packets and stopped, three times running.
+        dmcomm's own flagged code has the rule in it -- `IC1-C067-...-@F007`
+        sets both bits and asks for **F**, which is 3 + 12.
+
+        Omnipet's own sides send flags 0, where this is just `@3` again.
+        """
+        flags = ((packets[0][0] >> 6) & 0b11) if packets else 0
+        target = (IC.CHECKSUM_REMAINDER + flags * 4) % 16
+        return "@%X^1^F%X" % (target, IC.EOL)
+    #: **Wire 0 is module version 1.** The module numbers its three devices
+    #: 1, 2, 3 (10X, 20X, Burst) and the wire numbers them 0, 1, 2, so the
+    #: wire is the module minus one -- the offset `IC_RESEARCH_AND_TODO.md`
+    #: predicted a format here would need.
+    WIRE_VERSION_OFFSET = -1
+    VERSION_RANGE = (1, 3)
+    DEFAULT_VERSION = 1
+    COMPATIBILITY_VERSION = 0
+    #: **Sixteen, read off the device.** The Mini's 6 is not this bar: it is
+    #: the compatibility mode's, printed as one of the rules that CHANGE for
+    #: those battles, and `IC_RESEARCH_AND_TODO.md` recorded the module's
+    #: `battle_global_hit_points` as 0 for exactly that reason -- the iC's
+    #: own was unknown.
+    #:
+    #: The owner read it as 15 or 16 on 2026-09-21 and settled it at 16 on
+    #: 2026-10-01; filmed battle 83 is a knockout at exactly 16.
+    #:
+    #: It sits with the damage below rather than apart from it. Five Hypers
+    #: at 4 is 20 against 16, so a full charge is decisive without being a
+    #: one-shot; under the Mini's 6 it would have been 30, nearly twice the
+    #: bar.
+    FIXED_HP = 16
+    #: The highest attack value this line can roll. Four, from the playbook.
+    DAMAGE_LIMIT = 4
+    #: **An iC battle is its five rounds and no more**, where the Mini's
+    #: repeat until someone is out. Filmed battles 82 and 84 stopped after
+    #: round 5 with both sides standing (the device ahead and declared the
+    #: winner), and packet 4 holds five shots and packet 5 five hit bits.
+    #: Owner's reading, 2026-10-01; this was 10, the Mini's, read across.
+    MAX_ROUNDS = 5
+    #: **Equal HP after the five is settled in a sixth round**: "with equal
+    #: HP it is decided on the sixth turn" (Master Book, scan 73, printed
+    #: p.71). The sixth replays round 1's shots and hits, as the Mini's
+    #: rounds repeat; one side lands every round, so it always decides.
+    TIE_ROUNDS = 1
+    #: **The iC's own, and not the Mini's.** "Normal Single/Double/Triple/
+    #: Hyper attacks have power 1/2/3/4" -- the 10X playbook, recorded in
+    #: `IC_RESEARCH_AND_TODO.md`. A value is simply its damage.
+    #:
+    #: This was `{4: 6}`, carried across from the Mini, and that 6 belongs to
+    #: the compatibility mode: the same playbook page that sets HP to 6 for
+    #: those battles says the Hyper's 4 becomes 6 for them too. Both are
+    #: overrides of this line, so importing either into it was importing the
+    #: exception instead of the rule. The owner confirmed a value-3 shot
+    #: costing 3 on 2026-09-21.
+    #:
+    #: The playbook also gives Just Attack versions at 2/3/4/8, gated on
+    #: Reliability 31 and Perfect/Level 5+ with the charge stopped at MAX.
+    #: Not implemented, and explicitly disabled for compatibility battles --
+    #: see the Just Attack item in `IC_RESEARCH_AND_TODO.md`.
+    HIT_DAMAGE = {1: 1, 2: 2, 3: 3, 4: 4}
+    JUST_ATTACK_DAMAGE = {1: 2, 2: 3, 3: 4, 4: 8}
+    TURNS = 5
+    #: A rhythm charge: recent RPM is displayed separately from earned bars.
+    #: `monster.json.rpm`, or IC.json's stage/attribute fallback, supplies
+    #: the preferred pace. Reaching that RPM once does not grant Hyper x5;
+    #: the rhythm meter must actually reach ten bars. The approximate timing
+    #: model and its recording evidence are in utilities/claude/docs/design/ic_rpm.md.
+    #: **A value-4 shot draws from the crit bank**, as the Digimon X's mega
+    #: shot does -- `assets/atk_crit/`, not the module's `atk/`. Owner-read
+    #: off the device 2026-09-22: the iC draws its Hyper with a sprite of its
+    #: own, where the Digimon Mini draws the ordinary shot at double size.
+    #:
+    #: Which critical is the receiver's choice, not an id on the wire: see
+    #: the attack-kind block below. A native iC pet draws the iC's own (the
+    #: standard one, or its band's at Max Reliability); any other pet draws
+    #: its `atk_alt_2`, else `atk_alt` at double size, else `atk_main` at
+    #: double size (`BattleEncounter._count_bar_sprite`).
+    CRIT_BANK_DAMAGE = 4
+    MINIGAME = "RPM"
+    #: The charge this wire carries is the **bar**, 0-10, not the rate: it is
+    #: what `IC.json` is keyed on, and it is what the device draws. So the
+    #: session reports the bar as its `strength` and this reads it whole.
+    CHARGE_SCALE = "taps"
+    MAX_CHARGE = 10
+    #: Versus plays no charge, so both sides get the same one. Six of ten is
+    #: the middle of the table rather than a maximum, as PENOG's 10 of 40 is.
+    VERSUS_CHARGE = 6
+    ATTACK_ANIMATION = "count_bar"
+    #: Keeps the parser from shifting the Kind nibble as if it were a 0-based
+    #: sprite id: it is not one (`KIND_NORMAL`). `pet_to_digimon` writes the
+    #: Kind itself, and the parser turns Kind and Power into the iC's own
+    #: sprite ids (`battle.ic_attacks`).
+    SHOT_IS_OMNIPET_NUMBERED = True
+    #: The wire carries no stage, as PENX's does not.
+    CARRIES_STAGE = False
+    #: **Packet 3 is not Attribute + Shot Sizes, and it is not the charge's
+    #: attack row.** Its twelve-bit body is a number that tracks the roster
+    #: slot, and on both slots read so far it is *exactly* the Power the same
+    #: device sends for that slot in the Accel/Mini compatibility mode:
+    #:
+    #:     slot 8   packet 3 = 0167   body 22    DMM-wire Power 22
+    #:     slot 10  packet 3 = 0377   body 55    DMM-wire Power 55
+    #:
+    #: Two slots, two devices each, exact both times. What it MEANS here is
+    #: unread -- a second Power field, a stat the compatibility mode derives
+    #: its Power from, or a coincidence on two readings -- but "the charge's
+    #: five shots" it is not: the value did not move between a 0 RPM charge
+    #: and a 90 RPM one, and the stage-4 value decodes to a multiset that is
+    #: not even in the pool.
+    #:
+    #: The supposed Attribute bits in the top two are part of that number and
+    #: have read 0 on every side, including a Data Starmon and a Free
+    #: Aquilamon -- both of which DO state their real attribute on the
+    #: compatibility wire. So this wire either carries no attribute or puts
+    #: it somewhere else, and `ATTRIBUTE_ADVANTAGE` is being spent on a field
+    #: that is not one.
+    #:
+    #: **Packet 4 is the pattern**, which is where the missing attack row
+    #: turned out to be -- so nothing is being replayed from packet 3 any
+    #: more. `_parse_dmm_opponent` prints this body and whether it matches a
+    #: known slot, so the capture that explains what it MEANS is obvious.
+    #:
+    #: Keyed by the index the same packet 1 carries.
+    OBSERVED_PACKET3_BY_INDEX = {8: 0x0167, 10: 0x0377}
+    #: **The attribute is not in this layout.** Packet 3's top two bits are
+    #: where the Mini keeps it, and they read 0 on every iC side -- including
+    #: a Data Starmon and a Free Aquilamon, both of which state their real
+    #: attribute on the compatibility wire. So `ATTRIBUTE_ADVANTAGE` below is
+    #: being spent on a field that has never moved, and every opponent on
+    #: this wire is fought as a Virus. Left in place rather than removed,
+    #: because turning the triangle off is also a guess -- but do not treat
+    #: the attribute of an IC opponent as read.
+    ATTRIBUTE_IS_UNLOCATED = True
+    MAX_INDEX = 0xFF
+    MAX_POWER = 0xFF
+    MAX_SHOT = 0xF
+    #: PENX's order, untested here.
+    ATTRIBUTE_MAP = {0: 2, 1: 1, 2: 0, 3: 3}
+    ATTRIBUTE_BEATS = {2: 0, 0: 1, 1: 2}
+    #: The module declares 5 on the hit rate; the playbook (p.037) says
+    #: attribute matters and prints no number.
+    ATTRIBUTE_ADVANTAGE = 5
+    #: Index 0 is unread on this wire; 1 is the first roster slot on all
+    #: three devices, as PENX's Koromon is.
+    COMPATIBILITY_INDEX = 1
+
+    # -- Attack kind, Max Reliability and sprites (owner's probe, 2026-09-30) --
+    #
+    # utilities/IC/protocol.txt, "2026-09-30 -- RELIABILITY 31", has the
+    # battles. In short: the nibble called Projectile is NOT a sprite id.
+    # Its low bit is the Max Reliability flag, and the receiving iC draws the
+    # sender's attacks from ITS OWN library, choosing among them by that flag
+    # and by the Power byte beneath it.
+
+    #: Packet 2's top nibble. 0 is the Accel/Mini mode (the weapon dropped),
+    #: 4 an ordinary iC battle and 5 a Max Reliability one, which is the
+    #: battle the playbook's Just Attack damage belongs to
+    #: (`JUST_ATTACK_DAMAGE`). Swept 0-14 at one Power: every odd value drew
+    #: the Reliability-31 set and every even one the standard set, so the
+    #: low bit is the flag.
+    KIND_NORMAL = 4
+    KIND_MAX_RELIABILITY = 5
+    MAX_RELIABILITY_BIT = 0x1
+    #: **The weapon is a 5-bit item number, 1-19, split over two packets**:
+    #: its low four bits are packet 3's top nibble and its fifth is this
+    #: nibble's second bit. A Ravemon at Reliability 31 sent Kind 7 with
+    #: packet 3 nibbles 0-3 for the four weapons numbered 16-19, and Kind 5
+    #: with nibbles 8-15 for the eight before them (battles2.txt 60-70). A
+    #: ShineGreymon below 31 sent Kind 6 with a Dragon Break (battle 75).
+    WEAPON_HIGH_BIT = 0x2
+    #: Whose weapon each number is. 1-8 are the Attack +1 weapons and 12-19
+    #: the Attack +2 ones, one per family; 9-11 (Digi Cannon, Metal Armor,
+    #: Silver Rope) are any Digimon's. The family is the module's `digisoul`.
+    ANY_FAMILY_WEAPONS = (9, 10, 11)
+    WEAPON_FAMILIES = {1: "Dragon", 2: "Beast", 3: "Water", 4: "Bird",
+                       5: "Machine", 6: "Insect", 7: "Holy", 8: "Dark",
+                       12: "Insect", 13: "Dark", 14: "Machine", 15: "Beast",
+                       16: "Dragon", 17: "Water", 18: "Bird", 19: "Holy"}
+    #: **A weapon the Digimon can use changes its ordinary sprite**, at any
+    #: Reliability, and never its critical (owner, on the iC's own screen,
+    #: battles2.txt 61-79). "Can use" is an any-family weapon or one of the
+    #: Digimon's own family. The any-family three share one sprite and each
+    #: family has one for both of its weapons: read on ShineGreymon (Dragon
+    #: Sword, Dragon Break), MirageGaogamon (Beast Claw, Beast Blow) and
+    #: Ravemon (Fowl Tornado, Fowl Buraiga). A weapon of another family
+    #: changes nothing. Insect and Holy were drawn by the owner on
+    #: 2026-10-03; Dark, Machine and Water on 2026-10-04, sent to an iC by
+    #: `utilities/IC/crit_sprite_probe.py --weapons`. Every family is read,
+    #: and the ids were closed up the same day (Water 10 -> 9, Bird 11 -> 10,
+    #: Holy 12 -> 11) so the bank has no gaps.
+    ANY_FAMILY_WEAPON_SPRITE = 4
+    FAMILY_WEAPON_SPRITES = {"Dragon": 3, "Insect": 5, "Dark": 6, "Machine": 7,
+                             "Beast": 8, "Water": 9, "Bird": 10, "Holy": 11}
+    #: What a usable weapon adds to packet 3's Power: +15 for a family's
+    #: Attack +1 weapon and +8 for its Attack +2 (three families each), and
+    #: for the any-family three the playbook's small, large and medium
+    #: boosts. A weapon of another family adds nothing.
+    FAMILY_WEAPON_POWER = {1: 15, 2: 8}
+    ANY_FAMILY_WEAPON_POWER = {9: 4, 10: 15, 11: 8}
+    #: **A usable weapon adds its Attack to every hit that lands**, on top
+    #: of the Max Reliability damage where both apply (owner). Filmed battle
+    #: 83: a ShineGreymon with Metal Armor (+2) landed 4, 3 and 3 and won at
+    #: round 4 against 16 HP -- 6 + 5 + 5. The amounts are the playbook's
+    #: Attack +1/+2 (p.38), the same the module's items carry.
+    FAMILY_WEAPON_ATTACK = {1: 1, 2: 2}
+    ANY_FAMILY_WEAPON_ATTACK = {9: 1, 10: 2, 11: 1}
+    #: The playbook's gate: Reliability 31 and Perfect (stage 5) or above.
+    #: It also asks for the count bar stopped at MAX, but the devices sent 5
+    #: at bar 0 (11 of 19 battles at Reliability 31, never below Perfect).
+    #: A Baby II and a Child at Reliability 31 keep the standard sprites
+    #: and the ordinary damage, on the 10X and the 20X (owner, 2026-10-02
+    #: and 10-03), though a weapon it can use still changes its sprite
+    #: (Wanyamon, Beast Claw). An Adult at 31 does not change its attacks
+    #: either (owner, 2026-10-05), so the playbook's Perfect is the gate,
+    #: read now from both sides of it.
+    #: So the gate here is the two stats alone. The battles that sent 4
+    #: "at 31" fit the stat having moved: it loses 1 an hour and gains 1 a
+    #: win (battles2.txt 80-81, clear and then set a win later).
+    MAX_RELIABILITY = 31
+    MAX_RELIABILITY_MIN_STAGE = 5
+    #: The installed module that IS this line. It declares IC as well; the
+    #: owner is named outright, as the battle contract asks, so a save from
+    #: when it declared DMM still finds its line.
+    NATIVE_MODULES = ("IC",)
+    #: **Nothing on the wire names a sprite**, so a pet from another line
+    #: keeps its own library here rather than resolving its ids in the iC's.
+    OWN_ATTACK_LIBRARY = True
+    #: The iC's own sprites, `modules/IC/atk/` and `atk_crit/` (Sundeth,
+    #: 2026-09-30). Ordinary: 1 standard ("weak"), 2 the Max Reliability
+    #: one ("strong"), 3 the one a low-Power sender is drawn with and the
+    #: Dragon weapons', 4 the any-family weapons', then one per family's
+    #: weapons: 5 Insect, 6 Dark, 7 Machine, 8 Beast, 9 Water, 10 Bird and
+    #: 11 Holy.
+    #: Critical: 1 standard, then one per family as each is read: 2 Dragon
+    #: (claw), 3 Beast (wolf head), 4 Bird (wing), 5 Insect (thorns; once half
+    #: drawn, finished by the owner 2026-10-08), 6 Holy
+    #: (cross, the owner 2026-10-08), 7 Water (bubbles) and 8 Dark (skull),
+    #: both added by the owner 2026-10-11, and 9 Machine (a spinning gear),
+    #: added by the owner 2026-10-12. The ids stay put once given: a pet keeps its
+    #: `atk_alt_2` in the save, so a renumber would redraw a saved one.
+    #:
+    #: **Every iC Digimon carries them as data**: `atk_main` 1, `atk_alt` 2
+    #: and `atk_alt_2` the critical it throws at Max Reliability, its family's
+    #: (`FAMILY_CRITS`), so it has its sprites on every other line too.
+    #: Below `MAX_RELIABILITY_MIN_STAGE`
+    #: `atk_alt` is 0: those stages have no strong shot. This wire picks between
+    #: `atk_main` and `atk_alt` by the flag; the standard critical below Max
+    #: Reliability is the wire's own (`STANDARD_CRIT`). The two below are
+    #: the fallbacks for a Digimon that states none.
+    STANDARD_SPRITE = 1
+    MAX_RELIABILITY_SPRITE = 2
+    LOW_POWER_SPRITE = 3
+    STANDARD_CRIT = 1
+    NORMAL_SPRITES = tuple(range(1, 12))
+    CRIT_SPRITES = (1, 2, 3, 4, 5, 6, 7, 8, 9)
+    #: **Packet 2's "Power" byte is two fields: Family(3) | Strength(5).**
+    #: Read across every device side on record (2026-10-02): the top three
+    #: bits are the Digimon's DigiSoul family and the low five a strength
+    #: that rises with the stage. Eleven Digimon, no exception:
+    #:
+    #:     Dragon 0   Agumon 4, RizeGreymon 12, ShineGreymon 16
+    #:     Beast  1   Wanyamon 3, MirageGaogamon 17
+    #:     Water  2   Whamon 12
+    #:     Holy   3   Kudamon 4
+    #:     Dark   4   Goblimon 6
+    #:     Bird   5   Pinamon 3, Aquilamon 11, Ravemon 16
+    #:     Machine 6  Chuumon 6, Starmon 9
+    #:     Insect 7   Budmon 3, Lalamon 5, Blossomon 13
+    #:
+    #: Holy 3 had been inferred by elimination until a 20X Kudamon sent it
+    #: (Digimon Database IC ledger 754, 2026-10-03, with Agumon 753 and
+    #: Lalamon 752 the same day). Read as one number the byte put a
+    #: Baby II Budmon (227) far above a ShineGreymon (16); split, the
+    #: strength runs 3 at Baby II, 5-6 Child, 9-11 Adult, 12-13 Perfect and
+    #: 16-17 Ultimate. It is not the playbook's printed Strength (1, 2-3,
+    #: 5-6, 10-11, 18), and it did not move over 28 Ravemon battles.
+    FAMILY_CODES = {"Dragon": 0, "Beast": 1, "Water": 2, "Holy": 3,
+                    "Dark": 4, "Bird": 5, "Machine": 6, "Insect": 7}
+    FAMILY_NAMES = {code: name for name, code in FAMILY_CODES.items()}
+    STRENGTH_BITS = 5
+    MAX_STRENGTH = 31
+    #: The IC module stores that strength x10 as its `power`, in line with
+    #: every other module's; this wire divides by it.
+    POWER_SCALE = 10
+    #: What a pet of ours sends as its strength: the middle of what each
+    #: stage's Digimon sent. An estimate for the Digimon nobody has read;
+    #: stage 7 (the hidden Ultimates) is unread and takes stage 6's.
+    STRENGTH_BY_STAGE = {1: 0, 2: 3, 3: 6, 4: 10, 5: 12, 6: 16}
+    #: Packet 3's Power, which follows the stage: 5, 22-25, 55-56, 104-114
+    #: and 179 for stages 2-6 (it is the Digimon's Accel/Mini-mode Power).
+    MINI_POWER_BY_STAGE = {1: 0, 2: 5, 3: 22, 4: 55, 5: 112, 6: 179}
+    #: Flag clear: the receiver drew a sender whose byte was 25 or less with
+    #: sprite 3 and one at 34 or more with the standard one (10, 12, 15, 18
+    #: and 25 against 34, 50 and 60). Those are family 0 against family 1,
+    #: so the edge is very probably 31/32; 29 was the middle of the gap.
+    LOW_POWER_MAX = 31
+    #: Flag set: the receiver draws the sender's critical BY ITS FAMILY. The
+    #: bytes read were 15-17 claw, 49-61 wolf head, 175-177 wing and
+    #: 250-255 the Insect thorns: families 0, 1, 5 and 7. ShineGreymon
+    #: (Dragon) throws the claw and Ravemon (Bird) the wing on their own
+    #: screens. Holy (3) draws the cross (the owner, 2026-10-08), Water (2)
+    #: the bubbles and Dark (4) the skull (the owner, 2026-10-11), Machine (6)
+    #: the gear (the owner, 2026-10-12). Every family is read.
+    FAMILY_CRITS = {0: 2, 1: 3, 2: 7, 3: 6, 4: 8, 5: 4, 6: 9, 7: 5}
+
+    @staticmethod
+    def family_of(byte) -> int:
+        """The family code in a packet 2 Power byte."""
+        return (int(byte or 0) >> IC.STRENGTH_BITS) & 0b111
+
+    @staticmethod
+    def strength_of(byte) -> int:
+        """The strength in a packet 2 Power byte."""
+        return int(byte or 0) & IC.MAX_STRENGTH
+
+    @staticmethod
+    def power_byte(family, strength) -> int:
+        """Packet 2's byte for a Digimon of *family* (a name) at *strength*.
+        A Digimon with no family sends 0 there, which is the Dragon's."""
+        code = IC.FAMILY_CODES.get(family or "", 0)
+        return (code << IC.STRENGTH_BITS) | max(0, min(IC.MAX_STRENGTH, int(strength or 0)))
+
+    @staticmethod
+    def stage_value(table, stage) -> int:
+        """*table*'s entry for *stage*, the last one for anything above."""
+        stage = int(stage or 0)
+        return table.get(stage, table[max(table)] if stage > max(table) else 0)
+
+    @staticmethod
+    def is_max_reliability(kind) -> bool:
+        """Whether a packet 2 nibble carries the Max Reliability flag."""
+        return bool(int(kind or 0) & IC.MAX_RELIABILITY_BIT)
+
+    @staticmethod
+    def weapon_id(kind, nibble) -> int:
+        """The weapon a side sent: packet 3's nibble, plus 16 when packet
+        2's Kind carries the fifth bit."""
+        high = 16 if int(kind or 0) & IC.WEAPON_HIGH_BIT else 0
+        return high | (int(nibble or 0) & 0xF)
+
+    @staticmethod
+    def kind_with_weapon(kind, weapon) -> int:
+        """Packet 2's Kind for a side holding *weapon*."""
+        kind = int(kind or 0) & ~IC.WEAPON_HIGH_BIT
+        return kind | (IC.WEAPON_HIGH_BIT if int(weapon or 0) & 0x10 else 0)
+
+    @staticmethod
+    def weapon_tier(weapon, family=None) -> int:
+        """Whether a Digimon of *family* can use *weapon*: 0 no, 1 or 2 its
+        own family's Attack +1 or +2 weapon, and the weapon's own number for
+        an any-family one. *family* is the module's `digisoul`."""
+        weapon = int(weapon or 0)
+        if weapon in IC.ANY_FAMILY_WEAPONS:
+            return weapon
+        own = IC.WEAPON_FAMILIES.get(weapon)
+        if not own or own != family:
+            return 0
+        return 1 if weapon < min(IC.ANY_FAMILY_WEAPONS) else 2
+
+    @staticmethod
+    def weapon_sprite(weapon, family=None) -> int:
+        """The ordinary sprite *weapon* gives a Digimon of *family*, 0 for
+        none. With the family unknown only the any-family weapons answer."""
+        tier = IC.weapon_tier(weapon, family)
+        if tier in IC.ANY_FAMILY_WEAPONS:
+            return IC.ANY_FAMILY_WEAPON_SPRITE
+        return IC.FAMILY_WEAPON_SPRITES.get(family, 0) if tier else 0
+
+    @staticmethod
+    def weapon_attack(weapon, family=None) -> int:
+        """What *weapon* adds to each hit of a Digimon of *family*."""
+        tier = IC.weapon_tier(weapon, family)
+        return (IC.ANY_FAMILY_WEAPON_ATTACK.get(tier)
+                or IC.FAMILY_WEAPON_ATTACK.get(tier, 0))
+
+    @staticmethod
+    def weapon_power(weapon, family=None) -> int:
+        """What *weapon* adds to packet 3's Power on a Digimon of *family*."""
+        tier = IC.weapon_tier(weapon, family)
+        return (IC.ANY_FAMILY_WEAPON_POWER.get(tier)
+                or IC.FAMILY_WEAPON_POWER.get(tier, 0))
+
+    @staticmethod
+    def crit_for_power(power) -> int:
+        """The critical the receiver draws at Max Reliability for a sender's
+        Power byte: its family's, the standard one where that is unread."""
+        return IC.FAMILY_CRITS.get(IC.family_of(power), IC.STANDARD_CRIT)
+
+    @staticmethod
+    def normal_for_power(power) -> int:
+        """The ordinary sprite the receiver draws for a sender at *power*,
+        flag clear."""
+        return (IC.LOW_POWER_SPRITE if int(power or 0) <= IC.LOW_POWER_MAX
+                else IC.STANDARD_SPRITE)
 
 
 class DM20:
@@ -633,6 +1357,11 @@ class DM20:
     #: that is what the global `assets/atk` is numbered by and what the
     #: module was written against.
     SHOT_COUNT = 44
+    #: Neither 20th line carries a stage either, and its parser puts a Child
+    #: on the opponent the way PENX's does. It changes nothing today -- not
+    #: one index on this roster names two Digimon, so the stage filter never
+    #: runs -- but the flag is about the wire and not about today's rosters.
+    CARRIES_STAGE = False
 
 
 class PEN20:
@@ -708,6 +1437,11 @@ class PEN20:
     #: numbering until `utilities/claude/renumber_atk_sprites.py` closed the
     #: gaps.
     SHOT_COUNT = 108
+    #: Neither 20th line carries a stage either, and its parser puts a Child
+    #: on the opponent the way PENX's does. It changes nothing today -- not
+    #: one index on this roster names two Digimon, so the stage filter never
+    #: runs -- but the flag is about the wire and not about today's rosters.
+    CARRIES_STAGE = False
     MINIGAME = "Count Match Classic"  # shake meter, same 0-14 field as DM20
     CHARGE_SCALE = "taps"
     MAX_CHARGE = 14
@@ -1290,6 +2024,59 @@ class DMXW(DMC):
     FOUGHT_BATTLE = True
 
 
+class TWIN:
+    """Digimon Twin (2007, L and R). **Capture only: no field is decoded.**
+
+    The Twin talks infrared on the iC's signal -- dmcomm's two-letter `IC`
+    -- in a format of its own. The one working code on record is
+    wificom-lib's punchbag "Twin battle/event" (credit joushiikuta, copied
+    to `utilities/TWIN/sources/twin_ir_digirom.txt`): it answers with
+    **twenty** packets where an iC sends five, and its fourth ends in F
+    where every iC packet ends in 7 (`utilities/IC/protocol.txt`). Nobody
+    has recorded what a Twin sends, so there is nothing to battle with:
+    choosing TWIN in DCom answers with that code and logs every exchange
+    the Twin runs, laid out for decoding (`battle/dcom/dcom_capture.py`).
+
+    What the device does in a battle is documented, and waits here for a
+    wire to carry it (nhoko's guide; `utilities/TWIN/TWIN_RESEARCH.md`):
+    6 HP each; Single/Super/Double/Hyper cost 1/2/3/4; the outcome weighs
+    the B-mash count, the species' 強さ, the Va>Vi>Da>Va triangle and a
+    Strength bonus in four bands (0-3 / 4-7 / 8-11 / 12-15, sizes
+    unpublished); a hit can leave the defender in Panic, 5 points likelier
+    against an unfavourable attribute. A Twin battles only another Twin.
+    """
+    NAME = "TWIN"
+    DISPLAY_NAME = "TWIN (Digimon Twin L / R)"
+    MENU_LABEL = "TWIN (Digimon Twin)"
+    #: Six hit points each side (nhoko's guide). The TWIN module's
+    #: `battle_global_hit_points` is this number.
+    FIXED_HP = 6
+    #: Single, Super, Double and Hyper cost 1, 2, 3 and 4 (nhoko's guide):
+    #: each value is its own damage, which is what an adventure battle on a
+    #: line with no constants already charges.
+    HIT_DAMAGE = {1: 1, 2: 2, 3: 3, 4: 4}
+    #: The punchbag's length. How many the Twin itself sends is one of the
+    #: things a capture shows.
+    PACKET_COUNT = 20
+    #: The iC's signal, so the iC's hardware: see IC.TRANSPORT_NOTE.
+    DCOM_OP = "IC"
+    TRANSPORT_NOTE = IC.TRANSPORT_NOTE
+    #: The punchbag is an `IC2-` code, the role that answers, so the Twin
+    #: opens -- the same as an iC.
+    DCOM_TURN = DCOM_TURN_LISTEN
+    NATIVE_MODULES = ("TWIN",)
+    #: Sent as written; the adapter resolves the operators. `^0^2` on
+    #: packet 2 echoes the Twin's first digit and flips one bit of its
+    #: second, and `@4` on packet 4 is the digit that brings our packets
+    #: 1-4 to 4 mod 16 -- both are checked against what the Twin sends.
+    CAPTURE_ROM = "IC2-0007-^0^207-0007-@400F" + "-0000" * 16
+    #: What the code's operators imply, for the capture to test.
+    CAPTURE_CHECK_PACKETS = 4
+    CAPTURE_CHECK_REMAINDER = 4
+    CAPTURE_ECHO_PACKET = 2
+    CAPTURE_ECHO_XOR = (0x0, 0x2)
+
+
 # OEM mode: when the pet's module battle_protocol matches the connected
 # device's format, the pet's real index/version are sent so the device can
 # run unlocks; out-of-range versions are sent as 0 (special).  Shared by
@@ -1302,6 +2089,8 @@ class DMXW(DMC):
 VERSION_RANGES = {
     'DMOG': DMOG.VERSION_RANGE,
     'PENOG': PENOG.VERSION_RANGE,
+    'DMM': DMM.VERSION_RANGE,
+    'IC': IC.VERSION_RANGE,
     'DM20': DM20.VERSION_RANGE,
     'PEN20': PEN20.VERSION_RANGE,
     'DMX': DMX.VERSION_RANGE,
@@ -1312,17 +2101,76 @@ VERSION_RANGES = {
 }
 
 
-#: Every battle format that can be selected, in menu order. Both the DCom
+#: Every battle format that can be selected, oldest release first (the menu
+#: itself is ordered by RELEASED, below). Both the DCom
 #: menu and the versus protocol menu are built from this, so the two can
 #: never offer different lists -- the versus one used to be its own literal
 #: and had simply never had PENZ added to it.
-BATTLE_FORMATS = ('DMOG', 'PENOG', 'DM20', 'PEN20', 'DMX', 'PENZ', 'DMC',
-                  'PENC', 'DMXW')
+#: `IC` was deliberately absent while nothing drove an exchange with it --
+#: a menu entry that cannot finish a battle. It now generates, validates,
+#: parses and replays like every other format, so it is offered. **What it
+#: still has not got is a capture**: every field below packet 1 is PENX's
+#: layout read across (`IC` and `utilities/IC/protocol.txt`), so selecting
+#: it is how the first iC-to-iC exchange gets recorded, not a claim that
+#: the layout is settled. It also needs infrared: see `IC.DCOM_OP`.
+BATTLE_FORMATS = ('DMOG', 'PENOG', 'DMM', 'IC', 'DM20', 'PEN20', 'DMX',
+                  'PENZ', 'DMC', 'PENC', 'DMXW')
+
+#: Device lines the protocol menu shows before they have a battle format, by
+#: label. They are drawn greyed out and cannot be chosen, except those in
+#: OFFERED_UPCOMING. `PENX` here is the Pendulum X's own line, still to be
+#: written; the legacy alias of the same spelling names DMM (see
+#: LEGACY_FORMAT_NAMES), so readiness is BATTLE_FORMATS membership, never
+#: get_constants.
+UPCOMING_LINES = {
+    'PENPROG': 'PENPROG (Progress)',
+    'PENX': 'PENX (Pendulum X)',
+    'ACCEL': 'ACCEL (Digimon Accel)',
+    'TWIN': 'TWIN (Digimon Twin)',
+    'XWM': 'XWM (Mini Xros Wars)',
+}
+
+#: Upcoming lines offered anyway. TWIN is the next module being worked on;
+#: until it has a battle format DCom records what a Twin sends (see
+#: CAPTURE_FORMATS), and anywhere else choosing it says it is not ready
+#: rather than falling back to another line's battle.
+OFFERED_UPCOMING = ('TWIN',)
+
+#: Lines DCom can record but not battle: a code is known to make the device
+#: start an exchange, and nothing is known of what it sends back. Kept out
+#: of get_constants so nothing takes one for a battle format.
+CAPTURE_FORMATS = {'TWIN': TWIN}
 
 
-def menu_entries():
-    """``[(battle_format, label), ...]`` for a protocol menu, in menu order."""
-    return [(name, get_constants(name).MENU_LABEL) for name in BATTLE_FORMATS]
+def capture_constants(line):
+    """The constants of a line DCom can only record, or None."""
+    return CAPTURE_FORMATS.get(line)
+
+#: When each line's first device came out, which orders the protocol menu.
+#: From the Digimon Database's catalog (`Module.released`); DMC has a year only.
+RELEASED = {
+    'DMOG': '1997-06', 'PENOG': '1998-11', 'PENPROG': '2002-07',
+    'PENX': '2003-04', 'ACCEL': '2005-03', 'DMM': '2005-11',
+    'IC': '2006-03', 'TWIN': '2007-03', 'XWM': '2010-11',
+    'DM20': '2017-06', 'PEN20': '2018-06', 'DMX': '2019-03',
+    'PENZ': '2020-11', 'DMC': '2023', 'PENC': '2024-02', 'DMXW': '2026-02',
+}
+
+
+def menu_entries(include_upcoming=False):
+    """``[(line, label, enabled), ...]`` for a protocol menu, oldest release first.
+
+    Every battle format is enabled. An upcoming line is greyed out unless the
+    caller asks for the ones offered ahead of their format
+    (``include_upcoming``: the grids pass the debug mode, so 1.0 players
+    never reach TWIN while its research capture stays available); the caller
+    must check BATTLE_FORMATS before starting a battle with one.
+    """
+    lines = sorted(BATTLE_FORMATS + tuple(UPCOMING_LINES), key=RELEASED.__getitem__)
+    return [(name,
+             get_constants(name).MENU_LABEL if name in BATTLE_FORMATS else UPCOMING_LINES[name],
+             name in BATTLE_FORMATS or (include_upcoming and name in OFFERED_UPCOMING))
+            for name in lines]
 
 
 def fights_its_battle(battle_format: str) -> bool:
@@ -1348,6 +2196,8 @@ def versus_protocol(battle_format: str):
     return {
         'DMOG': BattleProtocol.DMOG_BS,
         'PENOG': BattleProtocol.PENOG_BS,
+        'DMM': BattleProtocol.DMM_BS,
+        'IC': BattleProtocol.IC_BS,
         'PENC': BattleProtocol.DMC_BS,
         'DM20': BattleProtocol.DM20_BS,
         'PEN20': BattleProtocol.PEN20_BS,
@@ -1355,7 +2205,7 @@ def versus_protocol(battle_format: str):
         'PENZ': BattleProtocol.DMX_BS,
         'DMC': BattleProtocol.DMC_BS,
         'DMXW': BattleProtocol.DMC_BS,
-    }.get(battle_format, BattleProtocol.DM20_BS)
+    }.get(canonical_format(battle_format), BattleProtocol.DM20_BS)
 
 
 #: The packet layouts a DCom exchange can use, by ``DCOM_WIRE`` name. Three
@@ -1365,12 +2215,17 @@ def versus_protocol(battle_format: str):
 #: DCOM_WIRE must appear here; get_wire refuses an unknown one rather than
 #: falling back, because a wrong wire is six DMX packets at a Color device
 #: that will never answer them.
-WIRE_FORMATS = {'DMOG': DMOG, 'PENOG': PENOG, 'DM20': DM20, 'DMX': DMX,
-                'PEN20': PEN20, 'DMC': DMC}
+WIRE_FORMATS = {'DMOG': DMOG, 'PENOG': PENOG, 'DMM': DMM, 'IC': IC,
+                'DM20': DM20, 'DMX': DMX, 'PEN20': PEN20, 'DMC': DMC}
 
 #: Format names that changed. Read but never written; a module saved after
 #: the rename carries the new one.
-LEGACY_FORMAT_NAMES = {'DM': 'DMOG'}
+#: `PENX` was this line's name until the Digivice iC turned out to have a
+#: battle protocol of its own. Three-prong devices do not share one wire --
+#: they each implement several - so the format is named after the device it
+#: was measured on, the Digimon Mini, and a real Pendulum X format can be
+#: added beside it when its own charge is read.
+LEGACY_FORMAT_NAMES = {'DM': 'DMOG', 'PENX': 'DMM'}
 
 
 def canonical_format(name):
@@ -1381,9 +2236,36 @@ def canonical_format(name):
 def get_constants(protocol_name: str):
     """Constants class for a battle format name, or None if unknown."""
     return {
-        'DMOG': DMOG, 'PENOG': PENOG, 'DM20': DM20, 'PEN20': PEN20,
+        'DMOG': DMOG, 'PENOG': PENOG, 'DMM': DMM, 'IC': IC,
+        'DM20': DM20, 'PEN20': PEN20,
         'DMX': DMX, 'PENZ': PENZ, 'DMC': DMC, 'PENC': PENC, 'DMXW': DMXW,
     }.get(canonical_format(protocol_name))
+
+
+def native_modules(battle_format: str) -> tuple:
+    """The modules a format names as its own, beyond what they declare.
+
+    A module normally owns the line its ``battle_protocol`` names. A line
+    can also name its owner outright (`IC.NATIVE_MODULES`), which holds
+    whatever the module declares.
+    """
+    limits = get_constants(battle_format or "")
+    return tuple(getattr(limits, "NATIVE_MODULES", ()) or ()) if limits else ()
+
+
+def wire_modules(battle_format: str) -> tuple:
+    """The modules whose devices speak this wire, by `MODULES_BY_WIRE_VERSION`.
+
+    A device can speak a line it does not own: a Digivice iC meets a Digimon
+    Mini on the Mini's wire as version 1, sending its own roster index. Its
+    module is a participant there -- an opponent naming it resolves in its
+    roster, and its pets send their own index -- without being the line's
+    native module or declaring it.
+    """
+    limits = get_constants(battle_format or "")
+    mapping = getattr(limits, "MODULES_BY_WIRE_VERSION", None) if limits else None
+    return tuple(dict.fromkeys(
+        name for names in (mapping or {}).values() for name in names))
 
 
 def damage_limit(protocol_name: str):

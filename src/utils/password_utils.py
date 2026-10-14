@@ -18,10 +18,13 @@ def _party_modules():
     return {pet.module for pet in game_globals.pet_list}
 
 
-def modules_with_passwords():
-    """Modules (objects) that have passwords AND a party pet using them."""
+def modules_with_passwords(module_name=None):
+    """Modules (objects) that have passwords AND a party pet using them;
+    only *module_name* when given (the Specials hub opens one module's)."""
     modules = []
     for name in _party_modules():
+        if module_name is not None and name != module_name:
+            continue
         module = get_module(name)
         if module and module.has_passwords():
             modules.append(module)
@@ -32,17 +35,18 @@ def any_party_module_has_passwords() -> bool:
     return bool(modules_with_passwords())
 
 
-def max_code_length(default: int = 6) -> int:
+def max_code_length(default: int = 6, module_name=None) -> int:
     """Longest password code among the party's modules (for the entry UI)."""
     longest = 0
-    for module in modules_with_passwords():
+    for module in modules_with_passwords(module_name):
         for pw in module.passwords:
             longest = max(longest, len(str(pw.get("code", ""))))
     return longest if longest else default
 
 
-def find_password(entered: str, entry_pad: str = ""):
-    """Match an entered code against the party modules' passwords.
+def find_password(entered: str, entry_pad: str = "", module_name=None):
+    """Match an entered code against the party modules' passwords, or only
+    *module_name*'s.
 
     The code entry pads short codes with its default character, so a
     password matches when it is a prefix of *entered* and the remainder is
@@ -51,7 +55,7 @@ def find_password(entered: str, entry_pad: str = ""):
     Returns (module, password) or (None, None).
     """
     entered = (entered or "").strip().upper()
-    for module in modules_with_passwords():
+    for module in modules_with_passwords(module_name):
         for pw in module.passwords:
             code = str(pw.get("code", "")).strip().upper()
             if not code or len(code) > len(entered):

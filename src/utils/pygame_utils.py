@@ -298,6 +298,22 @@ _last_cache_log_time = time.time()
 
 blit_cache = {}
 
+def rle_accelerate(surface):
+    """Run-length encode a large alpha surface drawn far more often than it
+    changes (a cached overlay, a border). Blitting it then skips transparent
+    runs and copies opaque ones instead of blending every pixel; the picture
+    is the same (half-transparent pixels may round one level apart). On the
+    Pi Zero 2W, whose pygame has no NEON blitters, blending one 240x240
+    overlay cost 17 ms a frame. Drawing into the surface later still works:
+    SDL decodes it and encodes it again at the next blit."""
+    if surface is not None:
+        try:
+            surface.set_alpha(255, pygame.RLEACCEL)
+        except pygame.error:
+            pass
+    return surface
+
+
 def blit_with_cache(surface, sprite, pos):
     """
     Blits a sprite and logs the number of calls per second.

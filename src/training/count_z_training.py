@@ -243,7 +243,7 @@ class CountMatchZTraining(Training):
         """Award trophy if strength result reaches maximum (3)"""
         if self.charge_result.get(self.pets[0], 0) == 3:
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Count Match Z training perfect score achieved! Trophy awarded.")
 
     def get_attack_count(self):

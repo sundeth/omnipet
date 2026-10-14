@@ -48,6 +48,11 @@ class TutorialDialog(UIComponent):
         
         # Text rendering cache
         self.text_surfaces = []
+        # The opaque box, rebuilt only when what it shows changes; each frame
+        # only its alpha changes (the fade). Re-rendering the wrapped text
+        # every frame cost the Pi Zero 2W several ms per frame.
+        self._box_surface = None
+        self._box_key = None
         
         # Not focusable (controlled by step system)
         self.focusable = False
@@ -198,7 +203,19 @@ class TutorialDialog(UIComponent):
         theme_colors = self.manager.get_theme_colors()
         bg_color = theme_colors.get("bg", (0, 0, 0))
         border_color = theme_colors.get("fg", (255, 255, 255))
-        
+
+        key = (self.current_message, self.rect.size, tuple(bg_color), tuple(border_color),
+               self.manager.ui_scale)
+        if key != self._box_key or self._box_surface is None:
+            self._box_surface = self._render_box(bg_color, border_color)
+            self._box_key = key
+        surface = self._box_surface
+        # Apply alpha to entire surface
+        surface.set_alpha(self.alpha if self.alpha < 255 else 255)
+        return surface
+
+    def _render_box(self, bg_color, border_color):
+        """The dialog box with its text, fully opaque."""
         # Create surface
         surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
         
@@ -234,11 +251,7 @@ class TutorialDialog(UIComponent):
                     surface.blit(word_surface, (text_x + x_offset, text_y))
                     x_offset += word_surface.get_width() + font.size(' ')[0]
                 text_y += line_height
-        
-        # Apply alpha to entire surface
-        if self.alpha < 255:
-            surface.set_alpha(self.alpha)
-        
+
         return surface
     
     def draw(self, surface, ui_local=False):

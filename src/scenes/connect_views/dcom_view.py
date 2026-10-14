@@ -30,10 +30,12 @@ from ui.components.button import Button
 from ui.components.background import Background
 from ui.components.label import Label
 from ui.components.menu import Menu
+from ui.components.protocol_selector import ProtocolSelector
 from ui.minigames.minigame_session import MinigameSession
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals
 from battle.dcom.dcom_controller import DComController
+from battle.dcom.dcom_capture import DComCapture
 from battle.dcom.dcom_protocol import EMPTY_PACKET, describe_status
 from battle.sim import protocol_constants
 from battle.sim.exchange import PacketExchange
@@ -83,7 +85,6 @@ class DComView:
         self.dcom_selected_device = None
         self.simulator = None
         self.battle_format = None
-        self.format_menu = []
 
         # Device discovery
         self.discovered_devices = []
@@ -102,6 +103,8 @@ class DComView:
         # Its status codes are the only diagnosis a connection that never gets
         # going ever produces, so they are counted rather than discarded.
         self.status_counts = {}
+        #: Set when the chosen format needs a transport this adapter lacks.
+        self._transport_warning = None
         self.empty_reads = 0
         self.turn = None
         self._turn_swapped = False
@@ -119,6 +122,9 @@ class DComView:
         #: Set when the adapter answers as a Python prompt rather than as
         #: firmware -- see _looks_like_repl.
         self._repl_seen = False
+        #: Set when the adapter said outright that it refused the command --
+        #: see _looks_like_refusal.
+        self._refused = False
         self._port_lost_at = 0
         self._next_reconnect_at = 0
         self._last_reconnect_log = 0
@@ -295,52 +301,113 @@ class DComView:
     # Device line selection
     # ------------------------------------------------------------------
 
-    def _show_protocol_selection(self):
-        """Show the device-line menu."""
+    def _show_protocol_selection(self, focus=None, note=None):
+        """Show the device-line grid.
+
+        It starts on *focus*, or else on the line the selected pet's own
+        module belongs to; *note* replaces the caption until the cursor moves.
+        """
         runtime_globals.game_console.log("[DComView] Showing protocol selection...")
         self.phase = "protocol_select"
-        self.status_label.set_text("Which device?")
+        # The grid fills the screen under the title and captions itself; a
+        # prompt behind it would only show at the panel's edges. Likewise
+        # it has its own CANCEL in the middle, and a second one under it
+        # would only look pressable while the grid takes every input.
+        self.status_label.set_text("")
+        self.cancel_button.visible = False
 
-        # Shared with the versus protocol menu, so the two always offer the
+        # Shared with the versus protocol grid, so the two always offer the
         # same device lines.
-        self.format_menu = protocol_constants.menu_entries()
-        options = [label for _, label in self.format_menu]
-        options.append("Cancel")
-
-        self.protocol_menu = Menu(width=200, height=140)
-        self.protocol_menu.open(options, self._on_protocol_select,
-                                on_cancel=self._on_cancel)
+        self.protocol_menu = ProtocolSelector()
+        self.protocol_menu.open(protocol_constants.menu_entries(_debug_mode()),
+                                self._on_protocol_select,
+                                on_cancel=self._on_cancel,
+                                focus=focus or self._pet_battle_format(), note=note)
         self.ui_manager.add_component(self.protocol_menu)
         self.ui_manager.set_active_menu(self.protocol_menu)
 
-        # Start on the line the selected pet's own module belongs to.
-        pet_module = self._pet_battle_protocol()
-        if pet_module in protocol_constants.BATTLE_FORMATS:
-            self.protocol_menu.selected_index = protocol_constants.BATTLE_FORMATS.index(pet_module)
+    def _pet_battle_format(self):
+        """The device line the selected pet's module belongs to, or None.
 
-    def _pet_battle_protocol(self):
-        """The battle_protocol of the selected pet's module, or None."""
+        A line can name its module outright (`IC.NATIVE_MODULES`), so that
+        is checked before the module's declared ``battle_protocol``, which is
+        read through its legacy spellings. A module declaring no line the
+        menu shows falls back to its own name. TWIN declares its own line,
+        which the menu offers ahead of a battle format, so DCom opens it on
+        the Twin's capture.
+        """
+        module_name = getattr(self.pet, 'module', '')
+        for battle_format in protocol_constants.BATTLE_FORMATS:
+            if module_name in protocol_constants.native_modules(battle_format):
+                return battle_format
+        lines = [line for line, _, _ in protocol_constants.menu_entries()]
         try:
             from utils.module_utils import get_module
-            module = get_module(getattr(self.pet, 'module', ''))
-            return getattr(module, 'battle_protocol', None) if module else None
+            module = get_module(module_name)
+            declared = protocol_constants.canonical_format(
+                getattr(module, 'battle_protocol', '') if module else '')
         except Exception:
-            return None
+            declared = None
+        if declared in lines:
+            return declared
+        return module_name if module_name in lines else None
 
-    def _on_protocol_select(self, index):
-        """Device line selected from menu."""
+    def _on_protocol_select(self, battle_format):
+        """Device line chosen from the grid."""
         self._close_menu('protocol_menu')
 
-        if index >= len(self.format_menu):
-            self._on_cancel()
+        if battle_format in protocol_constants.BATTLE_FORMATS:
+            self.simulator = DComBattleSimulator(self.dcom_controller,
+                                                 battle_format=battle_format)
+        elif protocol_constants.capture_constants(battle_format):
+            # No battle format yet, but a code that makes the device talk:
+            # record what it sends instead (see DComCapture).
+            self.simulator = DComCapture(battle_format)
+        else:
+            # Offered ahead of its battle format (see OFFERED_UPCOMING). Say
+            # so: the simulator would otherwise fight it as DM20.
+            self._show_protocol_selection(
+                focus=battle_format, note=f"{battle_format} is not ready yet")
             return
 
-        self.battle_format = self.format_menu[index][0]
-        self.simulator = DComBattleSimulator(self.dcom_controller,
-                                             battle_format=self.battle_format)
+        self.battle_format = battle_format
         runtime_globals.game_console.log(
-            f"[DComView] Battle format: {self.battle_format}")
+            f"[DComView] {'Capturing' if self._capturing else 'Battle format:'} "
+            f"{self.battle_format}")
+        self._transport_warning = self._transport_mismatch()
         self._start_minigame()
+
+    @property
+    def _capturing(self):
+        """True while recording a line DCom cannot battle yet."""
+        return getattr(self.simulator, 'capture_only', False)
+
+    def _transport_mismatch(self):
+        """A short line for a format this adapter cannot physically carry.
+
+        The iC's wire is infrared and its signal is two letters; classic
+        dmcomm firmware dispatches on one and knows V, X, Y and C only, so
+        it refuses the command. Nothing about that looks different from a
+        device that is not answering -- the adapter reports no packets
+        either way -- so it is worth saying before the sixty seconds run
+        down rather than after.
+
+        Returns None when the format needs nothing special, or when the
+        adapter has not said what it is: an unknown adapter is not a
+        mismatch, and refusing to try one would be worse than letting it
+        fail with the note already in the log.
+        """
+        limits = self.simulator.constants
+        if not getattr(limits, 'TRANSPORT_NOTE', None):
+            return None
+        info = getattr(self.dcom_controller, 'device_info', None) or ''
+        if 'dmcomm-original' not in str(info):
+            return None
+        runtime_globals.game_console.log(
+            "[DComView] %s needs %s -- this adapter reports %s"
+            % (self.battle_format, limits.TRANSPORT_NOTE, str(info).strip()))
+        return "%s needs an infrared adapter; this one is V/X/Y/C only." % (
+            self.battle_format,)
 
     # ------------------------------------------------------------------
     # Charge minigame
@@ -396,7 +463,8 @@ class DComView:
         self._last_status_log = time.time()
         self._last_comm_log = time.time()
 
-        self.status_label.set_text("Waiting for device...")
+        self.status_label.set_text(
+            getattr(self, '_transport_warning', None) or "Waiting for device...")
         self.cancel_button.visible = True
         self._arm_start_button()
 
@@ -420,6 +488,13 @@ class DComView:
         The packets depend on the turn: whoever opens the exchange carries
         Order 1, so swapping turns means regenerating, not just resending.
         """
+        if self._capturing:
+            # A fixed code with nothing of the pet's in it: the capture is
+            # its own exchange.
+            self.exchange = self.simulator
+            self._send_packets()
+            return True
+
         digimon = pet_to_digimon(self.pet, self.battle_format, self.minigame_result)
         self.exchange = PacketExchange(self.battle_format, digimon,
                                        opens=self.turn == 1, peer=False,
@@ -685,6 +760,29 @@ class DComView:
         return any(stripped.startswith(marker) or marker in stripped
                    for marker in cls.REPL_MARKERS)
 
+    #: What an adapter says when it **refused the command itself** -- as
+    #: opposed to accepting it and finding nothing on the line. The two look
+    #: identical from here otherwise: no packets either way.
+    #:
+    #: `dmcomm.ino` deactivates a command whose signal letter it does not
+    #: know, silently, with no error and no transmission -- it knows V, X, Y
+    #: and C -- and then prints `(paused)` because it has nothing to run. A
+    #: Pico Terminal says `CommandError('incomplete: ')` instead.
+    #: `utilities/claude/dcom_middleman.py` measured both and carries the
+    #: same list; this is the game learning what that tool already knew.
+    #:
+    #: **An IC command on classic firmware lands here**, which is the whole
+    #: reason it is worth detecting: the wire is infrared and its signal is
+    #: two letters, so a prong adapter refuses it -- and the player watched
+    #: sixty seconds of "No response from the adapter" for a command that
+    #: was never going to be sent.
+    REFUSAL_MARKERS = ("(paused)", "commanderror", "syntaxerror", "invalid")
+
+    @classmethod
+    def _looks_like_refusal(cls, line: str) -> bool:
+        lowered = line.strip().lower()
+        return any(marker in lowered for marker in cls.REFUSAL_MARKERS)
+
     def _consume_line(self, line: str) -> bool:
         """Handle one line from the adapter; True when the exchange is done."""
         if self._looks_like_repl(line):
@@ -696,6 +794,25 @@ class DComView:
                     "Reset it (Ctrl-D at the prompt, or unplug and replug) so "
                     "code.py runs again -- nothing will answer until it does.")
             runtime_globals.game_console.log(f"[DComView] RX: {line}")
+            return False
+
+        # Checked before the status codes, and before the packet scan: a
+        # refusal carries no packets and never will, so waiting out the
+        # window teaches nothing. It is reported once and the phase ends.
+        if self._looks_like_refusal(line):
+            runtime_globals.game_console.log(f"[DComView] RX: {line}")
+            if not self._refused:
+                self._refused = True
+                note = getattr(self.simulator.constants, 'TRANSPORT_NOTE', None)
+                runtime_globals.game_console.log(
+                    "[DComView] ===== THE ADAPTER REFUSED THE COMMAND ====="
+                    "\n[DComView] It answered %r, which is what firmware says "
+                    "when it does not recognise what it was given -- it never "
+                    "drove the line, so no device could have answered. %s"
+                    % (line.strip(),
+                       ("%s needs %s" % (self.battle_format, note)) if note
+                       else "Check that this adapter's firmware carries "
+                            "%s." % self.battle_format))
             return False
 
         status = describe_status(line)
@@ -717,6 +834,10 @@ class DComView:
         # Data got through, so whatever the adapter reported up to now was
         # just the wait, not a fault worth telling the player about.
         self.status_counts.clear()
+
+        if self._capturing:
+            self._record_capture(line)
+            return False
 
         # ONE LINE IS ONE EXCHANGE ATTEMPT. The adapter prints a whole
         # attempt and ends it with a newline, so a line that carries fewer
@@ -771,6 +892,22 @@ class DComView:
         self._learn_from_partial(received)
         return False
 
+    def _record_capture(self, line):
+        """Keep one exchange of a line DCom can only record, and listen on.
+
+        The adapter answers every exchange the device starts, so each
+        battle or event run on the toy is another capture. Each one keeps
+        the window open for the next.
+        """
+        report = self.simulator.record(line)
+        if not report:
+            return
+        self._device_answered = True
+        for entry in report:
+            runtime_globals.game_console.log(f"[DComCapture] {entry}")
+        runtime_globals.game_sound.play("menu")
+        self.comm_start_time = time.time()
+
     def _learn_from_partial(self, received):
         """Use a broken-off exchange to correct what we are sending.
 
@@ -812,6 +949,11 @@ class DComView:
         if self._repl_seen:
             return ("Adapter is at the CircuitPython REPL - reset it so "
                     "code.py runs.")
+        if self._refused:
+            if getattr(self.simulator.constants, 'TRANSPORT_NOTE', None):
+                return ("This adapter cannot send %s - it needs infrared "
+                        "firmware." % self.battle_format)
+            return "Adapter refused the %s command." % self.battle_format
         if not self.status_counts:
             return "No response from the adapter."
         # The code it reported most is the one describing the connection.
@@ -852,6 +994,17 @@ class DComView:
                 f"adapter says: {self._connection_diagnosis()}")
             self._last_comm_log = current_time
 
+        # A refused command is finished, not pending. Sitting out the rest
+        # of the window would only repeat a diagnosis already made.
+        if self._refused:
+            runtime_globals.game_console.log(
+                "[DComView] ===== ENDING: THE ADAPTER WILL NOT SEND THIS =====")
+            self.status_label.set_text(self._connection_diagnosis())
+            self.communicating = False
+            if self.dcom_controller:
+                self.dcom_controller.disconnect()
+            return
+
         if elapsed >= COMM_TIMEOUT_SECONDS:
             runtime_globals.game_console.log("[DComView] ===== EXCHANGE TIMED OUT =====")
             runtime_globals.game_console.log(
@@ -860,7 +1013,12 @@ class DComView:
             for code, (count, explanation) in sorted(self.status_counts.items()):
                 runtime_globals.game_console.log(
                     f"[DComView]   {code}: {count}x - {explanation}")
-            self.status_label.set_text(self._connection_diagnosis())
+            if self._capturing and self.simulator.captures:
+                self.status_label.set_text(
+                    f"Recorded {len(self.simulator.captures)} exchange(s) - "
+                    "they are in the log.")
+            else:
+                self.status_label.set_text(self._connection_diagnosis())
             self.communicating = False
             if self.dcom_controller:
                 self.dcom_controller.disconnect()
@@ -881,7 +1039,12 @@ class DComView:
                 and elapsed >= TURN_SWAP_SECONDS):
             self._swap_turn()
 
-        self.status_label.set_text(f"Waiting for device... ({remaining}s)")
+        if self._capturing and self.simulator.captures:
+            self.status_label.set_text(
+                f"Recorded {len(self.simulator.captures)} - run another on "
+                f"the device ({remaining}s)")
+        else:
+            self.status_label.set_text(f"Waiting for device... ({remaining}s)")
 
         if self._check_dcom_response():
             self.communicating = False
@@ -934,75 +1097,26 @@ class DComView:
                 self.dcom_controller.disconnect()
 
     def _create_dcom_pvp_data(self, my_pet, opponent, battle_result):
-        """Create PvP battle data from DCom battle result."""
-        runtime_globals.game_console.log("[DComView] Creating PvP battle data...")
+        """Hand the finished exchange to the battle scene.
 
-        my_pet_data = {
-            "name": getattr(my_pet, "name", "Pet"),
-            "stage": getattr(my_pet, "stage", 1),
-            "level": getattr(my_pet, "level", 1),
-            # The HP the battle was fought with belongs to the wire, not the
-            # pet: DMC, DM20 and PEN20 all fix it. Sending the pet's own left
-            # a Shoutmon on a 12 HP bar for a five-round DMC fight the log
-            # drained from 5, so the bar stopped at 7 instead of empty.
-            "hp": self.simulator.get_initial_hp(
-                pet_to_digimon(my_pet, self.battle_format, self.minigame_result)),
-            "power": my_pet.get_power() if hasattr(my_pet, "get_power") else getattr(my_pet, "power", 1),
-            "attribute": getattr(my_pet, "attribute", 0),
-            "atk_main": getattr(my_pet, "atk_main", None),
-            "atk_alt": getattr(my_pet, "atk_alt", None),
-            "module": getattr(my_pet, "module", "base"),
-            "sick": getattr(my_pet, "sick", 0) > 0,
-            "traited": getattr(my_pet, "traited", False),
-            "shook": getattr(my_pet, "shook", False),
-            "mini_game": self.minigame_result,
-        }
+        **This was a third copy of `pvp_payload.build`** and had drifted from
+        it in the two ways that decide how the opponent's shots are drawn: it
+        crossed `shot1`/`shot2` the wrong way into `atk_main`/`atk_alt`, and
+        it gave the opponent the PLAYER's module instead of the one
+        reproducing the device -- so a real Digimon Mini fought from a
+        Pendulum Colour save drew Colour shots from the global library. It
+        also never set `attack_sprite_module`, and dropped `atk_alt_2`, which
+        is a DMX critical's own sprite.
 
-        # Attack sprite ids are already 1-based here: parse_opponent shifts
-        # them on the way in.
-        opponent_pet_data = {
-            "name": opponent.name,
-            "stage": opponent.stage,
-            "level": opponent.level,
-            "hp": self.simulator.get_initial_hp(opponent),
-            "power": opponent.power,
-            "attribute": opponent.attribute,
-            "atk_main": opponent.shot1,
-            "atk_alt": opponent.shot2,
-            "module": getattr(my_pet, "module", "base"),
-            "sick": bool(opponent.sick),
-            "traited": bool(opponent.traited),
-            "shook": bool(opponent.egg_shake),
-            "mini_game": opponent.mini_game,
-        }
+        The DCom cable is the only pipe that came through here, so those bugs
+        were invisible to the WiFiCom path, which has always called `build`.
+        """
+        from battle.dcom import pvp_payload
 
-        battle_simulation_data = {
-            "battle_log": battle_result.to_dict() if hasattr(battle_result, 'to_dict') else {},
-            "team1": [my_pet_data],
-            "team2": [opponent_pet_data],
-            "module": getattr(my_pet, "module", "base"),
-            # device1 is the toy in a DCom result, so its win is our defeat.
-            "victory_status": "Defeat" if battle_result.winner == "device1" else "Victory",
-        }
-
-        runtime_globals.pvp_battle_data = {
-            "simulation_data": battle_simulation_data,
-            "original_battle_log": battle_result,
-            "is_host": True,
-            "my_pets": [my_pet],
-            "my_team_data": [my_pet_data],
-            "enemy_team_data": [opponent_pet_data],
-            "module": getattr(my_pet, "module", "base"),
-            "my_player_name": "YOU",
-            "enemy_player_name": self.battle_format,
-            "is_online_mode": False,
-            "is_dcom_mode": True,
-            "is_oem_mode": is_oem_pet(my_pet, self.battle_format),
-            "battle_format": self.battle_format,
-            "opponent_device_version": getattr(self.simulator, 'opponent_device_version', None),
-            "enemy_first": self.enemy_first,
-        }
-
+        pvp_payload.build(
+            my_pet, opponent, battle_result, self.battle_format, self.simulator,
+            minigame_result=self.minigame_result,
+            is_dcom_mode=True, enemy_first=self.enemy_first)
         runtime_globals.game_console.log("[DComView] PvP battle data created")
 
     # ------------------------------------------------------------------
@@ -1106,3 +1220,8 @@ class DComView:
                 self.ui_manager.remove_component(comp)
 
         runtime_globals.game_console.log("[DComView] Cleanup complete")
+
+def _debug_mode():
+    """Upcoming lines (TWIN) are offered in the protocol grid only in debug mode."""
+    from core import game_globals
+    return bool(getattr(game_globals.configuration, "debug_mode", False))

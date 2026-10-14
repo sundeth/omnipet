@@ -225,6 +225,15 @@ class UIComponent:
         if self.on_click_callback:
             self.on_click_callback()
     
+    def focus_visible(self):
+        """Whether this component draws its focus highlight.
+
+        Touch mode has no cursor: focus there only routes a tap to its
+        component, so nothing is drawn as focused (owner rule, 2026-10-13).
+        A tap still flashes through ``clicked``.
+        """
+        return self.focused and runtime_globals.INPUT_MODE != runtime_globals.TOUCH_MODE
+
     def get_colors(self):
         """
         Get colors for component based on current state (clicked, focused, normal).
@@ -253,7 +262,7 @@ class UIComponent:
             bg_color = theme_colors["highlight"]
             fg_color = theme_colors["bg"]
             line_color = theme_colors["bg"]
-        elif self.focused:
+        elif self.focus_visible():
             # Focused state: highlighted text/foreground while keeping background
             bg_color = theme_colors["bg"]
             fg_color = theme_colors["highlight"]

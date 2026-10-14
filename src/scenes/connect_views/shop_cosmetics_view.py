@@ -391,8 +391,9 @@ class ShopCosmeticsView:
         def fetch_cosmetics():
             try:
                 success, data = omninet_service.get_shop_cosmetics()
-                if success and data:
-                    self.cosmetics_data = data
+                if success:
+                    # an empty shelf is an answer, not a failure
+                    self.cosmetics_data = data or []
                 else:
                     self.cosmetics_data = []
                     runtime_globals.game_console.log(f"[ShopCosmeticsView] Failed to load cosmetics")
@@ -467,7 +468,8 @@ class ShopCosmeticsView:
 
                 is_background = (item.cosmetic_type or '').lower() == 'background'
                 if is_background:
-                    out_dir = os.path.join("save", "cosmetics", "backgrounds")
+                    # the player's own save folder: bought per account
+                    out_dir = os.path.join(game_globals.get_save_dir(), "cosmetics", "backgrounds")
                     os.makedirs(out_dir, exist_ok=True)
                     sprites = data.get('sprites') or {}
                     saved_paths = {}

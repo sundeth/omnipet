@@ -26,8 +26,12 @@ import re
 from wificom.dmcomm_shim import CommandError
 
 #: Signal letters dmcomm accepts. "C" is the Colour transport, which carries
-#: 16-byte packets; the other three are the 2-byte prong/IR wires.
-SIGNAL_TYPES = ("V", "X", "Y", "C")
+#: 16-byte packets; the others are the 2-byte prong/IR wires. **"IC" is two
+#: letters**, the Digivice iC's own infrared battle -- Omnipet's own punchbag
+#: file has shipped an `IC1-` ROM all along and this parser rejected it,
+#: because every other signal is a single character. Longest first, so "IC"
+#: is matched before anything that starts with "I".
+SIGNAL_TYPES = ("IC", "V", "X", "Y", "C")
 
 #: Turn 1 opens the exchange, turn 2 listens and answers, and 0 is listen-only.
 TURNS = (0, 1, 2)
@@ -121,16 +125,21 @@ def parse_command(text):
     if upper in OTHER_COMMANDS:
         return OtherCommand(upper)
 
-    signal_type = upper[0]
-    if signal_type not in SIGNAL_TYPES:
+    # Longest signal first: "IC" is two characters and everything else is
+    # one, so matching a single character would read an iC ROM as an unknown
+    # "I" and reject it.
+    signal_type = next((t for t in sorted(SIGNAL_TYPES, key=len, reverse=True)
+                        if upper.startswith(t)), None)
+    if signal_type is None:
         raise CommandError("Unknown signal type: %s" % command[0])
-    if len(command) < 2 or not command[1].isdigit():
+    width = len(signal_type)
+    if len(command) <= width or not command[width].isdigit():
         raise CommandError("No turn digit: %s" % command[:4])
-    turn = int(command[1])
+    turn = int(command[width])
     if turn not in TURNS:
         raise CommandError("Bad turn: %d" % turn)
 
-    rest = command[2:]
+    rest = command[width + 1:]
     if not rest.startswith("-"):
         raise CommandError("Expected '-' after the turn: %s" % command[:6])
     packets = [p for p in rest[1:].split("-") if p != ""]

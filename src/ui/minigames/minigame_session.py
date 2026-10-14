@@ -30,6 +30,8 @@ import random
 import pygame
 
 from core import runtime_globals
+from ui.minigames.count_bar import CountBar
+from ui.minigames.rpm import RPM
 from ui.minigames.count_match import CountMatch
 from ui.minigames.count_match_classic import CountMatchClassic
 from ui.minigames.count_match_z import CountMatchZ
@@ -49,6 +51,7 @@ from training.training import TRAINING_READY_SOUND
 MINIGAMES = (
     "None", "Dummy Bar", "Count Match Color", "Count Match Classic",
     "Count Match Z", "Xai Roll+Bar", "Xai Bar", "Punch", "Mogera",
+    "Count Bar", "RPM",
 )
 
 #: Minigames that draw the READY phase themselves rather than leaving it to
@@ -129,6 +132,20 @@ def minigame_result(minigame: str, strength: int = 0, super_hits: int = 0,
         if strength < 40:
             return 2
         return 3
+
+    if minigame == "Count Bar":
+        # A press count, and the Digimon Mini's grading of the row it throws:
+        # the shots' score, which depends on the Digimon's stage and attribute.
+        from battle.sim.battle_utils import get_dmm_grade, get_dmm_pattern
+        return get_dmm_grade(get_dmm_pattern(
+            strength, stage=getattr(pet, 'stage', None),
+            attribute=getattr(pet, 'attribute', None)))
+
+    if minigame == "RPM":
+        # The earned 0-10 rhythm meter is already the attack-table key.
+        # Final RPM or the total number of presses cannot reconstruct it.
+        from battle.sim.battle_utils import get_ic_grade, get_ic_pattern
+        return get_ic_grade(get_ic_pattern(strength))
 
     if minigame in ("Xai Roll+Bar", "Xai Bar"):
         # The Xai bar already reports 0-3.
@@ -284,6 +301,9 @@ class MinigameSession:
         self.color_band = None
         #: Count Match Z's arrow counter, which is its whole score.
         self.arrows = 0
+        #: The RPM charge's rate reading. `strength` carries its 0-10 bar,
+        #: which is the charge; this is what the player saw on the counter.
+        self.rpm = 0
 
         self.phase = "ready"       # ready -> charge
         self.instance = None       # the minigame component, when it has one
@@ -388,6 +408,16 @@ class MinigameSession:
 
         if name == "Dummy Bar":
             self.instance = DummyCharge(self.ui_manager, self.theme)
+        elif name == "Count Bar":
+            # Five seconds of its own, not the bar's hold time, and then two
+            # more showing the count it reached.
+            self.instance = CountBar(self.ui_manager)
+            self.instance.start()
+        elif name == "RPM":
+            # Six counting, three blinking, one held -- its own clock, and
+            # it needs the pet: the target rate is the Digimon's own.
+            self.instance = RPM(self.ui_manager, self.pet)
+            self.instance.start()
         elif name == "Count Match Classic":
             # Count Match Classic has no ready screen of its own, so it is
             # built here; the Count Match family all draw through the shared
@@ -463,6 +493,20 @@ class MinigameSession:
             if self.instance.is_time_up() or self.strength >= 20:
                 self._finish()
                 return
+        elif name == "Count Bar":
+            self.strength = self.instance.get_count()
+            if self.instance.is_time_up():
+                self._finish()
+            return
+        elif name == "RPM":
+            # The BAR is the charge, not the rate: it is what the iC's
+            # pattern table is keyed on. `rpm` is kept beside it for the log
+            # and for anything that wants to show what was actually played.
+            self.strength = self.instance.get_bars()
+            self.rpm = self.instance.get_rpm()
+            if self.instance.is_time_up():
+                self._finish()
+            return
 
         if pygame.time.get_ticks() >= self._deadline_ms:
             self._finish()
@@ -498,6 +542,12 @@ class MinigameSession:
             if self.xai_bar and self.xai_phase < 3:
                 self.xai_bar.stop()
                 self.strength = self.xai_bar.get_result()
+        elif self.minigame == "RPM" and self.instance:
+            # A manual B/X finish can occur between updates or just after a
+            # press. Commit the same current meter the screen would display.
+            self.instance.update()
+            self.strength = self.instance.get_bars()
+            self.rpm = self.instance.get_rpm()
         elif self.minigame == "Count Match Z" and self.instance:
             self.arrows = self.instance.get_press_counter()
         elif self.minigame == "Count Match Color" and self.instance:
@@ -510,9 +560,16 @@ class MinigameSession:
                 getattr(self.pet, 'stage', 1) or 1,
             )
         self.finished = True
+        extra = ""
+        if self.minigame == "RPM":
+            # The rate and the target are the whole story of this charge, and
+            # neither is recoverable from the bar afterwards.
+            target = getattr(self.instance, 'target', None)
+            extra = (f", rpm={self.rpm} (target {target}, "
+                     f"{getattr(self.instance, 'presses', 0)} presses)")
         runtime_globals.game_console.log(
             f"[Minigame] '{self.minigame}' finished: strength={self.strength}, "
-            f"super_hits={self.super_hits}, result={self.result}")
+            f"super_hits={self.super_hits}, result={self.result}{extra}")
 
     @property
     def result(self) -> int:

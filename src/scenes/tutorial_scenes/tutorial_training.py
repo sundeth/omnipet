@@ -12,7 +12,11 @@ class TutorialTraining(SceneTraining):
     Tutorial-controlled version of SceneTraining.
     Overrides input handling to give tutorial full control.
     """
-    
+
+    # Dummy in the first slot of the only page, RANDOM and MORE disabled, and
+    # no memory of the minigame last played: the focus step points at (36, 25).
+    TUTORIAL_LAYOUT = True
+
     def __init__(self) -> None:
         """Initialize the tutorial training scene."""
         super().__init__()
@@ -46,19 +50,14 @@ class TutorialTraining(SceneTraining):
     
     def _disable_non_dummy_buttons(self):
         """Disable focusability of all training buttons except dummy."""
-        # List of all non-dummy training buttons
-        button_attrs = [
-            'head_button', 'count_button', 'count_classic_button', 
-            'count_z_button', 'excite_button', 'punch_button', 
-            'mogera_button', 'exit_button'
-        ]
-        
-        for attr in button_attrs:
-            button = getattr(self, attr, None)
+        others = [button for key, button in self.mode_buttons.items() if key != "dummy"]
+        others += [self.more_button, self.random_button, self.exit_button,
+                   self.prev_page_button, self.next_page_button]
+        for button in others:
             if button:
                 button.focusable = False
-                runtime_globals.game_console.log(f"[TutorialTraining] Disabled focusability for {attr}")
-        
+        runtime_globals.game_console.log("[TutorialTraining] Disabled every button except dummy")
+
         # Ensure dummy button IS focusable and focused
         if self.dummy_button:
             self.dummy_button.focusable = True

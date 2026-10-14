@@ -200,69 +200,10 @@ def generate_daily_quests() -> List[GameQuest]:
 
 
 def get_hourly_random_event() -> Optional[GameEvent]:
-    """
-    Get a random event for the current hour based on XAI algorithm.
-    This should be called every hour when pets are not napping.
-
-    The daily XAI roll decides how often anything happens at all; the party
-    decides what happens. Events belong to the modules the player is actually
-    raising, so a DMX pet draws DMX events. An event flagged ``global`` is the
-    exception: it can turn up with no pet of its module in the party.
-
-    Returns:
-        Random event instance if one triggers, None otherwise
-    """
-    # Step 1: Roll chance based on XAI (1-7 gives 10%-70% chance)
-    xai_chance = min(70, game_globals.xai * 10)  # 1->10%, ..., 7->70%
-    roll = random.randint(1, 100)
-
-    if roll > xai_chance:
-        return None  # No event this hour
-    
-    # Step 2: Get modules of pets currently in the party
-    party_modules = set(pet.module for pet in game_globals.pet_list)
-
-    # Step 3: Collect what each module may contribute. A module the player is
-    # raising offers everything it has; any other module offers only the events
-    # it flagged global.
-    modules_with_events = []
-    for module_name, module in runtime_globals.game_modules.items():
-        event_data = module.load_events_json()
-        if not event_data:
-            continue
-        if module_name not in party_modules:
-            event_data = [e for e in event_data
-                          if getattr(e, "global_event", False)]
-            if not event_data:
-                continue
-        modules_with_events.append((module_name, event_data))
-    
-    if not modules_with_events:
-        return None
-    
-    # Step 4: Roll a random module from those that have events
-    selected_module_name, event_list = random.choice(modules_with_events)
-
-    # Step 5: Roll an event from the selected module using chance_percent
-    total_chance = sum(event_data.chance_percent for event_data in event_list)
-    if total_chance <= 0:
-        return None
-
-    event_roll = random.randint(1, min(100, total_chance))
-
-    cumulative_chance = 0
-    selected_event_data = None
-    for event_data in event_list:
-        cumulative_chance += event_data.chance_percent 
-        if event_roll <= cumulative_chance:
-            selected_event_data = event_data
-            break
-    
-    if not selected_event_data:
-        return None
-    
-    # Event passes all checks, create and return the instance
-    return create_event_instance_from_data(selected_event_data, selected_module_name)
+    """Select using the shared event rules; animation stays in SceneMainGame."""
+    from models.event_clock import EventClock
+    return EventClock.choose(game_globals.pet_list, runtime_globals.game_modules,
+                             game_globals.xai)
 
 
 def update_quest_progress(quest_type: QuestType, progress_amount: int = 1, module_name: str = None) -> bool:

@@ -229,10 +229,7 @@
           <div class="folder-structure">Omnipet/
 ├── main.py                        # Main game launcher
 ├── Omnipet.exe                    # Standalone executable (if using pre-built)
-├── config/
-│   ├── config_windows.json        # Game configuration
-│   └── input_config_windows.json  # Input mappings
-├── game/                          # Game engine
+├── src/                           # Game engine
 ├── modules/                       # Game modules (pets, rulesets)
 │   ├── D-3/                       # Digital Monster D-3 -25th COLOR EVOLUTION- module
 │   ├── DMC/                       # Digital Monster Color module
@@ -342,12 +339,7 @@
           <p>Your Omnipet installation should look like this:</p>
           <div class="folder-structure">Omnipet/
 ├── main.py                               # Main game launcher
-├── config/
-│   ├── config_python_desktop.json        # Game configuration
-│   ├── input_config_python_desktop.json  # Input mappings
-│   ├── config_raspberry.json             # Game configuration for Raspberry Pi OS
-│   └── input_config_raspberry.json       # Input mappings for Raspberry Pi OS
-├── game/                                 # Game engine
+├── src/                                  # Game engine
 ├── modules/                              # Game modules (pets, rulesets)
 │   ├── D-3/                              # Digital Monster D-3 -25th COLOR EVOLUTION- module
 │   ├── DMC/                              # Digital Monster Color module
@@ -405,10 +397,7 @@
           <div class="folder-structure">/userdata/roms/pygame/omnipet/
 ├── omnipet.pygame                  # Batocera launcher (REQUIRED)
 ├── main.py                         # Main game file
-├── config/               
-│   ├── config_batocera.json        # Game configuration
-│   └── input_config_batocera.json  # Input mappings
-├── game/                 
+├── src/
 ├── modules/              
 ├── modules/                        # Game modules (pets, rulesets)
 │   ├── D-3/                        # Digital Monster D-3 -25th COLOR EVOLUTION- module
@@ -641,10 +630,7 @@ if __name__ == "__main__":
           <div class="folder-structure">
 Omnipet/
 ├── main.py                               # Main game launcher
-├── config/
-│   ├── config_python_desktop.json        # Game configuration
-│   ├── input_config_python_desktop.json  # Input mappings
-├── game/                                 # Game engine
+├── src/                                  # Game engine
 ├── modules/                              # Game modules (pets, rulesets)
 │   ├── D-3/                              # Digital Monster D-3 -25th COLOR EVOLUTION- module
 │   ├── DMC/                              # Digital Monster Color module
@@ -668,7 +654,6 @@ Omnipet/
       <h3>First Launch</h3>
       <p>When you first start Omnipet:</p>
       <ol>
-        <li>Make sure you have a config directory with the config files in it</li>
         <li>To access the module documentation from within the game main documentation files, run the game at least once</li>
         <li>You'll see the egg selection screen, with eggs available from all installed modules</li>
         <li>You'll see the main game screen with an egg ready to hatch</li>
@@ -676,27 +661,10 @@ Omnipet/
 
       <br>
 
-      <h3>Configuration</h3>
-      <p>Key configuration files:</p>
-      <ul>
-        <li><strong>config.json:</strong> Default/Fallback display settings, sound levels, and game options</li>
-        <li><strong>input_config.json:</strong> Default/Fallback button mappings</li>
-        <br>
-        <li><strong>config_batocera.json:</strong> Display settings, sound levels, and game options for Batocera</li>
-        <li><strong>input_config_batocera.json:</strong> Customize button mappings for Batocera</li>
-        <br>
-        <li><strong>config_python_desktop.json:</strong> Display settings, sound levels, and game options for Linux or macOS</li>
-        <li><strong>input_config_python_desktop.json:</strong> Customize button mappings for Linux or macOS</li>
-        <br>
-        <li><strong>config_raspberry.json:</strong> Display settings, sound levels, and game options for Raspberry Pi OS</li>
-        <li><strong>input_config_raspberry.json:</strong> Customize button mappings for Raspberry Pi OS</li>
-        <br>
-        <li><strong>config_windows.json:</strong> Display settings, sound levels, and game options for Windows</li>
-        <li><strong>input_config_windows.json:</strong> Customize button mappings for Windows</li>
-        <br>
-        <li><strong>Module configs:</strong> Each module has its own configuration options, 
-          configured by editing the .json files in the module folder, or using Module Editor on Windows</li>
-      </ul>
+      <h3>Settings</h3>
+      <p>There are no configuration files to edit: display, sound, gameplay and button settings are set in the game's
+        Settings menu and saved with your game (button mappings: Settings &gt; Input &gt; Remap Input). Each platform starts
+        with its own defaults. Modules are configured in their .json files, or with the Module Editor on Windows.</p>
 
       <br>
 

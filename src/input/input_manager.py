@@ -116,6 +116,10 @@ def reload_input_mappings(input_manager):
     for jid in input_manager.joystick_button_maps:
         input_manager.joystick_button_maps[jid] = dict(joystick_button_map)
 
+    # GPIO events are mapped by pin when they arrive; a pin the new map adds
+    # still needs its Button
+    input_manager.register_gpio_pins()
+
 class InputManager:
     """
     Unified input layer for keyboard, GPIO, and joystick/controller input.
@@ -165,12 +169,8 @@ class InputManager:
         self.android_accel_cooldown = 0.1
         
         # Initialize Android accelerometer if running on Android.
-        # Skipped in the background-service process (PYTHON_SERVICE_ARGUMENT
-        # is only set there): the service imports this module too, and must
-        # not hold the sensor awake while the app is backgrounded.
-        import os as _os
         from core import runtime_globals
-        if runtime_globals.IS_ANDROID and "PYTHON_SERVICE_ARGUMENT" not in _os.environ:
+        if runtime_globals.IS_ANDROID:
             try:
                 from plyer import accelerometer # type: ignore
                 accelerometer.enable()
@@ -205,15 +205,23 @@ class InputManager:
             if not HAS_GPIO:
                 print("[Input] GPIO unavailable: gpiozero not installed or import failed")
             else:
-                for pin, action in self.pin_map.items():
-                    try:
-                        btn = Button(pin, pull_up=True, bounce_time=0.04)
-                        btn.when_pressed = self.make_gpio_handler(action, pin, True)
-                        btn.when_released = self.make_gpio_handler(action, pin, False)
-                        self.buttons[pin] = btn
-                    except Exception as e:
-                        print(f"[Input] GPIO pin {pin} ({action}) setup failed: {e}")
+                self.register_gpio_pins()
                 print(f"[Input] GPIO: {len(self.buttons)}/{len(self.pin_map)} buttons registered")
+
+    def register_gpio_pins(self):
+        """Register a gpiozero Button for every mapped pin that has none yet."""
+        if self.device != "Pi" or not HAS_GPIO:
+            return
+        for pin, action in self.pin_map.items():
+            if pin in self.buttons:
+                continue
+            try:
+                btn = Button(pin, pull_up=True, bounce_time=0.04)
+                btn.when_pressed = self.make_gpio_handler(action, pin, True)
+                btn.when_released = self.make_gpio_handler(action, pin, False)
+                self.buttons[pin] = btn
+            except Exception as e:
+                print(f"[Input] GPIO pin {pin} ({action}) setup failed: {e}")
     
     def _detect_mouse_support(self):
         """Auto-detect mouse/touch support"""
@@ -286,14 +294,6 @@ class InputManager:
     def init_joysticks(self):
         self.joysticks = {}
         self.joystick_button_maps.clear()
-        # The Android background service imports this module for the pet
-        # logic but has no SDL activity; its Java-side joystick driver would
-        # crash natively there, so don't even try (no dummy driver exists
-        # for joysticks, unlike video/audio).
-        import os as _os
-        if "PYTHON_SERVICE_ARGUMENT" in _os.environ:
-            print("[Input] service process: joystick init skipped")
-            return
         # Guarded: SDL_Init(JOYSTICK) hard-fails in processes without the
         # SDL bootstrap -- treat that as "no joysticks".
         try:
@@ -544,7 +544,9 @@ class InputManager:
 
         # --- GPIO (custom pygame events posted from gpiozero background threads) ---
         if event.type == GPIO_PRESS_EVENT:
-            action = event.action
+            # The handler was made with the action mapped at registration
+            # (before the save loaded): the current map decides
+            action = self.pin_map.get(event.gpio_pin, event.action)
             from core import runtime_globals
             if not runtime_globals.INPUT_MODE_FORCED:
                 runtime_globals.INPUT_MODE = runtime_globals.GPIO_MODE
@@ -554,6 +556,7 @@ class InputManager:
             return create_simple_event(action)
 
         if event.type == GPIO_RELEASE_EVENT:
+            self.active_gpio_inputs.discard(self.pin_map.get(event.gpio_pin, event.action))
             self.active_gpio_inputs.discard(event.action)
             return None
 

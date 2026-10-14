@@ -7,6 +7,14 @@ class GameBattle:
         self.team1 = team1  # Player's team
         self.team2 = team2  # Enemy's team
         self.enemy_first = enemy_first  # Whether enemy attacks first (DCom battles)
+        #: Replaying a finished simulation (non-DCom PvP): the simulator plays
+        #: each round as two halves -- every Digimon of one side, then every
+        #: one of the other -- so no lane may fire into a half before all the
+        #: others have finished the one before it. Otherwise a lane running
+        #: ahead can knock out a Digimon that a slower lane's log still has
+        #: shooting. See _may_fire.
+        self.lockstep = False
+        self._lockstep_waits = [0] * len(team1)
 
         self.team1_hp = [0] * len(team1)  # HP for each pet in team1
         self.team1_max_hp = [0] * len(team1)  # Max HP for team1
@@ -185,6 +193,8 @@ class GameBattle:
                         if self.turns[i] > 12:
                             self.phase[i] = "result"
                 elif self.phase[i] == "pet_charge":
+                    if not self._may_fire(i):
+                        continue
                     self.phase[i] = "pet_attack"
                     self.team1_shot[i] = True if self.team1_hp[i] > 0 else False
                 elif self.phase[i] == "enemy_attack" and (self.shot_wait[i] or self.team2_hp[i] <= 0):
@@ -196,12 +206,36 @@ class GameBattle:
                         if self.turns[i] > 12:
                             self.phase[i] = "result"
                 elif self.phase[i] == "enemy_charge":
+                    if not self._may_fire(i):
+                        continue
                     self.phase[i] = "enemy_attack"
                     self.team2_shot[i] = True if self.team2_hp[i] > 0 else False
 
                 if not self.shot_wait[i]:
                     self.cooldowns[i] = self.calculate_deterministic_cooldown(i)
                     self.frame_counters[i] = 0
+
+    #: Frames a lockstep lane waits for the others before firing anyway, so
+    #: a lane that can never finish does not hold the battle forever.
+    LOCKSTEP_MAX_WAIT = 90
+
+    def _round_half(self, i):
+        """Lane *i*'s place in the battle: two halves per turn."""
+        first = ("enemy_charge", "enemy_attack") if self.enemy_first else ("pet_charge", "pet_attack")
+        return self.turns[i] * 2 + (0 if self.phase[i] in first else 1)
+
+    def _may_fire(self, i):
+        """Whether lane *i* may leave its charge and fire (see lockstep)."""
+        if not self.lockstep:
+            return True
+        mine = self._round_half(i)
+        behind = any(self.phase[j] != "result" and self._round_half(j) < mine
+                     for j in range(len(self.team1)) if j != i)
+        if behind and self._lockstep_waits[i] < self.LOCKSTEP_MAX_WAIT:
+            self._lockstep_waits[i] += 1
+            return False
+        self._lockstep_waits[i] = 0
+        return True
 
     def update_bar_counters(self):
         """

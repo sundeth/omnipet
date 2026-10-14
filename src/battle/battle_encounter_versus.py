@@ -4,6 +4,7 @@ import pygame
 from battle.battle_encounter import BattleEncounter, GameBattle
 from battle.sim.battle_simulator import BattleSimulator, BattleProtocol
 from models.animation import PetFrame
+from utils.sprite_utils import get_right_sprite
 from battle.sim.models import Digimon
 from battle.sim.dcom_battle_simulator import pet_to_digimon
 from battle.sim import protocol_constants
@@ -56,7 +57,10 @@ class BattleEncounterVersus(BattleEncounter):
         # pets keep theirs.
         limits = protocol_constants.get_constants(self.battle_format)
         fixed_hp = getattr(limits, 'FIXED_HP', None) if limits else None
-        self.turn_limit = getattr(limits, 'TURNS', 5) if limits else 5
+        # A format whose rounds repeat past its pattern (DMM) declares how
+        # far they can run; every other format fights its TURNS once.
+        self.turn_limit = (getattr(limits, 'MAX_ROUNDS', getattr(limits, 'TURNS', 5))
+                           if limits else 5)
 
         if fixed_hp is not None:
             self.battle_player.team1_hp[0] = fixed_hp
@@ -146,9 +150,8 @@ class BattleEncounterVersus(BattleEncounter):
         left_sprite = None
         right_sprite = None
         # Left side shows pet2 (flip so it faces toward the center)
-        left_sprite = self.pet2.get_sprite(PetFrame.IDLE1.value) if hasattr(self.pet2, 'get_sprite') else None
-        if left_sprite:
-            left_sprite = pygame.transform.flip(left_sprite, True, False)
+        left_sprite = (get_right_sprite(self.pet2, PetFrame.IDLE1.value)
+                       if hasattr(self.pet2, 'get_sprite') else None)
 
         # Right side shows pet1 (no flip)
         right_sprite = self.pet1.get_sprite(PetFrame.IDLE1.value) if hasattr(self.pet1, 'get_sprite') else None
@@ -186,6 +189,8 @@ class BattleEncounterVersus(BattleEncounter):
     BATTLE_FORMATS = {
         BattleProtocol.DMOG_BS: 'DMOG',
         BattleProtocol.PENOG_BS: 'PENOG',
+        BattleProtocol.DMM_BS: 'DMM',
+        BattleProtocol.IC_BS: 'IC',
         BattleProtocol.DM20_BS: 'DM20',
         BattleProtocol.PEN20_BS: 'PEN20',
         BattleProtocol.DMX_BS: 'DMX',
@@ -206,12 +211,14 @@ class BattleEncounterVersus(BattleEncounter):
     @property
     def fixed_charge(self):
         constants = protocol_constants.get_constants(
-            self.BATTLE_FORMATS.get(self.protocol, 'DM20'))
+            self.battle_format or 'DM20')
         return getattr(constants, 'VERSUS_CHARGE', self.FIXED_CHARGE)
 
     def simulate_combat(self):
         """Run the protocol simulation over both pets' packets."""
-        battle_format = self.BATTLE_FORMATS.get(self.protocol, 'DM20')
+        # The chosen line, not the shared wire enum: PENC and DMXW share
+        # DMC's, PENZ shares DMX's (BAT-F5)
+        battle_format = self.battle_format or 'DM20'
 
         # Built by the same conversion a DCom battle uses, so a versus packet
         # says the same thing about a pet as a packet sent to a real device.
@@ -229,6 +236,9 @@ class BattleEncounterVersus(BattleEncounter):
 
         # Run simulation
         self.global_battle_log = self.simulator.simulate(attacker, defender)
+        # A level iC battle runs a round past MAX_ROUNDS (IC.TIE_ROUNDS);
+        # the animation has to play every round the simulation fought.
+        self.turn_limit = max(self.turn_limit, len(self.global_battle_log.battle_log or []))
 
         # Store the attacker's turns as the combat log for animation
         self.victory_status = "Victory" if self.global_battle_log.winner == "device1" else "Defeat"
@@ -254,8 +264,18 @@ class BattleEncounterVersus(BattleEncounter):
             winner = self.pet1 if self.global_battle_log.winner == "device1" else self.pet2
             loser = self.pet2 if winner == self.pet1 else self.pet1
 
-            winner.finish_versus(True)
-            loser.finish_versus(False)
+            winner.finish_versus(True, opponent=loser)
+            loser.finish_versus(False, opponent=winner)
+
+            # Connect Points and "connection" events, each pet against the
+            # other's device.
+            try:
+                from utils.event_utils import after_connection
+                for pet, won, other in ((winner, True, loser), (loser, False, winner)):
+                    after_connection([(pet, won)], getattr(other, 'device_version',
+                                                           getattr(other, 'version', None)))
+            except Exception as exc:
+                runtime_globals.game_console.log(f"[Events] connection trigger failed: {exc}")
 
             # Versus unlock logic: check if both pets are from the same module
             # and meet version requirements for versus unlocks

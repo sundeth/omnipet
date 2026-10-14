@@ -28,11 +28,20 @@ from battle.combat_constants import (
 )
 
 TRAINING_READY_SOUND = "training_ready"
+#: The currency screen, after the result, stays as long as the result does.
+CURRENCY_SCREEN_FRAMES = combat_constants.RESULT_SCREEN_FRAMES
 
 
 class Training:
     """
     Training mode where players build up strength by holding a bar.
+
+    Every minigame runs the same phases: ``alert`` (READY, its sound),
+    ``charge`` (the minigame itself), the attack phases where it has them
+    (``wait_attack``, ``attack_move``, ``impact``), ``result`` (BAD, GOOD,
+    GREAT or EXCELLENT), and ``currency``, which shows the pets side by side
+    with what the training earned in their modules' currencies. A training
+    that earned nothing skips it.
     """
 
     def __init__(self, ui_manager: UIManager) -> None:
@@ -266,6 +275,8 @@ class Training:
             self.update_impact_phase()
         elif self.phase == "result":
             self.update_result_phase()
+        elif self.phase == "currency":
+            self.update_currency_phase()
         self.frame_counter += 1
 
     def update_alert_phase(self):
@@ -342,6 +353,12 @@ class Training:
             if self.frame_counter >= self._prep_total_frames():
                 self._wave_in_prep = False
                 self.frame_counter = 0
+                # A charge too weak to fire queues no shot at all (dummy, shake
+                # and count_classic at 0 attacks): nothing would ever reach the
+                # target, so the phase waited forever. Straight to the result.
+                if not self.attack_waves and not self.attack_positions:
+                    self.phase = "result"
+                    return
                 # Shot fires NOW — play the attack sound regardless of subclass
                 # so single-shot modes (dummy/shake/count_classic/mogera) get it
                 # too. Adventure mode keeps its silent shot in battle_encounter.
@@ -419,14 +436,37 @@ class Training:
         if self.frame_counter >= combat_constants.RESULT_SCREEN_FRAMES:
             self.finish_training()
 
+    def update_currency_phase(self):
+        if self.frame_counter >= CURRENCY_SCREEN_FRAMES:
+            self.finish_training()
+
     def move_attacks(self):
         pass
 
     def finish_training(self):
+        """The result is over (or skipped): apply it, then show the currency
+        it earned before leaving -- or leave at once when it earned none.
+        From the currency screen, leave."""
+        if getattr(self, "_results_applied", False):
+            self.leave_training()
+            return
+        self._results_applied = True
+        self.earnings = self.apply_training_results() or []
+        if self.earnings:
+            self.animated_sprite.stop()
+            self.phase = "currency"
+            self.frame_counter = 0
+        else:
+            self.leave_training()
+
+    def apply_training_results(self):
+        """Apply the outcome: the sound, the quest, trophies, each pet's
+        training and the module currencies. Returns what was paid,
+        ``[(module name, currency name, amount), ...]``."""
         won = self.check_victory()
         if won:
             runtime_globals.game_sound.play("attack_fail")
-            
+
             # Update TRAINING quest progress when training is won
             update_quest_progress(QuestType.TRAINING, 1)
         else:
@@ -435,11 +475,41 @@ class Training:
         # Check for trophy conditions and award trophies
         self.check_and_award_trophies()
 
+        results = []
         for pet in self.pets:
-            pet.finish_training(won, grade=self.get_attack_count(), phase2=self.phase2_reached)
+            pet_won, grade = self.won_for(pet, won), self.grade_for(pet)
+            pet.finish_training(pet_won, grade=grade, phase2=self.phase2_reached,
+                                anguirus=self.anguirus_for(pet))
+            results.append((pet, pet_won, grade))
 
+        # Module currencies: each module that had a pet in the training is
+        # paid once, for the best outcome among its pets.
+        from utils.currency_utils import pay_earnings, training_earnings
+        return pay_earnings(training_earnings(results))
+
+    def leave_training(self):
+        """Back to the game, once: the scene changes on the next frame, and
+        the phase timer would call again until it does."""
+        if getattr(self, "_left", False):
+            return
+        self._left = True
         distribute_pets_evenly()
         change_scene("game")
+
+    def grade_for(self, pet):
+        """The 0-3 outcome *pet* is credited with. Shared by the whole party
+        unless a mode throws each pet its own row (Count Bar)."""
+        return self.get_attack_count()
+
+    def anguirus_for(self, pet):
+        """Whether *pet* trained with Anguirus (the PENGZ Count Match's every
+        fifth training), which pays its own G-Cells."""
+        return False
+
+    def won_for(self, pet, won):
+        """Whether *pet* succeeded; the session's verdict unless a mode grades
+        each pet on its own row."""
+        return won
 
     def _any_pet_shows_trophies(self):
         """Whether any pet in this session is on a device with a trophy meter.
@@ -495,6 +565,8 @@ class Training:
             self.draw_impact(screen)
         elif self.phase == "result":
             self.draw_result(screen)
+        elif self.phase == "currency":
+            self.draw_currency(screen)
 
     def _init_pet_sprite_cache(self):
         """
@@ -589,6 +661,8 @@ class Training:
                 x = base_x
                 y = y_base
 
+            if pet_sprite is None:      # no art for this pet yet: skip it, never stop the minigame
+                continue
             blit_with_cache(surface, pet_sprite, (x + slot_off, y + slot_off))
 
     def draw_alert(self, screen):
@@ -626,16 +700,90 @@ class Training:
     def draw_result(self, surface):
         pass
 
+    def currency_panel(self, module_name, currency_name, amount):
+        """A device's own picture of what it paid, or None for the text.
+        The iC's is its "50P GET!" (training.ic_minigame.get_panel)."""
+        from battle.ic_attacks import is_ic_module
+        module = (getattr(runtime_globals, "game_modules", None) or {}).get(module_name)
+        if is_ic_module(module):
+            from training.ic_minigame import ART_DOT, DOT, get_panel
+            return get_panel(amount, DOT // ART_DOT * runtime_globals.UI_SCALE)
+        return None
+
+    def _currency_lines(self):
+        """What the currency screen stacks under the pets, once:
+        ``[(surface, space after), ...]``."""
+        if getattr(self, "_currency_lines_cache", None) is None:
+            from utils.asset_utils import font_load
+            from utils.currency_utils import format_amount
+            scale = runtime_globals.UI_SCALE
+            amount_font = font_load(TEXT_FONT, int(32 * scale))
+            name_font = font_load(TEXT_FONT, int(20 * scale))
+            lines = []
+            for module_name, currency_name, amount in getattr(self, "earnings", []):
+                panel = self.currency_panel(module_name, currency_name, amount)
+                if panel is not None:
+                    lines.append((panel, int(6 * scale)))
+                    continue
+                lines.append((amount_font.render(
+                    "+" + format_amount(module_name, currency_name, amount),
+                    True, constants.FONT_COLOR_YELLOW), 0))
+                lines.append((name_font.render(currency_name, True, (255, 255, 255)),
+                              int(6 * scale)))
+            self._currency_lines_cache = lines
+        return self._currency_lines_cache
+
+    def draw_currency(self, surface):
+        """Every pet that trained, side by side and happy, and under them
+        what each module's currency gained: "+20P" over its name, or the
+        device's own picture of it (the iC's "50P GET!")."""
+        current_pets = tuple(self.pets)
+        if getattr(self, "_cached_pets_tuple", None) != current_pets:
+            self._init_pet_sprite_cache()
+            self._cached_pets_tuple = current_pets
+        scale = runtime_globals.UI_SCALE
+        width = runtime_globals.SCREEN_WIDTH
+        size = self._pet_sprite_size
+        pad = int(8 * scale)
+        lines = self._currency_lines()
+        count = len(self.pets)
+        text_height = sum(line.get_height() + after for line, after in lines)
+        band_height = (size + pad if count else 0) + text_height + 2 * pad
+        # A dark band across the screen, as the result's banners have, so it
+        # reads on any background.
+        y = (runtime_globals.SCREEN_HEIGHT - band_height) // 2
+        band = pygame.Surface((width, band_height), pygame.SRCALPHA)
+        band.fill((0, 0, 0, 170))
+        surface.blit(band, (0, y))
+        y += pad
+
+        if count:
+            gap = max(0, min(pad, (width - count * size) // max(1, count)))
+            x = (width - (count * size + (count - 1) * gap)) // 2
+            for pet in self.pets:
+                frames = self._pet_sprite_cache.get(pet, {})
+                sprite = frames.get(PetFrame.HAPPY) or frames.get(PetFrame.IDLE1)
+                if sprite is not None:
+                    blit_with_cache(surface, sprite, (x, y))
+                x += size + gap
+            y += size + pad
+
+        for rendered, after in lines:
+            blit_with_shadow(surface, rendered, ((width - rendered.get_width()) // 2, y))
+            y += rendered.get_height() + after
+
     def handle_event(self, event):
         event_type, event_data = event
 
         if self.phase == "alert":
             return
-        
+
         if self.phase == "charge" and event_type == "A":
             runtime_globals.game_sound.play("menu")
             self.strength = min(getattr(self, "strength", 0) + 1, getattr(self, "bar_level", 14))
         elif self.phase in ["wait_attack", "attack_move", "impact", "result"] and event_type in ["B", "START"]:
+            self.finish_training()
+        elif self.phase == "currency" and event_type in ["A", "B", "START"]:
             self.finish_training()
         elif self.phase == "charge" and event_type == "B":
             runtime_globals.game_sound.play("cancel")

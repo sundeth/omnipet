@@ -202,10 +202,29 @@ class SpriteSyncService:
     def update_module(self, module, progress_cb=None, timeout: float = 15.0) -> int:
         """Update local global sprites for one module. Returns files updated.
 
-        progress_cb(text) is called with a human-readable status (e.g.
-        "DMC: checking Agumon" / "DMC: downloading Agumon") so the boot scene
-        can show progress. Caller is responsible for the is_available() gate.
+        ``progress_cb(text, done, total)`` is called with a human-readable
+        status ("DMC: checking Agumon" / "DMC: downloading Agumon") plus, once
+        the work can be counted, how far through it is -- so a caller can show
+        a name, a percentage, or both. ``done``/``total`` are None while the
+        phase has nothing to count. Caller is responsible for the
+        is_available() gate.
+
+        **Every phase reports.** The two fingerprint passes and the catalogue
+        download all take network time and used to run silently, which left a
+        caller showing one frozen word for the whole sync -- and, for a module
+        already in sync, for the entire call, since the fast path returns
+        before the first name is ever reached.
         """
+        def report(text, done=None, total=None):
+            if not progress_cb:
+                return
+            try:
+                progress_cb(text, done, total)
+            except Exception as exc:
+                # A display callback must never be able to break a sync.
+                runtime_globals.game_console.log(
+                    f"[SpriteSync] progress callback failed: {exc}")
+
         formats = self._module_formats(module)
         if not formats:
             return 0
@@ -219,6 +238,7 @@ class SpriteSyncService:
         # 1) Fast path: compare the server's fingerprint to the one stored after
         # the last sync. This needs no catalogue download, so an up-to-date
         # module costs only a couple of checksum requests.
+        report(f"{module_name}: comparing with database")
         fingerprint = self._server_fingerprint(names, api_fmts, timeout)
         cache = self._load_cache()
         cached_fp = cache.get(module_name)
@@ -230,24 +250,32 @@ class SpriteSyncService:
         # compare chunk-by-chunk. A chunk whose local sprites already match the
         # server is skipped with NO per-name requests and NO downloads — so a
         # module that's already in sync costs only the fingerprint requests.
-        if progress_cb:
-            progress_cb(f"{module_name}: fetching database")
+        report(f"{module_name}: fetching database")
         if not self._ensure_catalog(timeout):
             return 0
 
         chunks = [names[i:i + self.CHUNK_SIZE] for i in range(0, len(names), self.CHUNK_SIZE)]
         name_format = getattr(module, "name_format", "$_dmc") or "$_dmc"
+        report(f"{module_name}: checking local sprites")
         local_fp = self._local_fingerprint(chunks, formats, name_format)
 
+        # Only the chunks that differ are walked name by name, so the count the
+        # caller is shown is the work actually left rather than the roster.
+        pending = [name
+                   for ci, chunk in enumerate(chunks)
+                   if self._chunk_differs(fingerprint, local_fp, api_fmts, ci)
+                   for name in chunk]
+
         updated = 0
-        for ci, chunk in enumerate(chunks):
-            if not self._chunk_differs(fingerprint, local_fp, api_fmts, ci):
-                continue   # local already matches the server for this chunk
-            for name in chunk:
-                if progress_cb:
-                    progress_cb(f"{module_name}: checking {name}")
-                updated += self._sync_one(name, formats, name_format,
-                                          module_name, progress_cb, timeout)
+        total = len(pending)
+        # Counted 1-based, so the run ends on 100% rather than one item short:
+        # a bar that stops at 80% and then jumps to "Installed" reads as having
+        # given up, which is the thing this reporting exists to prevent.
+        for position, name in enumerate(pending, 1):
+            report(f"{module_name}: checking {name}", position, total)
+            updated += self._sync_one(
+                name, formats, name_format, module_name,
+                lambda text, d=position, t=total: report(text, d, t), timeout)
 
         # Record the server fingerprint so later boots skip via the fast path.
         if fingerprint is not None:
@@ -298,9 +326,13 @@ class SpriteSyncService:
         joined = "\n".join(f"{s}:{by_stem[s]}" for s in stems)
         return hashlib.md5(joined.encode()).hexdigest()[:8]
 
-    def _sync_one(self, name, formats, name_format, module_name, progress_cb, timeout):
+    def _sync_one(self, name, formats, name_format, module_name, report, timeout):
         """Check one name across the formats and download any sheet that differs
-        from the local asset. Returns the number of files written."""
+        from the local asset. Returns the number of files written.
+
+        ``report(text)`` carries this name's place in the run already bound, so
+        a download reports at the same position as the check that found it.
+        """
         rec = self._resolve(name)
         if not rec:
             return 0
@@ -336,8 +368,7 @@ class SpriteSyncService:
             if local_hash == entry["hash"]:
                 continue   # up to date
 
-            if progress_cb:
-                progress_cb(f"{module_name}: downloading {name}")
+            report(f"{module_name}: downloading {name}")
             try:
                 dr = requests.get(
                     f"{self.BASE_URL}/api/digimon/{rid}/sheet/{api_fmt}",

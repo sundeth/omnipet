@@ -96,39 +96,59 @@ def safe_module_folder(module_name: str, module_id: str = "") -> str:
     return safe_name or module_id
 
 
-def install_module_zip(module_id: str, module_name: str, zip_bytes: bytes) -> bool:
-    """Extract a downloaded module zip into ``modules/<name>/``.
+def install_zip_into(target_dir: str, zip_bytes: bytes, log_name: str = "") -> bool:
+    """Unpack a module zip into *target_dir*, replacing what is there only once
+    the new one is known good.
 
-    Mirrors the shop's install routine so owned-module syncing produces the
-    same on-disk layout.  Returns True when a valid module.json ends up at the
-    folder root.
+    The zip goes into a sibling folder first; a single wrapping folder is
+    flattened so module.json sits at the root; only then is the installed
+    module swapped out. A broken or cut-off download used to delete the
+    module the player had before it was found to be bad.
     """
     import io
     import zipfile
     import shutil
+    staging = target_dir + ".installing"
+    retired = target_dir + ".replaced"
     try:
-        modules_dir = get_modules_dir()
-        safe_name = safe_module_folder(module_name, module_id)
-        target_dir = os.path.join(modules_dir, safe_name)
-        if os.path.isdir(target_dir):
-            shutil.rmtree(target_dir, ignore_errors=True)
-        os.makedirs(target_dir, exist_ok=True)
+        shutil.rmtree(staging, ignore_errors=True)
+        os.makedirs(staging, exist_ok=True)
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-            zf.extractall(target_dir)
-        # Flatten a single wrapping folder so module.json sits at the root.
-        entries = os.listdir(target_dir)
+            zf.extractall(staging)
+        entries = os.listdir(staging)
         if (len(entries) == 1
-                and os.path.isdir(os.path.join(target_dir, entries[0]))
-                and not os.path.exists(os.path.join(target_dir, 'module.json'))):
-            inner = os.path.join(target_dir, entries[0])
+                and os.path.isdir(os.path.join(staging, entries[0]))
+                and not os.path.exists(os.path.join(staging, 'module.json'))):
+            inner = os.path.join(staging, entries[0])
             for n in os.listdir(inner):
-                os.rename(os.path.join(inner, n), os.path.join(target_dir, n))
+                os.rename(os.path.join(inner, n), os.path.join(staging, n))
             os.rmdir(inner)
-        return os.path.exists(os.path.join(target_dir, 'module.json'))
+        if not os.path.exists(os.path.join(staging, 'module.json')):
+            raise ValueError("the download has no module.json")
+        shutil.rmtree(retired, ignore_errors=True)
+        if os.path.isdir(target_dir):
+            os.rename(target_dir, retired)
+        try:
+            os.rename(staging, target_dir)
+        except OSError:
+            if os.path.isdir(retired) and not os.path.isdir(target_dir):
+                os.rename(retired, target_dir)          # put the old one back
+            raise
+        shutil.rmtree(retired, ignore_errors=True)
+        return True
     except Exception as e:
-        runtime_globals.game_console.log(
-            f"[ModuleSync] install error for {module_name}: {e}")
+        runtime_globals.game_console.log(f"[ModuleSync] install error for {log_name or target_dir}: {e}")
+        shutil.rmtree(staging, ignore_errors=True)
         return False
+
+
+def install_module_zip(module_id: str, module_name: str, zip_bytes: bytes) -> bool:
+    """Extract a downloaded module zip into ``modules/<name>/`` (keeping the
+    installed one if the download is bad). Returns True when a valid
+    module.json ends up at the folder root."""
+    modules_dir = get_modules_dir()
+    target_dir = os.path.join(modules_dir, safe_module_folder(module_name, module_id))
+    return install_zip_into(target_dir, zip_bytes, module_name)
 
 
 def sync_owned_modules(download_missing: bool = True) -> bool:

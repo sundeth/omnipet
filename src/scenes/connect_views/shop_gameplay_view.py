@@ -257,8 +257,9 @@ class ShopGameplayView:
         def fetch_gameplay():
             try:
                 success, data = omninet_service.get_shop_gameplay()
-                if success and data:
-                    self.gameplay_data = data
+                if success:
+                    # an empty shelf is an answer, not a failure
+                    self.gameplay_data = data or []
                 else:
                     self.gameplay_data = []
                     runtime_globals.game_console.log(f"[ShopGameplayView] Failed to load gameplay")

@@ -80,7 +80,8 @@ def register_friend(module_name, friend_name) -> bool:
     module_list.append(friend_name)
     runtime_globals.game_console.log(f"[Friend] {friend_name} registered ({module_name})")
 
-    # The Friend also belongs in the digidex, under its own roster version.
+    # The Friend also belongs in the digidex, under its own roster version
+    # (a recruited raisable Digimon is discovered by raising it, as before).
     module = get_module(module_name)
     entry = _find_friend_monster(module, friend_name)
     if entry:
@@ -104,6 +105,20 @@ def _find_friend_monster(module, name):
     for entry in module.get_all_monsters():
         if entry.get("name") == name and read_availability(entry) == "Friend":
             return entry
+    return None
+
+
+def friend_record(module, name):
+    """The monster.json record a Friend stands for: an availability
+    "Friend" record, or the raisable Digimon a ``friend`` enemy recruits
+    (Digimon World's recruits, `GameModule.get_recruit_friends`). None for
+    neither."""
+    entry = _find_friend_monster(module, name)
+    if entry is not None or not module or not name:
+        return entry
+    recruits = getattr(module, "get_recruit_friends", None)
+    if recruits is not None and name in recruits():
+        return next((m for m in module.get_all_monsters() if m.get("name") == name), None)
     return None
 
 
@@ -134,12 +149,14 @@ def pet_has_xros_friends(pet) -> bool:
 # Separate from the hourly XAI events: this one is earned, not rolled.
 # =====================================================================
 
-def promise_friend_event(module_name, pets) -> bool:
-    """Queue a Friend encounter after an area clear. True when one was set.
+def promise_friend_event(module_name, pets, minutes=None) -> bool:
+    """Queue a Friend encounter *minutes* from now (default 1-5). True when
+    one was set. A module's events.json asks for it: a Friend-battle event
+    with ``delay_minutes`` (DMXW: after every area clear; utils.event_utils).
 
-    Only pets of the module whose area was cleared count, and only those with
-    a DigiXros form that asks for Friends. One of them is picked at random and
-    owns the promise; a later clear overrides an earlier one.
+    Only pets of the module count, and only those with a DigiXros form that
+    asks for Friends. One of them is picked at random and owns the promise;
+    a later one overrides an earlier one.
     """
     from core import game_globals
 
@@ -154,7 +171,7 @@ def promise_friend_event(module_name, pets) -> bool:
     game_globals.friend_event_pending = {
         "pet": pet.name,
         "module": module_name,
-        "minutes": _random.randint(1, 5),
+        "minutes": max(1, int(minutes)) if minutes else _random.randint(1, 5),
     }
     runtime_globals.game_console.log(
         f"[Friend] {pet.name} ({module_name}) owes a Friend encounter in "

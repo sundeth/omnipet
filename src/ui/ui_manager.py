@@ -9,7 +9,7 @@ from core import runtime_globals
 import core.constants as constants
 from ui.components.background import Background
 from utils.asset_utils import image_load
-from utils.pygame_utils import blit_with_cache
+from utils.pygame_utils import blit_with_cache, rle_accelerate
 
 # UI sprites loaded via load_sprite_integer_scaling, shared across UIManager
 # instances and keyed by (filepath, ui_scale) — without this every call hit
@@ -33,6 +33,10 @@ class UIManager:
         
         # Master UI cache - single surface for entire UI to reduce blits
         self.master_ui_surface = None
+        # RLE pacing of the overlay (see _pace_rle)
+        self._overlay_rle = True
+        self._rebuild_streak = 0
+        self._still_frames = 0
         self.master_ui_dirty = True  # Track if master surface needs rebuild
         
         # Shadow system configuration
@@ -1181,10 +1185,16 @@ class UIManager:
                 # If no component handled the mouse click, let it fall through
                 return False
 
+        # A hidden component never takes a press (DCom hid its CANCEL during
+        # the charge but left it focused; a mashed A then abandoned the battle).
+        focused_component = (self.focusable_components[self.focused_index]
+                             if 0 <= self.focused_index < len(self.focusable_components) else None)
+        if focused_component is not None and not getattr(focused_component, "visible", True):
+            focused_component = None
+
         # Handle tooltip activation for keyboard A button
         if event_type == "A":
-            if self.focused_index >= 0:
-                focused_component = self.focusable_components[self.focused_index]
+            if focused_component is not None:
                 if hasattr(focused_component, 'tooltip_text') and focused_component.tooltip_text:
                     # Toggle tooltip - hide if showing, show if hidden
                     if self.active_tooltip:
@@ -1194,8 +1204,7 @@ class UIManager:
                     return True
             
         # First, let the focused component handle the event
-        if self.focused_index >= 0:
-            focused_component = self.focusable_components[self.focused_index]
+        if focused_component is not None:
             if hasattr(focused_component, 'handle_event'):
                 if focused_component.handle_event(event):
                     return True
@@ -1289,9 +1298,14 @@ class UIManager:
     
     def activate_focused_component(self):
         """Activate the currently focused component"""
-        if self.focused_index >= 0:
+        if 0 <= self.focused_index < len(self.focusable_components):
             focused_component = self.focusable_components[self.focused_index]
-            
+            # A hidden component never takes a press: DCom hid its CANCEL
+            # during the charge but left it focused, so a mashed A after the
+            # charge abandoned the battle.
+            if not getattr(focused_component, "visible", True):
+                return False
+
             # Hide any existing tooltip first
             self.hide_tooltip()
             
@@ -1400,10 +1414,13 @@ class UIManager:
     def draw(self, surface):
         """Draw all components using master UI cache for static elements and direct rendering for dynamic elements"""
         # Rebuild master UI surface only if static components changed
+        rebuilt = False
         if self.master_ui_dirty or self.master_ui_surface is None:
             self._rebuild_master_ui_surface()
             self.master_ui_dirty = False
-        
+            rebuilt = True
+        self._pace_rle(rebuilt)
+
         # Single blit of entire static UI from cached master surface
         if self.master_ui_surface:
             blit_with_cache(surface, self.master_ui_surface, (self.ui_offset_x, self.ui_offset_y))
@@ -1437,11 +1454,40 @@ class UIManager:
         if self.active_tooltip:
             self.active_tooltip.draw(surface)
     
+    #: Rebuilds on this many frames in a row turn the overlay's RLE off: SDL
+    #: would encode it again every frame, which cost the Pi Zero 2W more than
+    #: the blend it saves (a marquee, an animated static component). This
+    #: many frames without a rebuild turn it back on.
+    RLE_OFF_AFTER = 3
+    RLE_ON_AFTER = 30
+
+    def _pace_rle(self, rebuilt):
+        """Keep the overlay RLE-encoded while it is still, plain while it changes."""
+        surface = self.master_ui_surface
+        if surface is None:
+            return
+        if rebuilt:
+            self._rebuild_streak += 1
+            self._still_frames = 0
+            if self._overlay_rle and self._rebuild_streak >= self.RLE_OFF_AFTER:
+                surface.set_alpha(255)            # per-pixel alpha kept, RLE off
+                self._overlay_rle = False
+        else:
+            self._rebuild_streak = 0
+            self._still_frames += 1
+            if not self._overlay_rle and self._still_frames >= self.RLE_ON_AFTER:
+                rle_accelerate(surface)
+                self._overlay_rle = True
+
     def _rebuild_master_ui_surface(self):
         """Rebuild the master UI surface by rendering all static components to it."""
         # Create master surface if needed
         if self.master_ui_surface is None:
-            self.master_ui_surface = pygame.Surface((self.ui_width, self.ui_height), pygame.SRCALPHA)
+            # Blitted every frame, rebuilt rarely: RLE spares the blend of
+            # every pixel (17 ms a frame on the Pi Zero 2W without it).
+            self.master_ui_surface = rle_accelerate(
+                pygame.Surface((self.ui_width, self.ui_height), pygame.SRCALPHA))
+            self._overlay_rle = True
         
         # Clear the master surface
         self.master_ui_surface.fill((0, 0, 0, 0))

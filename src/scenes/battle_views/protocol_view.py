@@ -2,15 +2,18 @@
 ProtocolView - Battle protocol selection
 
 Shows the device lines a versus battle can be fought under. The list comes
-from ``protocol_constants``, the same place the DCom menu takes it from, so
+from ``protocol_constants``, the same place the DCom grid takes it from, so
 the two can never drift -- this view used to carry its own literal and had
 simply never had PENZ added to it.
+
+Two pets of any lines fight here, so there is no line of their own to start
+on: the grid opens on CANCEL, in its middle.
 """
 import pygame
 from ui.ui_manager import UIManager
 from ui.components.title_scene import TitleScene
 from ui.components.background import Background
-from ui.components.menu import Menu
+from ui.components.protocol_selector import ProtocolSelector
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals
 from battle.sim import protocol_constants
@@ -37,10 +40,6 @@ class ProtocolView:
         self.background = None
         self.title_scene = None
         self.protocol_menu = None
-        
-        # The shared list: [(battle_format, label), ...] in menu order.
-        self.format_menu = protocol_constants.menu_entries()
-        self.protocol_options = [label for _, label in self.format_menu] + ["Cancel"]
 
         self._setup_ui()
         
@@ -57,28 +56,37 @@ class ProtocolView:
         self.title_scene = TitleScene(0, 9, "BATTLE")
         self.ui_manager.add_component(self.title_scene)
         
-        # Protocol selection menu (same style as DCom)
-        self.protocol_menu = Menu(width=200, height=140)
-        self.protocol_menu.open(self.protocol_options, self._on_protocol_select)
+        # Protocol selection grid (the same one DCom uses). It is modal, so
+        # B reaches it rather than handle_event below, and is passed on here.
+        self.protocol_menu = ProtocolSelector()
         self.ui_manager.add_component(self.protocol_menu)
-        self.ui_manager.set_active_menu(self.protocol_menu)
-        
+        self._open_grid()
+
         runtime_globals.game_console.log("[ProtocolView] UI setup complete")
-    
-    def _on_protocol_select(self, index):
-        """Device line selected from menu."""
-        if index >= len(self.format_menu):
-            self._on_cancel()
+
+    def _open_grid(self, focus=None, note=None):
+        """Show the grid, on *focus* (CANCEL when None) with *note* as its caption."""
+        self.protocol_menu.open(protocol_constants.menu_entries(_debug_mode()),
+                                self._on_protocol_select,
+                                on_cancel=self._on_cancel,
+                                focus=focus, note=note)
+        self.ui_manager.set_active_menu(self.protocol_menu)
+
+    def _on_protocol_select(self, battle_format):
+        """Device line chosen from the grid."""
+        if battle_format not in protocol_constants.BATTLE_FORMATS:
+            # Offered ahead of its battle format (see OFFERED_UPCOMING). Say
+            # so: versus_protocol would otherwise fight it as DM20.
+            self._open_grid(focus=battle_format,
+                            note=f"{battle_format} is not ready yet")
             return
 
-        battle_format, protocol_name = self.format_menu[index]
         # PENZ shares DMX's simulation as it shares its wire; the two differ
         # in the charge minigame, and versus does not play one.
         protocol = protocol_constants.versus_protocol(battle_format)
 
-        runtime_globals.game_sound.play("menu")
         runtime_globals.game_console.log(
-            f"[ProtocolView] {battle_format} selected ({protocol_name})")
+            f"[ProtocolView] {battle_format} selected ({protocol.name})")
 
         # Close menu before transitioning
         if self.protocol_menu:
@@ -129,3 +137,8 @@ class ProtocolView:
         event_type, event_data = event
         if event_type == "B":
             self._on_cancel()
+
+def _debug_mode():
+    """Upcoming lines (TWIN) are offered in the protocol grid only in debug mode."""
+    from core import game_globals
+    return bool(getattr(game_globals.configuration, "debug_mode", False))

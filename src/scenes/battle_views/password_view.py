@@ -1,6 +1,9 @@
 """
 PasswordView - Password entry for the Specials menu
-Redeems codes.json passwords (item / pet / unlock / encounter).
+Redeems codes.json passwords (item / pet / unlock / encounter). Opened from
+the Specials hub for one module (``module_name``), it takes only that
+module's codes and is titled with the module's name for them (PEN20's
+"Copymon").
 """
 import pygame
 from ui.ui_manager import UIManager
@@ -17,9 +20,16 @@ from utils import password_utils
 class PasswordView:
     """Password entry view: code boxes plus Confirm / Back buttons."""
 
-    def __init__(self, ui_manager: UIManager, change_view_callback):
+    def __init__(self, ui_manager: UIManager, change_view_callback, module_name=None):
         self.ui_manager = ui_manager
         self.change_view = change_view_callback
+        self.module_name = module_name
+        self.codes_title = "Password"
+        if module_name:
+            from utils.specials_utils import password_title
+            module = (runtime_globals.game_modules or {}).get(module_name)
+            if module is not None:
+                self.codes_title = password_title(module)
 
         self.background = None
         self.title_scene = None
@@ -38,15 +48,17 @@ class PasswordView:
         self.background.set_regions([(0, ui_height, "black")])
         self.ui_manager.add_component(self.background)
 
-        self.title_scene = TitleScene(0, 9, "SPECIALS")
+        self.title_scene = TitleScene(0, 9, self.codes_title.upper() if self.module_name else "SPECIALS")
         self.ui_manager.add_component(self.title_scene)
 
-        self.prompt_label = Label(0, 40, "Enter Password", is_title=True)
+        # The title bar names a module's own codes ("COPYMON").
+        prompt = "Enter Password" if self.codes_title == "Password" else "Enter Code"
+        self.prompt_label = Label(0, 40, prompt, is_title=True)
         self.ui_manager.add_component(self.prompt_label)
 
         # Size the entry to the longest code among the party's modules,
         # shrinking the boxes as needed to keep everything on screen.
-        length = max(4, min(10, password_utils.max_code_length()))
+        length = max(4, min(10, password_utils.max_code_length(module_name=self.module_name)))
         margin = 10
         spacing = 4
         char_w = min(40, (ui_width - 2 * margin - spacing * (length - 1)) // length)
@@ -90,7 +102,7 @@ class PasswordView:
     def _on_confirm(self):
         entered = self.code_entry.get_text()
         module, password = password_utils.find_password(
-            entered, entry_pad=self.code_entry.default_char)
+            entered, entry_pad=self.code_entry.default_char, module_name=self.module_name)
 
         if password is None:
             # Wrong code
@@ -114,7 +126,7 @@ class PasswordView:
 
     def _on_back(self):
         runtime_globals.game_sound.play("cancel")
-        self.change_view("specials")
+        self.change_view("specials", module_name=self.module_name)
 
     def cleanup(self):
         for comp in (self.background, self.title_scene, self.prompt_label,

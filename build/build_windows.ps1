@@ -80,11 +80,8 @@ New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME" -Force | Out-Null
 Write-Status "Copying assets..."
 Copy-Item -Recurse "..\assets" "$TEMP_DIR\$BUILD_NAME\"
 
-# Copy and rename config files
-Write-Status "Copying configuration files..."
-New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\config" -Force | Out-Null
-Copy-Item "..\config\config_windows.json" "$TEMP_DIR\$BUILD_NAME\config\config.json"
-Copy-Item "..\config\input_config_windows.json" "$TEMP_DIR\$BUILD_NAME\config\input_config.json"
+# Settings live in the save (GameConfiguration): the config/ folder
+# these builds used to copy was removed in 1.0 (e09369e8).
 
 # Copy documentation
 Write-Status "Copying documentation..."

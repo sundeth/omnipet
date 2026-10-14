@@ -146,7 +146,10 @@ class MogeraTraining(Training):
         
         elif self.phase == "result":
             self.update_result_phase()
-        
+
+        elif self.phase == "currency":
+            self.update_currency_phase()
+
         self.frame_counter += 1
 
     def _start_charge_phase(self):
@@ -224,7 +227,7 @@ class MogeraTraining(Training):
         """Award trophy if strength reaches maximum (14) and perfect counter"""
         if self.strength == 14 and self.countered_count == 5:
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Mogera training perfect score! Trophy awarded.")
 
     def draw(self, surface):
@@ -245,6 +248,8 @@ class MogeraTraining(Training):
             self.draw_impact(surface)
         elif self.phase == "result":
             self.draw_result(surface)
+        elif self.phase == "currency":
+            self.draw_currency(surface)
 
     def draw_mogera_appear(self, surface):
         """Draw Mogera appearing (alternating between mogera1 and mogera2)"""

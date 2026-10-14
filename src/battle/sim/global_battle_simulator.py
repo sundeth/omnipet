@@ -55,6 +55,21 @@ class GlobalBattleSimulator:
         #: stays the 0-3 quality every other table is keyed on.
         self.charge = charge
 
+    #: The ruleset a module declaring no battle protocol plays.
+    DEFAULT_FORMAT = "DMX"
+
+    def _format(self):
+        """The line whose rules this battle plays, canonically named.
+
+        **A module with no battle protocol plays the standard DMX ruleset**
+        ("None" is how module.json spells having none): its row is chosen by
+        the attacker's stage and level and by the 0-3 result of whichever
+        minigame the module plays (`mini_game`). It used to match no table
+        and throw five Singles every round.
+        """
+        fmt = protocol_constants.canonical_format(self.battle_format or "")
+        return fmt if fmt and fmt != "None" else self.DEFAULT_FORMAT
+
     def _pattern_for(self, pet, is_enemy=False):
         """The attacks *pet* throws, one per round.
 
@@ -66,8 +81,15 @@ class GlobalBattleSimulator:
 
         The Pendulum's table is keyed on the charge, and an enemy has no
         charge to play, so an enemy reads its **stage** instead.
+
+        **A pattern the data supplies wins** (`preset_pattern`): a quest
+        enemy's battle.json `attack_pattern`, or a charge played under a
+        module's own rules (the PENGZ Count Match).
         """
-        fmt = protocol_constants.canonical_format(self.battle_format or "")
+        preset = getattr(pet, "preset_pattern", None)
+        if preset:
+            return list(preset)
+        fmt = self._format()
         if fmt == "DMOG":
             # An adventure battle is fought on the module's own line, so its
             # Digimon are on the device's own 0-60 power scale.
@@ -77,6 +99,27 @@ class GlobalBattleSimulator:
             if is_enemy:
                 return get_penog_enemy_pattern(getattr(pet, "stage", 1))
             return get_penog_pattern(self.charge)
+        if fmt == "DMM":
+            # The Digimon Mini's table: the Count Bar count, read through the
+            # column for the Digimon's own stage and attribute. An enemy has
+            # no count and plays the one its stage is given in DMM.json.
+            from battle.sim.battle_utils import get_dmm_pattern, get_dmm_enemy_pattern
+            stage = getattr(pet, "stage", None)
+            attribute = getattr(pet, "attribute", None)
+            if is_enemy:
+                return get_dmm_enemy_pattern(stage, attribute)
+            return get_dmm_pattern(self.charge, stage=stage, attribute=attribute)
+        if fmt == "IC":
+            # The Digivice iC's own table: the Mini's pool of rows, keyed by
+            # the RPM bar. The bar is the pet's own -- one rhythm read
+            # against each Digimon's pace, set on it by the encounter -- and
+            # the shared charge only stands in for a pet without one. An
+            # enemy plays no charge and takes the bar its stage is given.
+            from battle.sim.battle_utils import get_ic_pattern, get_ic_enemy_pattern
+            if is_enemy:
+                return get_ic_enemy_pattern(getattr(pet, "stage", None))
+            charge = getattr(pet, "charge", None)
+            return get_ic_pattern(self.charge if charge is None else charge)
         if fmt == "PENC":
             # **A Pendulum Color plays a charge and a Digital Monster Color
             # does not**, which is why the two share this wire and not this
@@ -127,6 +170,18 @@ class GlobalBattleSimulator:
         # tables are deliberately separate and share only their shape.
         return get_attack_pattern(pet.level, pet.mini_game, protocol=fmt,
                                   stage=getattr(pet, "stage", None))
+
+    def _hp_cost(self, value):
+        """The HP a pattern value costs before buffs.
+
+        A value is its own damage on every line this simulator plays except
+        the Pendulum X / Mini, whose Hyper is a 4 that costs **6** -- a
+        one-shot kill against its 6 HP bar (`DMM.HIT_DAMAGE`). The value
+        still goes in the log unchanged, because it is what the encounter
+        draws projectiles from.
+        """
+        limits = protocol_constants.get_constants(self._format())
+        return getattr(limits, "HIT_DAMAGE", {}).get(value, value)
 
     def _attribute_advantage(self, att_attr, def_attr):
         # Vaccine > Virus > Data > Vaccine
@@ -241,7 +296,7 @@ class GlobalBattleSimulator:
                 # Calculate attack
                 pattern = pet.attack_pattern
                 base_dmg = min(pattern[turn % len(pattern)], self.damage_limit)
-                dmg = max(0, base_dmg + pet.buff)
+                dmg = max(0, self._hp_cost(base_dmg) + pet.buff)
                 hitrate = self._hitrate(pet, target)
                 hit = random.randint(0, 99) < hitrate
                 actual_dmg = dmg if hit else 0
@@ -277,7 +332,7 @@ class GlobalBattleSimulator:
                     for target in [t for t in device1 if t.alive]:  # Filter only alive pets
                         pattern = pet.attack_pattern
                         base_dmg = min(pattern[turn % len(pattern)], self.damage_limit)
-                        dmg = max(0, base_dmg + pet.buff)
+                        dmg = max(0, self._hp_cost(base_dmg) + pet.buff)
                         hitrate = self._hitrate(pet, target)
                         hit = random.randint(0, 99) < hitrate
                         actual_dmg = dmg if hit else 0
@@ -309,7 +364,7 @@ class GlobalBattleSimulator:
                     # Calculate attack
                     pattern = pet.attack_pattern
                     base_dmg = min(pattern[turn % len(pattern)], self.damage_limit)
-                    dmg = max(0, base_dmg + pet.buff)
+                    dmg = max(0, self._hp_cost(base_dmg) + pet.buff)
                     hitrate = self._hitrate(pet, target)
                     hit = random.randint(0, 99) < hitrate
                     actual_dmg = dmg if hit else 0

@@ -20,7 +20,8 @@ import core.constants as constants
 from utils.module_utils import get_module
 from utils.pet_utils import get_selected_pets
 from utils.scene_utils import change_scene
-from utils.inventory_utils import get_inventory_value, remove_from_inventory, add_to_inventory
+from utils.inventory_utils import get_inventory_value, remove_from_inventory, add_to_inventory, item_fits_pet
+from utils import item_effects
 from ui.ui_constants import BASE_RESOLUTION
 from utils.asset_utils import image_load
 
@@ -153,6 +154,8 @@ class SceneInventory:
                     proxy.status = meta.get('status', '')
                     proxy.amount = meta.get('amount', 1)
                     proxy.boost_time = meta.get('boost_time', 0)
+                    proxy.protocol_value = meta.get('protocol_value', 0)
+                    proxy.attack_sprite = meta.get('attack_sprite', 0)
                     proxy.component_item = ''
                     proxy.cross_module = True
                     items.append(InventoryItem(shop_id, proxy, icon, qty, None))
@@ -355,7 +358,9 @@ class SceneInventory:
         stomach).  A pet with stomach 0 cannot accept these, so they are
         greyed out for such pets."""
         gi = item.game_item
-        if gi.effect in ("component", "status_boost"):
+        if (gi.effect in ("component", "status_boost", "dna", "currency", "devolve", "bundle")
+                or gi.effect in item_effects.PET_EFFECTS
+                or gi.effect in item_effects.NOT_IMPLEMENTED_EFFECTS):
             return False
         if gi.effect == "status_change" and gi.status not in ("hunger", "strength"):
             return False
@@ -388,6 +393,8 @@ class SceneInventory:
                 if pet in selected_pet_set and not pet._is_blocked_by_sleep():
                     if is_food and pet.stomach <= 0:
                         continue  # Can't eat — grey out
+                    if not item_fits_pet(item.game_item, pet):
+                        continue  # Another family's item — grey out
                     enabled_indices.append(i)
             self.pet_selector.set_enabled_pets(enabled_indices)
         else:
@@ -401,9 +408,13 @@ class SceneInventory:
                     continue  # Skip pets blocked by sleep window
                 if is_food and pet.stomach <= 0:
                     continue  # Can't eat — grey out
+                if not item_fits_pet(item.game_item, pet):
+                    continue  # Another family's item — grey out
 
                 pet_needs_item = False
-                if item_status == "hunger":
+                if item.game_item.effect in item_effects.PET_EFFECTS:
+                    pet_needs_item = self._pet_needs_effect(item.game_item, pet)
+                elif item_status == "hunger":
                     pet_needs_item = pet.hunger < 4
                 elif item_status == "strength":
                     pet_needs_item = pet.strength < 4
@@ -423,12 +434,18 @@ class SceneInventory:
         # Food items (hunger/strength) can't be eaten by a pet with stomach 0.
         if self._is_food_item(item):
             targets = [pet for pet in targets if pet.stomach > 0]
+        # A boost item that names a DigiSoul family is that family's only.
+        targets = [pet for pet in targets
+                   if item_fits_pet(item.game_item, pet)]
         if runtime_globals.strategy_index != 0:
             # NEED mode: only pets that actually need this item
             item_status = item.game_item.status
             filtered = []
             for pet in targets:
-                if item_status == "hunger":
+                if item.game_item.effect in item_effects.PET_EFFECTS:
+                    if self._pet_needs_effect(item.game_item, pet):
+                        filtered.append(pet)
+                elif item_status == "hunger":
                     if pet.hunger < 4:
                         filtered.append(pet)
                 elif item_status == "strength":
@@ -450,9 +467,19 @@ class SceneInventory:
             self._use_component_item(item)
         elif effect == "status_boost":
             self._use_status_boost_item(item, targets)
+        elif effect == "dna":
+            self._use_dna_item(item, targets)
+        elif effect == "currency":
+            self._use_currency_item(item, targets)
+        elif effect == "devolve":
+            self._use_devolve_item(item, targets)
+        elif effect in item_effects.PET_EFFECTS:
+            self._use_pet_effect_item(item, targets)
+        elif effect == "bundle":
+            self._use_bundle_item(item)
         elif effect == "status_change" and status not in ["hunger", "strength"]:
             self._use_status_change_item(item, targets)
-        elif not effect and not status:
+        elif effect in item_effects.NOT_IMPLEMENTED_EFFECTS or (not effect and not status):
             # Catalogued items whose authentic behavior is not implemented
             # remain visible/grantable, but cannot be accidentally consumed
             # as a generic food item.
@@ -498,85 +525,153 @@ class SceneInventory:
         self._return_to_game()
     
     def _use_status_boost_item(self, item, targets):
-        """Handle status boost items (battle effects)"""
+        """Handle status boost items (battle effects): stored once a pet
+        takes the item."""
+        gi = item.game_item
+        self._use_feeding_item(item, targets, before_finish=lambda: item_effects.add_battle_boost(
+            gi, gi.status, gi.amount, gi.boost_time))
 
-        eff = game_globals.battle_effects.get(item.game_item.status, {"amount": 0, "boost_time": 0, "module": item.game_item.module})
-        eff["amount"] = item.game_item.amount
-        eff["boost_time"] += item.game_item.boost_time
-        eff["module"] = item.game_item.module
-        eff["item_id"] = item.game_item.id
-        game_globals.battle_effects[item.game_item.status] = eff
-        
-        # Continue to feeding animation
-        self._use_feeding_item(item, targets)
+    def _show_notes(self, notes):
+        for note in notes:
+            runtime_globals.game_message.add_slide(
+                note, (255, 255, 0), 56 * runtime_globals.UI_SCALE, runtime_globals.FONT_SIZE_SMALL)
+
+    def _consume(self, item):
+        """Use up one of a non-default item; a reusable one is kept."""
+        if getattr(item.game_item, "reusable", False):
+            return
+        if item.id not in [ditem.id for ditem in runtime_globals.default_items.values()]:
+            remove_from_inventory(item.id)
+
+    def _use_bundle_item(self, item):
+        """A set of items (effect `bundle`): every `item` row handed over."""
+        gi = item.game_item
+        notes = [item_effects.give_item(gi, row.get("item", ""), int(row.get("amount", 1) or 1))
+                 for row in getattr(gi, "extra_effects", None) or [] if row.get("effect") == "item"]
+        notes = [n for n in notes if n]
+        if not notes:
+            runtime_globals.game_sound.play("cancel")
+            return
+        self._show_notes(notes)
+        runtime_globals.game_sound.play("happy2")
+        self._consume(item)
+        self._return_to_game()
+
+    @staticmethod
+    def _pet_needs_effect(game_item, pet):
+        """For the NEED selection: a medicine is for a pet with its ailment,
+        Digi Bedding for one that is sick, injured or has a care mistake;
+        every other pet effect for any pet it fits."""
+        if game_item.effect == "cure":
+            return item_effects.has_ailment(pet, game_item.status)
+        if game_item.effect == "bedding":
+            return pet.sick > 0 or getattr(pet, "mistakes", 0) > 0
+        if game_item.effect == "multiplier":
+            # A BE item whose targets have no stat here, or Vital Values
+            # for a pet without them.
+            return item_effects.fits(game_item, pet)
+        return True
+
+    def _use_pet_effect_item(self, item, targets):
+        """The Digivice iC's items that act on the pet rather than feed it
+        (`item_effects.PET_EFFECTS`). A ticket starts its battle and a C'mon
+        Switch shows the first selected pet up close; an evolving item takes
+        the first pet that can use it, one evolution an item; the rest act
+        on every selected pet."""
+        gi = item.game_item
+        if gi.effect == "encounter":
+            if item_effects.start_encounter(gi):
+                self._consume(item)
+                runtime_globals.game_console.log(f"[SceneInventory] {gi.name}: battle started")
+            else:
+                runtime_globals.game_sound.play("cancel")
+            return
+        if gi.effect == "closeup":
+            from utils import accessory_utils
+            accessory_utils.start_closeup(targets[0])
+            runtime_globals.game_sound.play("happy")
+            self._consume(item)
+            self._return_to_game()
+            return
+        if gi.effect in ("evolve", "random_evolve"):
+            targets = targets[:1]
+        affected = [pet for pet in targets if item_effects.apply_pet_effect(gi, pet)]
+        if not affected:
+            runtime_globals.game_sound.play("cancel")
+            runtime_globals.game_console.log(f"[SceneInventory] {gi.name}: no selected pet took it")
+            return
+        self._show_notes(item_effects.finish_use(gi, affected))
+        if gi.effect not in ("evolve", "random_evolve"):
+            # An evolution plays its own sound.
+            runtime_globals.game_sound.play("happy2")
+        self._consume(item)
+        runtime_globals.game_console.log(
+            f"[SceneInventory] {gi.name} ({gi.effect}): {', '.join(pet.name for pet in affected)}")
+        self._return_to_game()
+
+    def _use_currency_item(self, item, targets):
+        """Handle currency items: `amount` of the item's `currency`, paid
+        once however many pets are selected."""
+        gi = item.game_item
+        note = item_effects.pay_currency(gi, gi.currency, gi.amount)
+        if not note:
+            runtime_globals.game_sound.play("cancel")
+            return
+        self._show_notes([note] + item_effects.finish_use(gi, targets))
+        runtime_globals.game_sound.play("happy2")
+        self._consume(item)
+        runtime_globals.game_console.log(f"[SceneInventory] {gi.name}: {note}")
+        self._return_to_game()
+
+    def _use_devolve_item(self, item, targets):
+        """Handle devolve items: each pet returns to the form it evolved
+        from (`GamePet.devolve`); a pet with none is left alone."""
+        gi = item.game_item
+        devolved = [pet for pet in targets if pet.devolve()]
+        if not devolved:
+            runtime_globals.game_sound.play("cancel")
+            runtime_globals.game_console.log(
+                f"[SceneInventory] {gi.name}: no selected pet has an earlier form")
+            return
+        self._show_notes(item_effects.finish_use(gi, devolved))
+        runtime_globals.game_sound.play("evolution")
+        self._consume(item)
+        runtime_globals.game_console.log(
+            f"[SceneInventory] {gi.name}: {', '.join(pet.name for pet in devolved)} devolved")
+        self._return_to_game()
     
+    def _use_dna_item(self, item, targets):
+        """Handle DNA items: `amount` of the item's `digisoul` to each pet."""
+        family = getattr(item.game_item, "digisoul", "") or ""
+        amount = item.game_item.amount
+        affected_pets = [pet for pet in targets
+                         if hasattr(pet, "add_dna") and pet.add_dna(family, amount)]
+        if not affected_pets:
+            runtime_globals.game_sound.play("cancel")
+            runtime_globals.game_console.log(
+                f"[SceneInventory] No pets took {family or 'no'} DNA from {item.game_item.name}")
+            return
+
+        for pet in affected_pets:
+            pet.check_disturbed_sleep()
+            pet.set_state("eat", True)
+        self._show_notes(item_effects.finish_use(item.game_item, affected_pets))
+        self._setup_eating_animation(item, affected_pets)
+
+        self._consume(item)
+
+        runtime_globals.game_console.log(
+            f"[SceneInventory] {item.game_item.name}: +{amount} {family} DNA to {len(affected_pets)} pets")
+        self._return_to_game()
+
     def _use_status_change_item(self, item, targets):
-        """Handle status change items (direct stat modifications)"""
+        """Handle status change items (direct stat modifications), each
+        stat within its own limits (`item_effects.apply_status`)."""
         status_to_change = item.game_item.status
         amount = item.game_item.amount
-        affected_pets = []  # Track pets that received stat changes
-        
-        # For capped stats, check if all pets have reached the cap
-        if status_to_change in ['hp', 'attack', 'power']:
-            all_capped = True
-            bonus_index = {'hp': 0, 'attack': 1, 'power': 2}[status_to_change]
-            cap_attr = {'hp': 'hp_max_item_boost', 'attack': 'atk_max_item_boost', 'power': 'power_max_item_boost'}[status_to_change]
-            
-            for pet in targets:
-                pet_module = get_module(pet.module)
-                cap = getattr(pet_module, cap_attr, 0)
-                current_bonus = pet.bonus_stats[bonus_index]
-                if current_bonus < cap:
-                    all_capped = False
-                    break
-            
-            if all_capped:
-                runtime_globals.game_sound.play("cancel")
-                runtime_globals.game_console.log(f"[SceneInventory] All pets have reached {status_to_change} cap")
-                return
-            
-            # Apply bonus to pets that haven't reached cap
-            for pet in targets:
-                pet_module = get_module(pet.module)
-                cap = getattr(pet_module, cap_attr, 0)
-                current_bonus = pet.bonus_stats[bonus_index]
-                if current_bonus < cap:
-                    new_bonus = min(cap, current_bonus + amount)
-                    pet.bonus_stats[bonus_index] = new_bonus
-                    affected_pets.append(pet)
-                    runtime_globals.game_console.log(f"[SceneInventory] {pet.name} {status_to_change} bonus: {current_bonus} -> {new_bonus} (cap: {cap})")
-        
-        # For uncapped or direct stats
-        elif status_to_change == 'strength':
-            for pet in targets:
-                old_strength = pet.strength
-                pet.strength = min(4, pet.strength + amount)
-                if pet.strength != old_strength:
-                    affected_pets.append(pet)
-                    runtime_globals.game_console.log(f"[SceneInventory] {pet.name} strength: {pet.strength}")
-        
-        elif status_to_change == 'dp':
-            for pet in targets:
-                old_dp = pet.dp
-                pet.dp = min(pet.energy, pet.dp + amount)
-                if pet.dp != old_dp:
-                    affected_pets.append(pet)
-                    runtime_globals.game_console.log(f"[SceneInventory] {pet.name} dp: {pet.dp}/{pet.energy}")
-        
-        elif status_to_change == 'timer':
-            for pet in targets:
-                pet._rt_origin -= amount * 60  # shift origin back by the given number of minutes
-                affected_pets.append(pet)
-                runtime_globals.game_console.log(f"[SceneInventory] {pet.name} timer advanced by {amount} minutes")
-        
-        elif status_to_change == 'vital_values':
-            for pet in targets:
-                old_vital = pet.vital_values
-                pet.vital_values = min(9999, pet.vital_values + amount)
-                if pet.vital_values != old_vital:
-                    affected_pets.append(pet)
-                    runtime_globals.game_console.log(f"[SceneInventory] {pet.name} vital_values: {pet.vital_values}")
-        
+        affected_pets = [pet for pet in targets
+                         if item_effects.apply_status(pet, status_to_change, amount)]
+
         if len(affected_pets) == 0:
             runtime_globals.game_sound.play("cancel")
             runtime_globals.game_console.log(f"[SceneInventory] No pets affected by {item.game_item.name}")
@@ -585,19 +680,20 @@ class SceneInventory:
         for pet in affected_pets:
             pet.check_disturbed_sleep()
             pet.set_state("eat", True)
-        
+        self._show_notes(item_effects.finish_use(item.game_item, affected_pets))
+
         # Set up eating animation for affected pets
         self._setup_eating_animation(item, affected_pets)
         
-        # Remove item from inventory
-        if item.id not in [ditem.id for ditem in runtime_globals.default_items.values()]:
-            remove_from_inventory(item.id)
+        self._consume(item)
         
         runtime_globals.game_console.log(f"[SceneInventory] Applied {item.game_item.name} to {len(affected_pets)} pets")
         self._return_to_game()
     
-    def _use_feeding_item(self, item, targets):
-        """Handle regular feeding items (hunger/strength)"""
+    def _use_feeding_item(self, item, targets, before_finish=None):
+        """Handle regular feeding items (hunger/strength), and the feeding
+        step of a battle boost. Only a pet that takes the item gets its
+        weight and extra effects, and an item nobody took is kept."""
 
         food_status = item.game_item.status
         food_amount = item.game_item.amount
@@ -611,13 +707,22 @@ class SceneInventory:
             if accepted:
                 pet.animation_counter = 0
                 accepted_pets.append(pet)
+
+        if not accepted_pets:
+            runtime_globals.game_sound.play("cancel")       # nobody ate: nothing happened
+            runtime_globals.game_console.log(f"[SceneInventory] No pet took {item.game_item.name}")
+            self._return_to_game()
+            return
+
+        runtime_globals.game_sound.play("menu")             # the item was used
+        if before_finish:
+            before_finish()
+        self._show_notes(item_effects.finish_use(item.game_item, accepted_pets))
         
         # Set up eating animation for pets that accepted the food
         self._setup_eating_animation(item, accepted_pets)
         
-        # Remove from inventory for non-default items
-        if item.id not in [ditem.id for ditem in runtime_globals.default_items.values()]:
-            remove_from_inventory(item.id)
+        self._consume(item)
         
         runtime_globals.game_console.log(f"[SceneInventory] Fed {len(accepted_pets)} pets with {item.game_item.name}")
         self._return_to_game()

@@ -3,8 +3,9 @@ Scene Collection
 ================
 
 The card collection: per-module card grids (3 columns) with owned counts and
-cooldown overlays, a View window for a large card + Use action, and an NFC
-Read modal for scanning physical cards.
+cooldown overlays, a View window for a large card + Use action (a
+Collectible card has no use: VIEW opens its close-up, front and back, the
+whole screen), and an NFC Read modal for scanning physical cards.
 
 Layout (base 240x240 UI, YELLOW_BRIGHT theme like the Library):
     y 9..28    title "COLLECTION"
@@ -308,6 +309,9 @@ class SceneCollection:
         if self.mode == "view":
             self._handle_view_event(event_type, event_data)
             return
+        if self.mode == "closeup":
+            self._handle_closeup_event(event_type, event_data)
+            return
         if self.mode == "read":
             self._handle_read_event(event_type, event_data)
             return
@@ -349,7 +353,7 @@ class SceneCollection:
             runtime_globals.game_sound.play("menu")
         elif event_type == "A":
             if self.view_focus == 0 and can_use:
-                self._use_view_card()
+                self._view_action()
             else:
                 runtime_globals.game_sound.play("cancel")
                 self.mode = "grid"
@@ -357,7 +361,7 @@ class SceneCollection:
             use_rect, back_rect = self._view_button_rects()
             pos = event_data["pos"]
             if can_use and use_rect.collidepoint(pos):
-                self._use_view_card()
+                self._view_action()
             elif back_rect.collidepoint(pos):
                 runtime_globals.game_sound.play("cancel")
                 self.mode = "grid"
@@ -378,7 +382,44 @@ class SceneCollection:
             return False
         module_name, card = self.view_card
         owned = card_utils.get_owned(module_name, card.get("id"))
+        if card_utils.is_collectible(card):
+            return owned["digital"] + owned["physical"] > 0
         return owned["digital"] > 0
+
+    def _view_action(self):
+        """The View window's left button: USE, or VIEW for a Collectible."""
+        module_name, card = self.view_card
+        if card_utils.is_collectible(card):
+            self.closeup_side = "front"
+            self.mode = "closeup"
+            runtime_globals.game_sound.play("menu")
+            return
+        self._use_view_card()
+
+    def _handle_closeup_event(self, event_type, event_data):
+        """The close-up: LEFT/RIGHT (or A, or a click on the card) turn the
+        card over where it has a back; B (or a click off the card) returns
+        to the View window."""
+        module_name, card = self.view_card
+        has_back = card_utils.load_card_sprite(module_name, card, "back", 8, 8) is not None
+        if event_type == "B":
+            runtime_globals.game_sound.play("cancel")
+            self.mode = "view"
+        elif event_type in ("LEFT", "RIGHT", "A") and has_back:
+            self.closeup_side = "back" if self.closeup_side == "front" else "front"
+            runtime_globals.game_sound.play("menu")
+        elif event_type == "A":
+            runtime_globals.game_sound.play("cancel")
+            self.mode = "view"
+        elif event_type == "LCLICK" and event_data and "pos" in event_data:
+            # A click on the card turns it over; anywhere else, back out.
+            rect = getattr(self, "_closeup_rect", None)
+            if has_back and rect is not None and rect.collidepoint(event_data["pos"]):
+                self.closeup_side = "back" if self.closeup_side == "front" else "front"
+                runtime_globals.game_sound.play("menu")
+            else:
+                runtime_globals.game_sound.play("cancel")
+                self.mode = "view"
 
     def _select_card_at(self, pos):
         """Select (or open) the card tile under a click. True when handled."""
@@ -419,6 +460,8 @@ class SceneCollection:
 
         if self.mode == "view":
             self._draw_view_window(surface)
+        elif self.mode == "closeup":
+            self._draw_closeup(surface)
         elif self.mode == "read":
             self._draw_read_modal(surface)
 
@@ -604,10 +647,14 @@ class SceneCollection:
                     surface.blit(cd_label, (self._sx(120) - cd_label.get_width() // 2,
                                             sy + int(4 * self.scale)))
 
-        # Buttons: Use (digital only) + Back
-        can_use = owned["digital"] > 0
+        # Buttons: Use (digital only) or View (a Collectible) + Back
+        collectible = card_utils.is_collectible(card)
+        can_use = self._view_card_usable()
         use_rect, back_rect = self._view_button_rects()
-        if can_use:
+        if can_use and collectible:
+            self._draw_modal_button(surface, use_rect, "VIEW",
+                                    focused=(self.view_focus == 0), enabled=True)
+        elif can_use:
             ready = card_utils.cooldown_remaining(card_id) <= 0
             self._draw_modal_button(surface, use_rect, "USE",
                                     focused=(self.view_focus == 0), enabled=ready)
@@ -616,9 +663,29 @@ class SceneCollection:
         self._draw_modal_button(surface, back_rect, "BACK",
                                 focused=(self.view_focus == 1), enabled=True)
 
-        if owned["physical"] > 0 and owned["digital"] == 0:
+        if owned["physical"] > 0 and owned["digital"] == 0 and not collectible:
             note = self.font_small.render("Physical card - view only", True, (180, 180, 180))
             surface.blit(note, (self._sx(120) - note.get_width() // 2, self._sy(222)))
+
+    def _draw_closeup(self, surface):
+        """A Collectible card up close: the whole screen, front or back."""
+        module_name, card = self.view_card
+        width, height = surface.get_size()
+        overlay = pygame.Surface((width, height))
+        overlay.fill((0, 0, 0))
+        surface.blit(overlay, (0, 0))
+        side = getattr(self, "closeup_side", "front")
+        margin = int(6 * self.scale)
+        sprite = card_utils.load_card_sprite(module_name, card, side,
+                                             width - 2 * margin, height - 2 * margin)
+        if sprite is None and side == "back":
+            sprite = card_utils.load_card_sprite(module_name, card, "front",
+                                                 width - 2 * margin, height - 2 * margin)
+        self._closeup_rect = None
+        if sprite is not None:
+            pos = ((width - sprite.get_width()) // 2, (height - sprite.get_height()) // 2)
+            self._closeup_rect = pygame.Rect(pos, sprite.get_size())
+            blit_with_cache(surface, sprite, pos)
 
     def _draw_modal_button(self, surface, rect, label, focused, enabled):
         bg = YELLOW_BRIGHT_DARK if focused else (30, 30, 30)

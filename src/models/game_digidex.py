@@ -92,6 +92,15 @@ def register_digidex_entry(name: str, module: str, version: int, reward: bool = 
                 pass
 
 
+def known_pet_keys() -> set:
+    """(name, module, version) of every pet in the digidex, read once.
+
+    For a caller checking many pets (the Library lists thousands): one file
+    read instead of one per pet, which made opening it take a second.
+    """
+    return {(p.get("name"), p.get("module"), p.get("version")) for p in load_digidex()}
+
+
 def is_pet_unlocked(name: str, module: str, version: int) -> bool:
     """Check whether a specific pet has already been unlocked."""
     data = load_digidex()

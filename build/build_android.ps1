@@ -51,11 +51,8 @@ wsl bash -c "rm -rf $WSLBuildDir/modules && mkdir -p $WSLBuildDir/modules"
 # folder would never be used.
 wsl bash -c "rm -rf $WSLBuildDir/save && mkdir -p $WSLBuildDir/save"
 wsl bash -c "cp /mnt/e/Omnipet/main_android.py $WSLBuildDir/main.py"
-# Background service entrypoint (buildozer.spec: services = pet_background:service_main.py:foreground).
-# Without this file in the build tree the service Java class still gets
-# generated, but its Python entrypoint is missing from the APK and the
-# service process aborts immediately at startup.
-wsl bash -c "cp /mnt/e/Omnipet/service_main.py $WSLBuildDir/service_main.py"
+wsl bash -c "rsync -avu --delete /mnt/e/Omnipet/android_src/ $WSLBuildDir/android_src/"
+wsl bash -c "python3 /mnt/e/Omnipet/build/prepare_android_manifest.py $WSLBuildDir/android_src"
 wsl bash -c "cp /mnt/e/Omnipet/buildozer.spec $WSLBuildDir/"
 
 # Clean caches
@@ -76,13 +73,10 @@ wsl bash -c $buildCommand
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "=== Build Successful ===" -ForegroundColor Green
-    # Sanity check: the background-service entrypoint must be inside the
-    # APK's python payload, otherwise the Android service aborts at startup.
-    wsl bash -c "unzip -p $WSLBuildDir/bin/*.apk assets/private.tar | tar -tz | grep -q 'service_main'"
+    # Native sources must be compiled into classes.dex; no service payload remains.
+    wsl bash -c "unzip -p $WSLBuildDir/bin/*.apk classes.dex | strings | grep -q 'org/omnipet/offline/PetAlarmReceiver'"
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "WARNING: service_main is MISSING from the APK payload -- the background service will not run!" -ForegroundColor Red
-    } else {
-        Write-Host "  service entrypoint present in APK payload" -ForegroundColor Green
+        throw "PetAlarmReceiver is missing from the APK's native classes."
     }
     New-Item -ItemType Directory -Force -Path "$ProjectRoot\bin" | Out-Null
     wsl bash -c "cp $WSLBuildDir/bin/*.apk /mnt/e/Omnipet/bin/"

@@ -1408,8 +1408,13 @@ class SceneTutorial:
         from ui.ui_constants import TEXT_FONT
         # The game's own text font at the ordinary size — this used to be
         # pygame's default face at two thirds of it, and read as noise.
-        font = font_load(TEXT_FONT, int(16 * self.ui_scale))
-        text = font.render("START to skip tutorial", True, (150, 150, 150))
+        # Rendered once per scale, not every frame.
+        cached = getattr(self, "_skip_hint_text", None)
+        if cached is None or cached[0] != self.ui_scale:
+            font = font_load(TEXT_FONT, int(16 * self.ui_scale))
+            cached = (self.ui_scale, font.render("START to skip tutorial", True, (150, 150, 150)))
+            self._skip_hint_text = cached
+        text = cached[1]
         
         # Position at top-right
         x = runtime_globals.SCREEN_WIDTH - text.get_width() - int(5 * self.ui_scale)

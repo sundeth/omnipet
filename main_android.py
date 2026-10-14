@@ -160,20 +160,13 @@ def main():
         offscreen = pygame.Surface((game_width, game_height))
         runtime_globals.render_surface = offscreen
 
-        # Now import game after environment is configured
+        from services import android_progress
+        android_progress.install_intent_hook()
         from vpet import VirtualPetGame
         game = VirtualPetGame()
-
-        # Background service controller
-        from services import android_background_service as bg_service
-
-        # If a previous session left the service running, stop it now.
-        bg_service.stop_service()
-
-        # Notifications are disabled for now (service_main.NOTIFICATIONS_ENABLED),
-        # so don't ask for POST_NOTIFICATIONS — prompting for a permission the
-        # build never uses only costs the player a dialog. Restore this call
-        # alongside the background-service work.
+        android_progress.refresh_scene(game)
+        android_progress.request_notification_permission()
+        game.save()  # first checkpoint/forecast, including legacy-save migration
 
         # SDL2 lifecycle events on Android.  SDL sends the APP_* pair on every
         # pause/resume; the WINDOW_* ones come straight out of nativePause /
@@ -195,7 +188,6 @@ def main():
         clock = pygame.time.Clock()
         running = True
         paused = False           # activity backgrounded: don't tick, don't draw
-        service_running = False  # the background service owns the save file
         present_failures = 0
         last_periodic_save = pygame.time.get_ticks()
         _last_frame_ticks = None  # None skips the gap check on the first iteration
@@ -209,42 +201,22 @@ def main():
         _lifecycle = {"pause": False, "resume": False}
 
         def _enter_background():
-            """Save, hand the pets to the service, and stop drawing."""
-            nonlocal paused, service_running
+            """Checkpoint care state and let native scheduled alarms take over."""
+            nonlocal paused
             if paused:
                 return
             paused = True
-            try:
-                game.save()
-            except Exception as save_exc:
-                print(f"[main_android] save() on pause failed: {save_exc}")
-            try:
-                service_running = bool(bg_service.start_service())
-            except Exception as svc_exc:
-                print(f"[main_android] start_service() failed: {svc_exc}")
-                service_running = False
-            print(f"[main_android] backgrounded (service: {service_running})")
+            android_progress.enter_background()
 
         def _leave_background():
-            """Take the pets back from the service and resume drawing."""
-            nonlocal paused, service_running, present_failures
-            if not paused and not service_running:
-                return  # not a resume -- window event during normal play
+            """Recover invisibly before any input or rendering resumes."""
+            nonlocal paused, present_failures
+            if not paused:
+                return
+            android_progress.enter_foreground()
+            android_progress.refresh_scene(game)
             paused = False
             present_failures = 0
-            try:
-                bg_service.stop_service()
-            except Exception as exc:
-                print(f"[main_android] stop_service() failed: {exc}")
-            if service_running:
-                # Only worth re-reading the save when the service was the one
-                # advancing it; game_globals.load() replaces every pet object.
-                service_running = False
-                try:
-                    bg_service.reload_state_from_disk()
-                except Exception as rel_exc:
-                    print(f"[main_android] reload_state_from_disk failed: {rel_exc}")
-            print("[main_android] foregrounded")
 
         # These run on Android's UI thread and must stay one assignment long.
         # Anything heavier (a save, a JNI call, an import) blocks the UI thread
@@ -257,7 +229,7 @@ def main():
             _lifecycle["resume"] = True
 
         # Install Android-native lifecycle callbacks.
-        bg_service.install_lifecycle_hooks(
+        android_progress.install_lifecycle_hooks(
             on_pause=_on_pause_from_jvm,
             on_resume=_on_resume_from_jvm,
         )
@@ -280,7 +252,8 @@ def main():
             _now_ticks = pygame.time.get_ticks()
             if (not paused and _last_frame_ticks is not None
                     and _now_ticks - _last_frame_ticks > 3000):
-                _leave_background()
+                android_progress.recover_suspension((_now_ticks - _last_frame_ticks) / 1000.0)
+                android_progress.refresh_scene(game)
             _last_frame_ticks = _now_ticks
 
             for event in pygame.event.get():
@@ -305,7 +278,7 @@ def main():
                     game.handle_event(event)
 
             if paused:
-                # The service is ticking the pets; touching the GL surface
+                # Native alarms handle reminders; touching the GL surface
                 # here would blank or crash it.  Idle instead -- time.wait()
                 # releases the GIL, which is what keeps the JVM lifecycle
                 # callbacks above (and Android's UI thread) responsive.
@@ -371,14 +344,7 @@ def main():
                         print(f"[main_android] display re-acquire failed: {disp_exc}")
             clock.tick(game_globals.configuration.frame_rate)
 
-        game.save()
-
-        # Foreground loop is exiting (user quit or OS terminating). Hand
-        # ticking off to the background service so pets keep advancing.
-        try:
-            bg_service.start_service()
-        except Exception as bg_exc:
-            print(f"[main_android] Failed to start background service on exit: {bg_exc}")
+        _enter_background()
 
     except Exception as e:
         # Show error screen with crash info + diagnostic data for debugging

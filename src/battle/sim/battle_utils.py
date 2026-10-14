@@ -988,8 +988,10 @@ def get_penc_training_pattern(stage=1, band=0):
     The same table a battle reads. They used to be separate, on four rows
     measured at one stage -- and reading every stage showed the difference
     was the stage, so there is nothing left for a second table to hold.
+    The battle rows run six rounds; the charge fires the first five
+    (PENC_CHARGE_ROUNDS), which is all the minigame has waves for.
     """
-    return get_penc_pattern(stage, band)
+    return get_penc_pattern(stage, band)[:PENC_CHARGE_ROUNDS]
 
 
 def penc_result_from_wire(op13_words, we_are_initiator):
@@ -1128,6 +1130,256 @@ def get_dmog_pve_pattern(slot, rng=None):
     return list(picker(choices))
 
 
+def _dmm_table():
+    return _pattern_table("DMM")
+
+
+#: Omnipet's attribute spellings, as DMM.json's columns name them.
+_DMM_ATTRIBUTES = {"Va": "Va", "Vaccine": "Va", "Da": "Da", "Data": "Da",
+                   "Vi": "Vi", "Virus": "Vi"}
+
+
+def dmm_column(stage=None, attribute=None):
+    """The DMM.json column a Digimon of this stage and attribute reads.
+
+    Stage 1-3 and Stage 6-7 are one column whatever the attribute; Stages 4
+    and 5 split by it. A Free pet, or any attribute a stage has no column for,
+    takes that stage's first column (Vaccine). A stage outside the table --
+    a pet from another module on this wire -- takes the nearest one.
+    """
+    columns = _dmm_table()["columns"]
+    try:
+        stage = int(stage)
+    except (TypeError, ValueError):
+        stage = 3
+    stages = sorted({s for column in columns for s in column["stages"]})
+    stage = max(stages[0], min(stages[-1], stage))
+    candidates = [column for column in columns if stage in column["stages"]]
+    name = _DMM_ATTRIBUTES.get(attribute)
+    for column in candidates:
+        if column["attributes"] is None or name in column["attributes"]:
+            return column
+    return candidates[0]
+
+
+def get_dmm_pattern(count, rng=None, stage=None, attribute=None):
+    """The five rounds a Digimon Mini throws for a Count Bar count, shuffled.
+
+    A value is the shot size, 1 to 4. The count picks a pattern number from the
+    column for the Digimon's **stage and attribute** (`dmm_column`); left
+    unset they read Stage 1-3. The device plays a pattern's five values **in a
+    different order every time**, so this deals them out afresh on every call;
+    pass *rng* to make the order repeatable. A count past the table reads its
+    last cell.
+    """
+    table = _dmm_table()
+    count = max(0, min(int(count or 0), table["max_count"]))
+    number = dmm_column(stage, attribute)["select"][count]
+    pattern = list(table["patterns"][number]["pattern"])
+    (rng or random).shuffle(pattern)
+    return pattern
+
+
+def get_dmm_enemy_pattern(stage=None, attribute=None, rng=None):
+    """The five rounds an adventure enemy throws on the Mini's table.
+
+    An enemy plays no charge, so it plays its column's `enemy_counts` for its
+    stage -- **ours**, not the device's, since the Mini has no adventure mode:
+    the lowest count whose row reaches a per-stage HP total. A stage the
+    column does not list takes that column's highest entry.
+    """
+    column = dmm_column(stage, attribute)
+    counts = column.get("enemy_counts", {})
+    count = counts.get(str(stage))
+    if count is None:
+        count = max(counts.values()) if counts else 0
+    return get_dmm_pattern(count, rng=rng, stage=stage, attribute=attribute)
+
+
+def dmm_pattern_number(pattern):
+    """Which of the 32 pool patterns a five-round row is, or None."""
+    shots = [list(pattern).count(size) for size in (1, 2, 3, 4)]
+    for entry in _dmm_table()["patterns"]:
+        if entry["shots"] == shots:
+            return entry["no"]
+    return None
+
+
+def dmm_counts_for(pattern, stage=None, attribute=None):
+    """The counts at which a Digimon of this stage and attribute throws this row.
+
+    Two pool entries hold the same shots (#15 and #16, #8 and #26), so the
+    match is on the shots rather than the number.
+    """
+    shots = [list(pattern).count(size) for size in (1, 2, 3, 4)]
+    table = _dmm_table()
+    column = dmm_column(stage, attribute)
+    return [count for count, number in enumerate(column["select"])
+            if table["patterns"][number]["shots"] == shots]
+
+
+def is_dmm_megahit(pattern):
+    """Whether a row is the Mini's Megahit, five rounds of its strongest shot."""
+    return sorted(pattern) == sorted(_dmm_table()["megahit"])
+
+
+def get_dmm_score(pattern):
+    """The Mini's training score for a row: its five shots' points summed.
+
+    A Single scores 0, a Double 1, a Triple 2 and a Hyper 4 (DMM.json's
+    `shot_points`, from nhoko's guide and the owner's manual), so a row is
+    worth 0 to 20 and a Megahit is the 20.
+    """
+    points = _dmm_table()["shot_points"]
+    return sum(points.get(str(value), 0) for value in pattern)
+
+
+def get_dmm_grade(pattern):
+    """The 0-3 result a Count Bar row is worth: Bad, Good, Great, Excellent.
+
+    Graded on the **score**, not on the count or the bars: 0-5 is a failure
+    that only sheds weight, and 6-11, 12-17 and 18 up are the three bands
+    that raise Strength (DMM.json's `grades`, the fewest points each needs).
+    The row belongs to the Digimon -- one count throws a different row at
+    each stage -- so the grade does too.
+    """
+    score = get_dmm_score(pattern)
+    thresholds = _dmm_table()["grades"]
+    for grade, name in ((3, "excellent"), (2, "great"), (1, "good")):
+        if score >= thresholds[name]:
+            return grade
+    return 0
+
+
+# ----------------------------------------------------------------------
+# The Digivice iC's RPM charge
+# ----------------------------------------------------------------------
+#
+# The iC shares the Mini's pool of rows and keys it differently. The Mini
+# reads a press count through a stage/attribute column; the iC reads a
+# rhythm meter earned against the Digimon's preferred pace. Its 0-10 bars
+# select a block of the shared pool. Final RPM alone cannot select a row.
+
+
+def _ic_table():
+    return _pattern_table("IC")
+
+
+#: Omnipet's attribute spellings, as IC.json's fallback names them. A Free
+#: pet is `Fr`, and a module record spells it as an empty string.
+_IC_ATTRIBUTES = {"Va": "Va", "Vaccine": "Va", "Da": "Da", "Data": "Da",
+                  "Vi": "Vi", "Virus": "Vi", "Fr": "Fr", "Free": "Fr", "": "Fr"}
+
+def ic_rpm_target(pet=None, stage=None, attribute=None, rpm=None):
+    """The Digimon's preferred pace, not an instant maximum-charge threshold.
+
+    **Its own, where it has one.** The iC gives every Digimon an RPM in its
+    roster -- 50 to 85 across the three devices, in `monster.json` -- and
+    that is the documented number: the playbook prints the same figures as a
+    stage/attribute table, and the roster refines them per Digimon.
+
+    `rpm_fallback` is that stage/attribute table, and is what a pet from
+    another module on this wire reads, since it carries no iC roster entry.
+    """
+    if rpm is None and pet is not None:
+        rpm = getattr(pet, "rpm", None)
+    try:
+        rpm = int(rpm)
+    except (TypeError, ValueError):
+        rpm = 0
+    if rpm > 0:
+        return rpm
+
+    if pet is not None:
+        if stage is None:
+            stage = getattr(pet, "stage", None)
+        if attribute is None:
+            attribute = getattr(pet, "attribute", None)
+    try:
+        stage = int(stage)
+    except (TypeError, ValueError):
+        stage = 3
+    columns = _ic_table()["rpm_fallback"]
+    stages = sorted({s for column in columns for s in column["stages"]})
+    stage = max(stages[0], min(stages[-1], stage))
+    column = next((c for c in columns if stage in c["stages"]), columns[0])
+    name = _IC_ATTRIBUTES.get(attribute, "Fr")
+    return column["rpm"].get(name, column["rpm"]["Fr"])
+
+
+def get_ic_pattern(bar, rng=None):
+    """The five rounds a Digivice iC throws for a bar, shuffled.
+
+    A bar holds up to four rows of the shared pool and **nothing read says
+    which one a battle throws**, so one is drawn at random; pass *rng* to
+    make it repeatable. As on the Mini, a row is a set of five values and
+    not a sequence, so the order is dealt afresh every time.
+    """
+    table = _ic_table()
+    bar = max(0, min(int(bar or 0), table["max_bar"]))
+    rows = table["bar_rows"][str(bar)]
+    picker = rng.choice if rng is not None else random.choice
+    pattern = list(table["patterns"][picker(rows)]["pattern"])
+    (rng or random).shuffle(pattern)
+    return pattern
+
+
+def ic_pattern_number(pattern):
+    """Which of the iC's rows a five-round set is, or None."""
+    shots = [list(pattern).count(size) for size in (1, 2, 3, 4)]
+    for entry in _ic_table()["patterns"]:
+        if entry["shots"] == shots:
+            return entry["no"]
+    return None
+
+
+def ic_bars_for_pattern(pattern):
+    """Every bar that can throw this row. A row can sit in two blocks."""
+    shots = [list(pattern).count(size) for size in (1, 2, 3, 4)]
+    return sorted({entry["bar"] for entry in _ic_table()["patterns"]
+                   if entry["shots"] == shots})
+
+
+def get_ic_score(pattern):
+    """The training score of an iC row, on the Mini's points.
+
+    The points are `shot_points`, which are the Mini's: what a row is worth
+    as TRAINING is Omnipet's own presentation and nothing on the iC
+    contradicts them. It is not the damage -- see IC.HIT_DAMAGE, where the
+    iC's Hyper is 4 and the Mini's is 6.
+    """
+    points = _ic_table()["shot_points"]
+    return sum(points.get(str(value), 0) for value in pattern)
+
+
+def get_ic_grade(pattern):
+    """The 0-3 result an iC row is worth: Bad, Good, Great, Excellent."""
+    score = get_ic_score(pattern)
+    thresholds = _ic_table()["grades"]
+    for grade, name in ((3, "excellent"), (2, "great"), (1, "good")):
+        if score >= thresholds[name]:
+            return grade
+    return 0
+
+
+def get_ic_enemy_pattern(stage=None, rng=None):
+    """The five rounds an adventure enemy throws on the iC's table.
+
+    An enemy plays no charge, so Omnipet picks its bar from its stage -- an
+    engine choice, as the Mini's `enemy_counts` are, because neither device
+    has an adventure mode. The ladder runs from the weakest bar at Baby I to
+    a strong one at Ultimate, stopping short of bar 10: the Hyper x5 belongs
+    to a player who earned it.
+    """
+    table = _ic_table()
+    try:
+        stage = int(stage)
+    except (TypeError, ValueError):
+        stage = 3
+    bar = max(0, min(table["max_bar"] - 1, stage + 1))
+    return get_ic_pattern(bar, rng=rng)
+
+
 #: The Pendulum's own table, from PENOG.json.
 PENOG_PATTERN_TABLE = None
 
@@ -1259,7 +1511,7 @@ def get_attack_damage(pattern_value, protocol="DMX"):
     Measured, not guessed. Ten battles against a real Digital Monster X
     were filmed on both screens and its HP bar read off round by round --
     one segment is one HP (`utilities/DMX/battle.txt`, reproduced by
-    `tests/test_battle_protocols.py`). Every figure above is a direct
+    `utilities/claude/tests/test_battle_protocols.py`). Every figure above is a direct
     reading: a critical against a full 18 leaves 8, and a single pattern
     walked down 16/10/6/4/0 gives the other four.
 

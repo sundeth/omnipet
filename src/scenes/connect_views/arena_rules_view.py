@@ -1,9 +1,10 @@
 """
 ArenaRulesView - Display the current arena season's rules.
 
-Shows the season's start/end dates and any restrictions that constrain
-which pets can join: allowed stages, attributes, or modules.  The
-underlying restriction keys mirror Season.is_pet_allowed on the server:
+Shows the season's start/end times, its battle settings (attacks per day,
+charge) and any restrictions that constrain which pets can join: allowed
+stages, attributes, or modules. The restriction keys are the ones the
+server's arena engine (``battle.arena.engine.restriction_error``) checks:
 
     {
         "allowed_stages":    [3, 4, 5],
@@ -52,6 +53,28 @@ def _format_week_label(value: str) -> str:
     # 1-indexed week-of-month: day 1-7 = WEEK 1, 8-14 = WEEK 2, etc.
     week = ((d.day - 1) // 7) + 1
     return f"{month} WEEK {week}"
+
+
+def _attribute_name(value) -> str:
+    """Vaccine / Data / Virus / Free, however the season wrote it."""
+    from battle.arena.engine import ATTRIBUTE_NAMES, ArenaError, normalize_attribute
+    try:
+        return ATTRIBUTE_NAMES[normalize_attribute(value)]
+    except ArenaError:
+        return str(value)
+
+
+def _format_moment(value: str) -> str:
+    """A season boundary in local time, e.g. ``OCT 05 14:00``."""
+    if not value or "T" not in value:
+        return _format_week_label(value)
+    try:
+        moment = _datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if moment.tzinfo is not None:
+            moment = moment.astimezone()
+        return f"{_MONTH_ABBR[moment.month - 1]} {moment.day:02d} {moment.hour:02d}:{moment.minute:02d}"
+    except Exception:
+        return value
 
 
 def _format_season_name(season: dict) -> str:
@@ -116,18 +139,23 @@ class ArenaRulesView:
             color_override=(255, 255, 255), center=True,
             word_wrap=True, max_width=w - 20))
 
-        # Start / End dates — short month + week-of-month, no year, to
-        # fit comfortably in the 240px-wide layout.
-        start = _format_week_label(self._season.get('start_date', ''))
-        end = _format_week_label(self._season.get('end_date', ''))
+        # Start / End -- local time, no year, to fit the 240px layout.
+        start = _format_moment(self._season.get('starts_at') or self._season.get('start_date', ''))
+        end = _format_moment(self._season.get('ends_at') or self._season.get('end_date', ''))
         self._add(Label(
-            10, 55, f"START: {start}", color_override=(200, 200, 200)))
+            10, 52, f"START: {start}", color_override=(200, 200, 200)))
         self._add(Label(
-            10, 68, f"END:   {end}", color_override=(200, 200, 200)))
+            10, 64, f"END:   {end}", color_override=(200, 200, 200)))
+        config = self._season.get('config') or {}
+        charge = config.get('charge', 2)
+        charge_text = "random" if charge == "random" else str(charge)
+        self._add(Label(
+            10, 76, f"ATTACKS/DAY: {config.get('attacks_per_day', '-')}  CHARGE: {charge_text}",
+            color_override=(200, 200, 200)))
 
         # Restrictions block
         restrictions = self._season.get('restrictions') or {}
-        y = 90
+        y = 94
         if not restrictions:
             self._add(Label(
                 w // 2, y, "No restrictions - all pets eligible",
@@ -144,6 +172,8 @@ class ArenaRulesView:
                 if not values:
                     continue
                 shown_any = True
+                if label == "Attribute":
+                    values = [_attribute_name(v) for v in values]
                 value_str = ", ".join(str(v) for v in values)
                 self._add(Label(
                     10, y, f"{label}:", color_override=(255, 215, 80)))

@@ -23,6 +23,9 @@ class GameSound:
         """
         self.base_path = base_path
         self.sounds = {}
+        # Every play() request, muted or not: input dispatch reads it to tell
+        # whether a press already answered with a sound (vpet.dispatch_input).
+        self.play_requests = 0
         self.sounds_loaded = False
         self.sound_labels = {
             1: "noise_beep",
@@ -48,13 +51,22 @@ class GameSound:
             21: "xros_start",
             22: "xros_animation",
             23: "xros_evolution",
+            # The Digivice iC's own minigame sounds (utilities/IC/make_ic_sounds.py).
+            24: "ic_shuffle",
+            25: "ic_fail",
+            26: "ic_success",
+            27: "ic_building_break",
+            28: "ic_poop_start",
+            29: "ic_poop_stage",
+            30: "ic20_ready",
+            31: "ic20_start",
+            32: "ic_press",
         }
 
         # Initialize pygame mixer with a small buffer to minimise playback latency.
         # 512 samples @ 44100 Hz ≈ 12 ms latency; safe on both desktop and Pi Zero 2W.
         # Guarded: SDL_Init(AUDIO) hard-fails in processes without the SDL
-        # bootstrap (notably the Android background service, which imports
-        # this module for the pet-tick logic) -- sound is simply disabled.
+        # bootstrap (for example headless tests) -- sound is simply disabled.
         try:
             if not pygame.mixer.get_init():
                 pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
@@ -108,6 +120,7 @@ class GameSound:
             The pygame Channel used for a sound effect, or None when playback
             could not be started (including when sound is muted).
         """
+        self.play_requests += 1
         if not game_globals.configuration.sound_volume:
             return None
         

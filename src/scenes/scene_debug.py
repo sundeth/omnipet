@@ -294,10 +294,16 @@ class SceneDebug:
             self.pending_menu = None
             open_next_step()
 
-        # Update pet selector with current selected pets
+        # Update pet selector with current selected pets, only when they
+        # changed: set_pets marks the row for redraw, which rebuilt the whole
+        # UI overlay every frame (34 ms a frame on the Pi Zero 2W).
         if self.pet_selector:
             current_pets = get_selected_pets()
-            self.pet_selector.set_pets(current_pets)
+            key = [(id(pet), getattr(pet, "name", None), getattr(pet, "state", None) == "nap")
+                   for pet in current_pets]
+            if key != getattr(self, "_pet_selector_key", None):
+                self._pet_selector_key = key
+                self.pet_selector.set_pets(current_pets)
         
         self.ui_manager.update()
 

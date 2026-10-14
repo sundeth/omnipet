@@ -3,6 +3,7 @@ import pygame
 from ui.ui_manager import UIManager
 from ui.components.background import Background
 from ui.components.title_scene import TitleScene
+from ui.components.label import Label
 from ui.components.button import Button
 from ui.components.menu import Menu
 from ui.components.digidex_list import DigidexList
@@ -13,7 +14,7 @@ from ui.components.digidex_tree import DigidexTree
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals
 import core.constants as constants
-from models.game_digidex import is_pet_unlocked, load_digidex
+from models.game_digidex import known_pet_keys, load_digidex
 from utils.data_compat import availability as read_availability
 from models.game_digidex_entry import GameDigidexEntry
 from utils.pygame_utils import  sprite_load_percent
@@ -51,9 +52,20 @@ class SceneDigidex:
             base_on="height"
         )
 
-        self.digidex_data = load_digidex()
-        self.pets = self.build_pet_list()
-        self.all_pets = self.pets.copy()  # Store unfiltered list for filtering
+        # The roster of every installed module is built after one "Loading..."
+        # frame has been drawn, a few modules per frame (LOAD_BUDGET_S): the
+        # first time each module's monster.json is parsed, which on a Pi Zero
+        # took 2.5 s in a single frame and looked like a frozen menu.
+        self._loading = True
+        self._loading_drawn = False
+        self._load_queue = None
+        self._loading_ui = UIManager(theme="LIME")
+        self._loading_ui.add_component(TitleScene(0, 9, "DIGIDEX"))
+        self._loading_label = Label(120, 112, "Loading...", is_title=True, center=True)
+        self._loading_ui.add_component(self._loading_label)
+        self.digidex_data = []
+        self.pets = []
+        self.all_pets = []
 
         # Scope chosen at the module view: which module (None = All) and
         # whether the Friends list (availability == "Friend") is shown
@@ -76,9 +88,53 @@ class SceneDigidex:
         self.tree_button = None
         self.back_button = None
 
+    #: Time one frame may spend building rosters while Loading is shown.
+    LOAD_BUDGET_S = 0.025
+
+    def _load_step(self):
+        """Build module rosters for up to LOAD_BUDGET_S (at least one module),
+        then, once every module is in, the UI. Returns True when done."""
+        import time
+        if self._load_queue is None:
+            self.digidex_data = load_digidex()
+            self._load_known_keys = known_pet_keys()
+            self._load_queue = list(runtime_globals.game_modules.values())
+            self._load_total = len(self._load_queue)
+            self._load_entries = []
+            self._load_known_counts = {}
+        started = time.perf_counter()
+        while self._load_queue:
+            module = self._load_queue.pop(0)
+            entries, known = self._module_roster(module, self._load_known_keys)
+            self._load_entries.extend(entries)
+            self._load_known_counts[module.name] = known
+            if time.perf_counter() - started >= self.LOAD_BUDGET_S:
+                break
+        if self._load_queue:
+            done = self._load_total - len(self._load_queue)
+            self._loading_label.set_text(f"Loading... {done}/{self._load_total}")
+            return False
+        self._finish_loading()
+        return True
+
+    def _finish_loading(self):
+        """Build the roster (what _load_step has not yet) and the UI; the
+        constructor only showed Loading."""
+        if self._load_queue is None:
+            self.digidex_data = load_digidex()
+            self.pets = self.build_pet_list()
+        else:
+            while self._load_queue:
+                module = self._load_queue.pop(0)
+                entries, known = self._module_roster(module, self._load_known_keys)
+                self._load_entries.extend(entries)
+                self._load_known_counts[module.name] = known
+            self.pets = self._complete_pet_list(self._load_entries, self._load_known_counts)
+        self.all_pets = self.pets.copy()  # Store unfiltered list for filtering
         self._setup_ui()
         self._show_module_view()
-
+        self._loading = False
+        self._loading_ui = None
         runtime_globals.game_console.log("[SceneDigidex] Digidex scene initialized with UI system (LIME theme).")
 
     def _setup_ui(self):
@@ -212,50 +268,76 @@ class SceneDigidex:
             f"[SceneDigidex] Scope: module={module_name or 'All'} friends={friends}")
 
     def build_pet_list(self):
+        """Every module's Library entries at once (the scene builds them a few
+        modules per frame instead, see _load_step)."""
+        known_keys = known_pet_keys()
         all_entries = []
         known_count_by_module = {}
-
         for module in runtime_globals.game_modules.values():
-            monsters = module.get_all_monsters()
-            module_known_count = 0
+            entries, known = self._module_roster(module, known_keys)
+            all_entries.extend(entries)
+            known_count_by_module[module.name] = known
+        return self._complete_pet_list(all_entries, known_count_by_module)
 
-            module_friends = None
+    def _module_roster(self, module, known_keys):
+        """One module's Library entries and how many of them are known."""
+        entries = []
+        module_known_count = 0
+        module_friends = None
+        roster = module.roster_summary()
+        name_format = module.name_format
 
-            for monster in monsters:
-                # Unobtainable pets never appear in the digidex.
-                availability = read_availability(monster)
-                if availability == "Unobtainable":
+        for name, version, attribute, stage, availability in roster:
+            # Unobtainable pets never appear in the digidex.
+            if availability == "Unobtainable":
+                continue
+            if availability == "Friend":
+                # Friend pets are discovered by battling their
+                # Friend-flagged enemy, tracked in the save's friend list.
+                if module_friends is None:
+                    from utils.xros_utils import get_module_friends
+                    module_friends = get_module_friends(module.name)
+                known = name in module_friends
+            else:
+                known = (name, module.name, version) in known_keys
+
+            if not known:
+                name = "????"
+                attribute = "???"
+                sprite = self.unknown_sprite
+            else:
+                module_known_count += 1
+                sprite = None
+
+            entry = GameDigidexEntry(name, attribute, stage, module.name, version, sprite, known, name_format)
+            entry.availability = availability
+            entries.append(entry)
+
+        # Recruits (Digimon World's): raisable Digimon a friend-flagged
+        # enemy recruits are listed again under Friends, known once
+        # recruited. Not counted towards the digidex unlocks: raising
+        # them is what counts.
+        recruits = getattr(module, "get_recruit_friends", lambda: [])()
+        if recruits:
+            from utils.xros_utils import get_module_friends
+            met = get_module_friends(module.name)
+            seen = set()
+            for name, version, attribute, stage, _availability in roster:
+                if name not in recruits or name in seen:
                     continue
+                seen.add(name)
+                known = name in met
+                entry = GameDigidexEntry(
+                    name if known else "????",
+                    attribute if known else "???",
+                    stage, module.name, version,
+                    None if known else self.unknown_sprite, known, module.name_format)
+                entry.availability = "Friend"
+                entries.append(entry)
+        return entries, module_known_count
 
-                name = monster["name"]
-                version = monster["version"]
-                attribute = monster.get("attribute", "")
-                stage = monster.get("stage", 0)
-                name_format = module.name_format
-                if availability == "Friend":
-                    # Friend pets are discovered by battling their
-                    # Friend-flagged enemy, tracked in the save's friend list.
-                    if module_friends is None:
-                        from utils.xros_utils import get_module_friends
-                        module_friends = get_module_friends(module.name)
-                    known = name in module_friends
-                else:
-                    known = is_pet_unlocked(name, module.name, version)
-
-                if not known:
-                    name = "????"
-                    attribute = "???"
-                    sprite = self.unknown_sprite
-                else:
-                    module_known_count += 1
-                    sprite = None
-
-                entry = GameDigidexEntry(name, attribute, stage, module.name, version, sprite, known, name_format)
-                entry.availability = availability
-                all_entries.append(entry)
-
-            known_count_by_module[module.name] = module_known_count
-
+    def _complete_pet_list(self, all_entries, known_count_by_module):
+        """Grant the digidex-count unlocks and sort the entries."""
         for module in runtime_globals.game_modules.values():
             unlocks = getattr(module, "unlocks", [])
             if isinstance(unlocks, list):
@@ -271,21 +353,33 @@ class SceneDigidex:
     def update(self):
         # Update shared window background
         self.window_background.update()
-        
+
+        if self._loading:
+            if self._loading_drawn:
+                self._load_step()
+            return
+
         # Update UI manager (delegates to active components)
         self.ui_manager.update()
 
     def draw(self, surface: pygame.Surface):
         # Draw shared window background
         self.window_background.draw(surface)
-        
+
+        if self._loading:
+            self._loading_ui.draw(surface)
+            self._loading_drawn = True
+            return
+
         # Draw UI components via manager
         self.ui_manager.draw(surface)
 
     def handle_event(self, event):
         if not isinstance(event, tuple) or len(event) != 2:
             return False
-        
+        if self._loading:
+            return True     # nothing to press until the roster is built
+
         event_type, event_data = event
         
         # Handle events through UIManager

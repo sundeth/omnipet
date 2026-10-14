@@ -106,10 +106,11 @@ class AdventureView:
         )
         self.ui_manager.add_component(self.adventure_button)
         
-        # Specials button (password redemption) — only shown when a party
-        # pet belongs to a module that has passwords (codes.json).
-        from utils.password_utils import any_party_module_has_passwords
-        has_specials = any_party_module_has_passwords()
+        # Specials button (the Specials hub) — only shown when a party pet's
+        # module offers something there: codes (codes.json) or an open shop
+        # (shop.json). See utils.specials_utils.
+        from utils.specials_utils import any_party_specials
+        has_specials = any_party_specials()
 
         exit_width = 75
         exit_height = 25
@@ -117,11 +118,10 @@ class AdventureView:
         exit_y = adventure_y + button_height // 2 + button_spacing
 
         if has_specials:
-            specials_width = 95
+            # As wide as EXIT, under it; the label alone fits that width.
             self.specials_button = Button(
-                (ui_width - specials_width) // 2, exit_y, specials_width, exit_height,
+                exit_x, exit_y, exit_width, exit_height,
                 "SPECIALS", self._on_specials,
-                icon_name="Shiny", icon_prefix="Status",
                 cut_corners={'tl': False, 'tr': False, 'bl': False, 'br': False}
             )
             self.ui_manager.add_component(self.specials_button)

@@ -118,9 +118,9 @@ class CountMatchClassicTraining(Training):
         if self.minigame:
             self.strength = self.minigame.strength
 
-        if self.strength == 14:
+        if self.strength >= 14:          # the meter runs past 14; the result screen promises it from 14 up
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Count Match Classic training perfect score achieved! Trophy awarded.")
 
     def draw_charge(self, surface):

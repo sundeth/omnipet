@@ -41,8 +41,9 @@ class HeadToHeadTraining(Training):
         if self.phase != "alert":
             self.head_charge.update()
             
-        # Check if minigame is complete
-        if self.head_charge.is_complete() and self.phase != "result":
+        # Check if minigame is complete. Only from the charge: after the result
+        # the phase moves on to the currency screen, which this used to undo.
+        if self.head_charge.is_complete() and self.phase == "charge":
             self.phase = "result"
             self.frame_counter = 0
             
@@ -101,7 +102,7 @@ class HeadToHeadTraining(Training):
         """Award trophy on winning head-to-head training"""
         if self.check_victory():
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Head-to-head training won! Trophy awarded.")
 
     def get_attack_count(self):

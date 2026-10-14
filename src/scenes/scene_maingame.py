@@ -19,12 +19,14 @@ import core.constants as constants
 from models.game_evolution_entity import GameEvolutionEntity
 from utils.pet_utils import all_pets_hatched, distribute_pets_evenly, draw_pet_outline, get_selected_pets
 from utils.pygame_utils import blit_with_cache, get_flipped_sprite, get_font
+from utils.sprite_utils import right_facing
 from utils.scene_utils import change_scene
 from utils.inventory_utils import add_to_inventory, get_item_by_name
 from utils.module_utils import get_module
 from utils.quest_event_utils import generate_daily_quests, get_hourly_random_event
 from utils.inventory_utils import add_to_inventory
 from utils.asset_utils import image_load
+from utils import accessory_utils
 
 #=====================================================================
 # SceneMainGame
@@ -263,6 +265,8 @@ class SceneMainGame:
                 # The iC Reliability penalty is per pair accumulated since
                 # the last flush, so cleaning begins a new episode.
                 pet.unflushed_poops = 0
+                # Cleaned in time: no poop costs a care mistake now.
+                pet.poop_mistake_timers = []
                 module = get_module(pet.module)
                 if module.care_flush_disturbance_sleep:
                     pet.check_disturbed_sleep()
@@ -282,10 +286,10 @@ class SceneMainGame:
         if pending and self.friend_show is None:
             runtime_globals.friend_celebration = None
             try:
-                from utils.xros_utils import _find_friend_monster
+                from utils.xros_utils import friend_record
                 from models.game_pet import GamePet
                 module = get_module(pending["module"])
-                entry = _find_friend_monster(module, pending["name"])
+                entry = friend_record(module, pending["name"])
                 if entry:
                     data = dict(entry)
                     data["module"] = pending["module"]
@@ -314,45 +318,20 @@ class SceneMainGame:
         # One tick a minute drives both event systems.
         minute_tick = self.frame_counter % (game_globals.configuration.frame_rate * 60) == 0
 
-        # --- Friend Event Battles (earned by clearing an area) ---------------
-        # Independent of the XAI roll: the promise was made by a pet that
-        # cleared an area and simply counts down. The timer is paused while
-        # another event is on screen, so the promise is never spent on a
-        # moment when it could not be shown.
-        if minute_tick and self.event_stage == 0 and game_globals.event is None:
-            from utils.xros_utils import tick_friend_event
-            friend_event = tick_friend_event()
-            if friend_event is not None:
-                game_globals.event = friend_event
-
-        # --- XAI random events (rolled, roughly hourly) ----------------------
+        from models.event_clock import EventClock
         if game_globals.event is None:
-            if self.event_stage == 0:
-                if minute_tick:
-                    game_globals.event_time -= 1
-                    if game_globals.event_time <= 0:
-                        # Something has to be up and about for an event to
-                        # interrupt it; a party that is all asleep or dead is
-                        # left alone.
-                        anyone_active = any(
-                            pet.state not in ("dead", "nap")
-                            for pet in game_globals.pet_list)
-
-                        if anyone_active:
-                            # Time to check for an event with XAI-based probability
-                            game_globals.event = get_hourly_random_event()
-                            runtime_globals.game_console.log(f"[Event] Event check with XAI {game_globals.xai}")
-                        else:
-                            runtime_globals.game_console.log(f"[Event] Skipping event check - no pet is awake")
-
-                        # Roughly hourly, with a little slack so the check
-                        # doesn't land on the same minute every time.
-                        game_globals.event_time = random.randint(45, 75)
+            if minute_tick and self.event_stage == 0:
+                from utils.xros_utils import tick_friend_event
+                from utils.event_utils import scheduled_event
+                EventClock.tick(game_globals, get_hourly_random_event, tick_friend_event,
+                                choose_scheduled=lambda: scheduled_event(
+                                    game_globals.pet_list, runtime_globals.game_modules,
+                                    datetime.datetime.now()))
         elif game_globals.event is not None and self.event_stage == 0:
             if game_globals.event:
                 self.event_stage = 1  # Move to alert stage
-                self.event_sound_played = False
-                self.event_alert_timeout = 0
+                self.event_alert_timeout, self.event_sound_played = EventClock.initial_alert(
+                    game_globals.event, game_globals.configuration.frame_rate)
                 runtime_globals.game_console.log(f"[Event] New event: {game_globals.event.name}")
         
         # Stage 2: Alert stage - blink alert icon and wait for player input
@@ -367,7 +346,7 @@ class SceneMainGame:
             
             # 1-minute timeout: dismiss event if player doesn't respond
             self.event_alert_timeout += 1
-            if self.event_alert_timeout >= game_globals.configuration.frame_rate * 60:
+            if EventClock.expired(self.event_alert_timeout, game_globals.configuration.frame_rate):
                 runtime_globals.game_console.log(f"[Event] Event timed out after 1 minute: {game_globals.event.name}")
                 game_globals.event = None
                 self.event_stage = 0
@@ -393,6 +372,42 @@ class SceneMainGame:
                                                      game_globals.event.name]
                 change_scene("battle")
                 # Reset event
+                game_globals.event = None
+                self.event_stage = 0
+            elif game_globals.event.type == EventType.BATTLE_RUN:
+                # Every round of the area in turn; the battle pays the reward
+                # (battle.battle_encounter, `special_run`).
+                event = game_globals.event
+                runtime_globals.game_console.log(f"[Event] Starting battle run: {event.name}")
+                runtime_globals.special_run = {
+                    "name": event.name, "item": event.item,
+                    "item_quantity": event.item_quantity,
+                    "reward_round": getattr(event, "reward_round", 0)}
+                runtime_globals.special_encounter = [event.module, event.area, event.round, None]
+                change_scene("battle")
+                game_globals.event = None
+                self.event_stage = 0
+            elif game_globals.event.type == EventType.CARD_BATTLE:
+                # The opponent was drawn when the event fired; the battle
+                # fights that monster and pays the card's rewards.
+                event = game_globals.event
+                runtime_globals.game_console.log(f"[Event] Starting card battle: {event.name} vs {event.opponent}")
+                runtime_globals.card_battle = {
+                    "module": event.module, "event_id": event.id, "name": event.name,
+                    "opponent": getattr(event, "opponent", ""),
+                    "opponent_version": getattr(event, "opponent_version", 0)}
+                runtime_globals.special_encounter = [event.module, -1, 1, None]
+                change_scene("battle")
+                game_globals.event = None
+                self.event_stage = 0
+            elif game_globals.event.type == EventType.SHOP_ACCESS:
+                # A random or scheduled shop event opens the shop when
+                # accepted (a battle-triggered one opened it at once).
+                from utils.event_utils import grant_shop_access, _announce
+                event = game_globals.event
+                grant_shop_access(event.module, event.shop, getattr(event, "access_minutes", 0))
+                _announce(f"{event.shop} opened!")
+                runtime_globals.game_sound.play("happy")
                 game_globals.event = None
                 self.event_stage = 0
 
@@ -695,6 +710,9 @@ class SceneMainGame:
         if self.friend_show is not None:
             self.friend_show.draw(surface)
 
+        # A C'mon Switch close-up, over everything
+        accessory_utils.draw_closeup(surface)
+
         # Draw event animations and alerts
         self.draw_events(surface)
 
@@ -717,7 +735,7 @@ class SceneMainGame:
             frame_enum = pet.animation_frames[pet.frame_index]
             frame = runtime_globals.pet_sprites[pet][frame_enum.value]
             if pet.direction == 1:
-                frame = get_flipped_sprite(frame)
+                frame = right_facing(frame, runtime_globals.pet_sprites_right.get(pet))
 
             if is_selected:
                 draw_pet_outline(surface, frame, pet.x, pet.y, color=constants.FONT_COLOR_BLUE)  # blue outline
@@ -912,6 +930,10 @@ class SceneMainGame:
 
         blit_with_cache(surface, heart_surface, (x, y))
 
+    def plays_own_input_sounds(self):
+        """Input is locked while an evolution plays: no answer to each press."""
+        return bool(getattr(self, "lock_inputs", False))
+
     def handle_event(self, event) -> None:
         """
         Handles keyboard and GPIO button inputs in the main game scene.
@@ -923,6 +945,11 @@ class SceneMainGame:
         runtime_globals.last_input_frame = getattr(self, 'frame_counter', 0)
 
         if self.lock_inputs:
+            return
+
+        # Any input ends a C'mon Switch close-up, and does nothing else.
+        if accessory_utils.closeup_active():
+            accessory_utils.end_closeup()
             return
 
         # Handle mouse/touch clicks in pet area to toggle hearts view and menu

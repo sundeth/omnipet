@@ -20,6 +20,76 @@ from core import runtime_globals, game_globals
 from utils.asset_utils import image_load, resolve_path
 
 
+def _frame_key(filename: str):
+    """``(frame number, right-facing?)`` for "4.png" / "4R.png", else None.
+
+    A ``<n>R.png`` frame is the device's own right-facing drawing of frame
+    n (the Pendulum Color Godzilla Edition and the Digital Monster COLOR
+    Godzilla carry them for asymmetric Digimon); without one the left frame
+    is mirrored, as before.
+    """
+    stem = os.path.splitext(filename)[0]
+    right = stem[-1:] in ("R", "r")
+    if right:
+        stem = stem[:-1]
+    try:
+        return int(stem), right
+    except ValueError:
+        return None
+
+
+def _scaled(sprite, size, scale, pixel_perfect):
+    if size:
+        return (scale_sprite_pixel_perfect(sprite, size)
+                if pixel_perfect
+                else scale_sprite_proportionally(sprite, size))
+    if scale != 1.0:
+        base_size = sprite.get_size()
+        new_size = (int(base_size[0] * scale), int(base_size[1] * scale))
+        return pygame.transform.scale(sprite, new_size)
+    return sprite
+
+
+def pair_right_frames(sprites, right) -> Dict[pygame.Surface, pygame.Surface]:
+    """Map each loaded frame to its right-facing frame, by surface.
+
+    Keyed by the left surface rather than the frame number, so a frame that
+    is later replaced (the dead sprite, Burpmon) or moved (reverse_atk_frames)
+    simply has no pair and is mirrored instead.
+    """
+    if not right:
+        return {}
+    if isinstance(sprites, dict):
+        items = sprites.items()
+    else:
+        items = enumerate(sprites)
+    return {frame: right[i] for i, frame in items
+            if frame is not None and i in right}
+
+
+def get_right_sprite(entity, index):
+    """Frame *index* of a pet or enemy facing right (its ``get_right_sprite``,
+    else the frame mirrored); None when the frame is missing."""
+    getter = getattr(entity, "get_right_sprite", None)
+    if getter is not None:
+        return getter(index)
+    frame = entity.get_sprite(index)
+    if frame is None:
+        return None
+    from utils.pygame_utils import get_flipped_sprite
+    return get_flipped_sprite(frame)
+
+
+def right_facing(frame, pairs):
+    """*frame* facing right: its own right-facing drawing, else mirrored."""
+    from utils.pygame_utils import get_flipped_sprite
+    if pairs:
+        own = pairs.get(frame)
+        if own is not None:
+            return own
+    return get_flipped_sprite(frame)
+
+
 def get_sprite_name(pet_name: str, name_format: str = "$_dmc") -> str:
     """
     Generate standardized sprite folder/zip name using module name_format.
@@ -157,15 +227,17 @@ def create_fallback_sprite(size: tuple) -> pygame.Surface:
 
 
 def load_sprites_from_directory(sprite_path: str, size: tuple = None, scale: float = 1.0,
-                                pixel_perfect: bool = False) -> Dict[int, pygame.Surface]:
+                                pixel_perfect: bool = False,
+                                right: Optional[Dict[int, pygame.Surface]] = None) -> Dict[int, pygame.Surface]:
     """
     Load all PNG sprites from a directory.
-    
+
     Args:
         sprite_path: Path to directory containing sprites
         size: Target size tuple (width, height) for scaling
         scale: Scale factor if size is not provided
-        
+        right: Receives the right-facing ``<n>R.png`` frames when given
+
     Returns:
         Dictionary mapping frame number (int) to pygame Surface, returns empty dict if dir not found
     """
@@ -179,28 +251,18 @@ def load_sprites_from_directory(sprite_path: str, size: tuple = None, scale: flo
     try:
         for filename in os.listdir(resolved_path):
             if filename.lower().endswith('.png'):
-                # Extract frame number from filename (e.g., "0.png" -> 0)
-                try:
-                    frame_num = int(filename[:-4])
-                except (ValueError, IndexError):
-                    # Skip files that don't have numeric names
+                # Extract frame number from filename (e.g., "0.png" -> 0,
+                # "4R.png" -> right-facing 4); skip other names
+                key = _frame_key(filename)
+                if key is None or (key[1] and right is None):
                     continue
-                    
+                frame_num, is_right = key
+
                 file_path = os.path.join(sprite_path, filename)
                 try:
                     sprite = image_load(file_path).convert_alpha()
-                    
-                    # Apply scaling
-                    if size:
-                        sprite = (scale_sprite_pixel_perfect(sprite, size)
-                                  if pixel_perfect
-                                  else scale_sprite_proportionally(sprite, size))
-                    elif scale != 1.0:
-                        base_size = sprite.get_size()
-                        new_size = (int(base_size[0] * scale), int(base_size[1] * scale))
-                        sprite = pygame.transform.scale(sprite, new_size)
-                    
-                    sprites[frame_num] = sprite
+                    sprite = _scaled(sprite, size, scale, pixel_perfect)
+                    (right if is_right else sprites)[frame_num] = sprite
                 except pygame.error as e:
                     runtime_globals.game_console.log(f"[Sprite] Failed to load sprite {file_path}: {e}")
     except OSError as e:
@@ -210,15 +272,17 @@ def load_sprites_from_directory(sprite_path: str, size: tuple = None, scale: flo
 
 
 def load_sprites_from_zip(zip_path: str, size: tuple = None, scale: float = 1.0,
-                          pixel_perfect: bool = False) -> Dict[int, pygame.Surface]:
+                          pixel_perfect: bool = False,
+                          right: Optional[Dict[int, pygame.Surface]] = None) -> Dict[int, pygame.Surface]:
     """
     Load sprites from a zip file.
-    
+
     Args:
         zip_path: Path to zip file
         size: Target size tuple (width, height) for scaling
         scale: Scale factor if size is not provided
-        
+        right: Receives the right-facing ``<n>R.png`` frames when given
+                
     Returns:
         Dictionary mapping frame number (int) to pygame Surface, returns empty dict if zip not found
     """
@@ -236,10 +300,10 @@ def load_sprites_from_zip(zip_path: str, size: tuple = None, scale: float = 1.0,
                 try:
                     # Extract frame number from filename
                     filename = os.path.basename(zip_entry)
-                    try:
-                        frame_num = int(filename[:-4])
-                    except (ValueError, IndexError):
+                    key = _frame_key(filename)
+                    if key is None or (key[1] and right is None):
                         continue
+                    frame_num, is_right = key
                     
                     # Read the file data
                     with zip_file.open(zip_entry) as sprite_file:
@@ -247,18 +311,8 @@ def load_sprites_from_zip(zip_path: str, size: tuple = None, scale: float = 1.0,
                     
                     # Create pygame surface from the data
                     sprite = pygame.image.load(io.BytesIO(sprite_data)).convert_alpha()
-                    
-                    # Apply scaling
-                    if size:
-                        sprite = (scale_sprite_pixel_perfect(sprite, size)
-                                  if pixel_perfect
-                                  else scale_sprite_proportionally(sprite, size))
-                    elif scale != 1.0:
-                        base_size = sprite.get_size()
-                        new_size = (int(base_size[0] * scale), int(base_size[1] * scale))
-                        sprite = pygame.transform.scale(sprite, new_size)
-                    
-                    sprites[frame_num] = sprite
+                    sprite = _scaled(sprite, size, scale, pixel_perfect)
+                    (right if is_right else sprites)[frame_num] = sprite
                     
                 except Exception as e:
                     runtime_globals.game_console.log(f"[Sprite] Failed to load sprite {zip_entry} from {zip_path}: {e}")
@@ -272,17 +326,19 @@ def load_sprites_from_zip(zip_path: str, size: tuple = None, scale: float = 1.0,
 
 
 def try_load_sprite_type(sprite_type: str, module_path: str, sprite_name: str, size: tuple, scale: float,
-                         pixel_perfect: bool = False) -> Dict[int, pygame.Surface]:
+                         pixel_perfect: bool = False,
+                         right: Optional[Dict[int, pygame.Surface]] = None) -> Dict[int, pygame.Surface]:
     """
     Try to load sprites of a specific type from module folder first, then global assets.
-    
+
     Args:
         sprite_type: Type of sprite ("Color", "Dot", or "HD")
         module_path: Path to module folder
         sprite_name: Name of the sprite (formatted name)
         size: Target size tuple for scaling
         scale: Scale factor if size not provided
-        
+        right: Receives the right-facing frames of the set that is used
+
     Returns:
         Dictionary mapping frame number to sprite, or empty dict if not found
     """
@@ -297,7 +353,9 @@ def try_load_sprite_type(sprite_type: str, module_path: str, sprite_name: str, s
     
     # Try module folder first
     module_sprite_dir = os.path.join(module_path, folder_name, sprite_name)
-    sprites = load_sprites_from_directory(module_sprite_dir, size, scale, pixel_perfect)
+    sprites = load_sprites_from_directory(module_sprite_dir, size, scale, pixel_perfect, right)
+    if not sprites and right:
+        right.clear()
     if sprites:
         log_type = f"module {sprite_type}"
         runtime_globals.game_console.log(f"[Sprite] Loaded {len(sprites)} frames from {log_type}")
@@ -305,7 +363,9 @@ def try_load_sprite_type(sprite_type: str, module_path: str, sprite_name: str, s
     
     # Try module zip file
     module_sprite_zip = os.path.join(module_path, folder_name, f"{sprite_name}.zip")
-    sprites = load_sprites_from_zip(module_sprite_zip, size, scale, pixel_perfect)
+    sprites = load_sprites_from_zip(module_sprite_zip, size, scale, pixel_perfect, right)
+    if not sprites and right:
+        right.clear()
     if sprites:
         log_type = f"module {sprite_type}"
         runtime_globals.game_console.log(f"[Sprite] Loaded {len(sprites)} frames from {log_type} (zip)")
@@ -313,7 +373,9 @@ def try_load_sprite_type(sprite_type: str, module_path: str, sprite_name: str, s
     
     # Try global assets folder
     assets_sprite_dir = os.path.join("assets", folder_name, sprite_name)
-    sprites = load_sprites_from_directory(assets_sprite_dir, size, scale, pixel_perfect)
+    sprites = load_sprites_from_directory(assets_sprite_dir, size, scale, pixel_perfect, right)
+    if not sprites and right:
+        right.clear()
     if sprites:
         log_type = f"assets {sprite_type}"
         runtime_globals.game_console.log(f"[Sprite] Loaded {len(sprites)} frames from {log_type}")
@@ -321,7 +383,9 @@ def try_load_sprite_type(sprite_type: str, module_path: str, sprite_name: str, s
     
     # Try global assets zip file
     assets_sprite_zip = os.path.join("assets", folder_name, f"{sprite_name}.zip")
-    sprites = load_sprites_from_zip(assets_sprite_zip, size, scale, pixel_perfect)
+    sprites = load_sprites_from_zip(assets_sprite_zip, size, scale, pixel_perfect, right)
+    if not sprites and right:
+        right.clear()
     if sprites:
         log_type = f"assets {sprite_type}"
         runtime_globals.game_console.log(f"[Sprite] Loaded {len(sprites)} frames from {log_type} (zip)")
@@ -338,7 +402,8 @@ def load_pet_sprites(
     scale: float = 1.0,
     primary_sprite_format: str = "Color",
     secondary_sprite_format: str = "HD",
-    pixel_perfect: bool = False
+    pixel_perfect: bool = False,
+    right: Optional[Dict[int, pygame.Surface]] = None
 ) -> Dict[int, pygame.Surface]:
     """
     Load pet sprites with advanced priority system based on configuration and module settings.
@@ -368,7 +433,7 @@ def load_pet_sprites(
     """
     sprites, _ = load_pet_sprites_resolved(
         pet_name, module_path, name_format, size, scale,
-        primary_sprite_format, secondary_sprite_format, pixel_perfect
+        primary_sprite_format, secondary_sprite_format, pixel_perfect, right
     )
     return sprites
 
@@ -408,7 +473,8 @@ def load_pet_sprites_resolved(
     scale: float = 1.0,
     primary_sprite_format: str = "Color",
     secondary_sprite_format: str = "HD",
-    pixel_perfect: bool = False
+    pixel_perfect: bool = False,
+    right: Optional[Dict[int, pygame.Surface]] = None
 ) -> Tuple[Dict[int, pygame.Surface], Optional[str]]:
     """Like load_pet_sprites() but also reports which format was actually used.
 
@@ -431,7 +497,7 @@ def load_pet_sprites_resolved(
     for sprite_type in load_order:
         if sprite_type in all_types:  # Safety check
             sprites = try_load_sprite_type(sprite_type, module_path, sprite_name, size, scale,
-                                           pixel_perfect)
+                                           pixel_perfect, right)
             if sprites:
                 return sprites, sprite_type
 
@@ -450,7 +516,8 @@ def load_enemy_sprites(
     scale: float = 1.0,
     primary_sprite_format: str = "Color",
     secondary_sprite_format: str = "HD",
-    pixel_perfect: bool = False
+    pixel_perfect: bool = False,
+    right: Optional[Dict[int, pygame.Surface]] = None
 ) -> Dict[int, pygame.Surface]:
     """
     Load enemy sprites using the same system as pets.
@@ -469,7 +536,7 @@ def load_enemy_sprites(
     """
     # Enemies use the same loading system as pets
     return load_pet_sprites(enemy_name, module_path, name_format, size, scale,
-                           primary_sprite_format, secondary_sprite_format, pixel_perfect)
+                           primary_sprite_format, secondary_sprite_format, pixel_perfect, right)
 
 
 def convert_sprites_to_list(sprites_dict: Dict[int, pygame.Surface], max_frames: int = 20) -> List[Optional[pygame.Surface]]:

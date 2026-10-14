@@ -19,16 +19,16 @@ This package is upstream wificom-lib, vendored. Layout:
     punchbag.py         vendored verbatim   the DigiROM tree
     realtime.py         vendored, 2 lines   real-time battle state machines
     settings.py         vendored verbatim   stored settings
-    digiroms.txt        vendored verbatim   canned DigiROMs
     version.py          ported              version info sent to the server
     transport.py        Omnipet             paho-mqtt in place of wifi_picow
     dmcomm_shim.py      Omnipet             stands in for dmcomm-python
 
 Upstream's own imports (`from wificom import mqtt`) resolve unchanged,
 because `main.py` puts `src/` on `sys.path` and this package sits there under
-its upstream name.
+its upstream name. Upstream's digiroms.txt (canned DigiROMs; the game does not
+read it) is kept as test data in `tests/support/data/digiroms.txt`.
 
-UPSTREAM.md records the revision, what each upstream file became and why, and
+utilities/wificom/UPSTREAM.md records the revision, what each upstream file became and why, and
 how to re-sync. The verbatim upstream tree is kept at
 `utilities/wificom/upstream/` to diff against.
 """

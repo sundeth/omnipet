@@ -56,7 +56,7 @@
             <h2 class="section-title" onclick="toggleSection(this)">Controls<span class="arrow">▼</span></h2>
             <div class="section-content" style="display:none;">
                 <p>These are default controls for the game, each device can have its own mapping for these buttons. You
-                    can customize the mapping by editing file input_config.json inside the config folder</p>
+                    can change the mapping in game: Settings &gt; Input &gt; Remap Input (keyboard, gamepad and GamePi buttons).</p>
                 <br>
                 <ul style="list-style: none; padding: 0;">
                     <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
@@ -1047,66 +1047,41 @@
         </div>
 
         <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)">Configuration Files<span class="arrow">▼</span>
+            <h2 class="section-title" onclick="toggleSection(this)">Settings<span class="arrow">▼</span>
             </h2>
             <div class="section-content" style="display:none;">
-                <p>Omnipet uses two main configuration files located in the <code>config</code> folder. These files allow you to customize the game's behavior, display settings, and input controls.</p>
-                
-                <h3>config.json - Game Settings</h3>
-                <p>This file contains general game settings that control display, performance, and game limits:</p>
+                <p>Everything is set from the game's own Settings menu (START from the main screen) and saved with your game: there are no configuration files to edit. Each platform starts with sensible defaults (on a GamePi, Batocera or a phone: fullscreen at 240x240 and 30 fps).</p>
                 <table class="feature-table">
                     <tr>
-                        <td style="width: 200px;"><strong>SCREEN_WIDTH</strong></td>
-                        <td>Game window width in pixels. Default: 240</td>
+                        <td style="width: 200px;"><strong>Gameplay</strong></td>
+                        <td>Max Pets (how many pets your party holds), Wake and Sleep (the times your pets go to bed and wake up), Change Mode (Free or Progress Mode), Replay Tutorial</td>
                     </tr>
                     <tr>
-                        <td><strong>SCREEN_HEIGHT</strong></td>
-                        <td>Game window height in pixels. Default: 240</td>
+                        <td><strong>Display</strong></td>
+                        <td>Render Res (the resolution the game draws at), Window Size (when not fullscreen), Show Clock, Show FPS, Timeout (screen saver), Sprites (the sprite style you prefer) and Old Sprites</td>
                     </tr>
                     <tr>
-                        <td><strong>FRAME_RATE</strong></td>
-                        <td>Target frames per second for the game. Default: 30</td>
+                        <td><strong>Audio</strong></td>
+                        <td>Volume</td>
                     </tr>
                     <tr>
-                        <td><strong>MAX_PETS</strong></td>
-                        <td>Maximum number of pets that can be in your active party. Default: 6</td>
+                        <td><strong>Input</strong></td>
+                        <td>Remap Input (assign keyboard keys, gamepad buttons and GamePi buttons to each action: LEFT, RIGHT, UP, DOWN, A, B, X, Y, START, SELECT, L, R) and Test Graphics (run the display setup again)</td>
                     </tr>
                     <tr>
-                        <td><strong>FULLSCREEN</strong></td>
-                        <td>Launch the game in fullscreen mode. Set to <code>true</code> or <code>false</code>. Default: false</td>
+                        <td><strong>Backgrounds</strong></td>
+                        <td>Choose among the backgrounds you have unlocked or bought</td>
                     </tr>
                     <tr>
-                        <td><strong>AUTO_RESOLUTION</strong></td>
-                        <td>Automatically set resolution based on your screen resolution. When enabled, ignores SCREEN_WIDTH and SCREEN_HEIGHT. Note: This may reduce performance on some devices. Default: false</td>
+                        <td><strong>Secrets</strong></td>
+                        <td>Enter codes</td>
                     </tr>
                     <tr>
-                        <td><strong>SHOW_FPS</strong></td>
-                        <td>Display the current FPS counter on screen. Default: false</td>
+                        <td><strong>System</strong></td>
+                        <td>Android only: notifications</td>
                     </tr>
                 </table>
-
-                <h3>input_config.json - Input Controls</h3>
-                <p>This file configures all input methods for the game. You can customize keyboard keys, mouse behavior, GPIO pins for Raspberry Pi, and joystick button mappings.</p>
-                
-                <h4>Keyboard Section</h4>
-                <p>Map keyboard keys to game actions. Keys are specified using Pygame key constants (e.g., <code>K_LEFT</code>, <code>K_RETURN</code>).</p>
-                <ul>
-                    <li><strong>LEFT, RIGHT, UP, DOWN:</strong> Directional navigation</li>
-                    <li><strong>A:</strong> Confirm/Select action</li>
-                    <li><strong>B:</strong> Back/Cancel action</li>
-                    <li><strong>X, Y:</strong> Alternative action buttons</li>
-                    <li><strong>START:</strong> Open main menu</li>
-                    <li><strong>SELECT:</strong> Secondary select action</li>
-                    <li><strong>R:</strong> Right shoulder button</li>
-                </ul>
-
-                <h4>GPIO Section</h4>
-                <p>Pin mappings for running the game on GamePi (Raspberry Pi Zero 2W). Each entry maps a GPIO pin number to a game action (e.g., <code>"16": "LEFT"</code>).</p>
-
-                <h4>Joystick Section</h4>
-                <p>Map joystick/gamepad buttons to game actions. Each entry maps a button index to a game action (e.g., <code>"0": "A"</code>). Button indices may vary depending on your controller model.</p>
-
-                <p><strong>Note:</strong> After modifying configuration files, restart the game for changes to take effect.</p>
+                <p><strong>Fullscreen:</strong> start the game with <code>--fullscreen</code> (for example <code>launch.sh --fullscreen</code>) to force it on a desktop.</p>
             </div>
         </div>
     </div>

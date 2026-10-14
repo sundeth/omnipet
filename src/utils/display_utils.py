@@ -289,6 +289,9 @@ def load_preserving_display():
         game_globals.configuration.screen_width,
         game_globals.configuration.screen_height)
     ensure_render_surface_matches()
+    if runtime_globals.IS_ANDROID:
+        from services import android_progress
+        android_progress.on_load()
     # Re-place the loaded pets/poops for the carried resolution.
     try:
         from utils.pet_utils import reposition_for_resolution
@@ -324,6 +327,9 @@ def load_keeping_device_display():
         game_globals.configuration.screen_width,
         game_globals.configuration.screen_height)
     ensure_render_surface_matches()
+    if runtime_globals.IS_ANDROID:
+        from services import android_progress
+        android_progress.on_load()
 
 
 def reconcile_window_from_config():

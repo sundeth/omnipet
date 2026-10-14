@@ -89,7 +89,7 @@ class ExciteTraining(Training):
         """Award trophy if strength reaches maximum (3)"""
         if self.xaibar.selected_strength == 3:
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Excite training perfect score achieved! Trophy awarded.")
 
     def draw_charge(self, surface):
@@ -189,13 +189,9 @@ class ExciteTraining(Training):
     def get_attack_count(self):
         # The Xai bar already reports 0-3, which is exactly the Digital
         # Monster X's Bad / Good / Great / Excellent.
+        # (It used to turn a Good 1 into 2, paying a Good stop as Great.)
         strength = self.xaibar.selected_strength
-        if strength < 1:
-            return 0
-        elif strength < 3:
-            return 2
-        else:
-            return 3
+        return max(0, min(3, int(strength or 0)))
 
     def handle_event(self, event):
         event_type, event_data = event

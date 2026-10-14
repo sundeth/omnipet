@@ -22,7 +22,7 @@ ROM is reported.
 
 `src/battle/dcom/dcom_protocol.py` formats DigiROM command strings but does
 not parse them back, so the parser is still to be written (or dmcomm-python
-vendored alongside this package). See UPSTREAM.md.
+vendored alongside this package). See utilities/wificom/UPSTREAM.md.
 """
 
 from typing import Any, Callable, Optional

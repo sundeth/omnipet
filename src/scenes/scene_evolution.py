@@ -118,6 +118,9 @@ class SceneEvolution:
 
         phase_methods.get(self.phase, lambda: None)()
 
+    def plays_own_input_sounds(self):
+        return True
+
     def handle_event(self, event):
         if not isinstance(event, tuple) or len(event) != 2:
             return

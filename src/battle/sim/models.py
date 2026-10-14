@@ -183,6 +183,8 @@ class AttributeEnum(Enum):
 class BattleProtocol(Enum):
     DMOG_BS = auto()   # Digital Monster Original (slot-based)
     PENOG_BS = auto()  # Digimon Pendulum (original), its own 4-packet battle
+    DMM_BS = auto()   # Digimon Pendulum X / Digimon Mini, 4 packets on X timing
+    IC_BS = auto()     # Digivice iC / 20X / Burst, 5 packets on the IR wire
     DM20_BS = auto()
     DMC_BS = auto()
     DMX_BS = auto()

@@ -12,7 +12,7 @@ from battle.dcom.dcom_controller import DComController
 from battle.dcom.dcom_protocol import ProtocolType
 from battle.sim.models import Digimon, BattleResult, DigimonStatus, BattleProtocol
 from battle.sim.battle_simulator import (BattleSimulator, DMDevice, DM20Device,
-                                         PENOGDevice,
+                                         PENOGDevice, DMMDevice, ICDevice,
                                          PEN20Device, DMXDevice, DMCDevice)
 from battle.sim import protocol_constants
 from core import runtime_globals
@@ -57,6 +57,12 @@ def is_oem_pet(pet, battle_format: str) -> bool:
     module_name = getattr(pet, 'module', '')
     if not module_name or not battle_format:
         return False
+    # A line can name its own device module outright, and a wire names the
+    # other devices that speak it: an iC on the Mini's wire sends its own
+    # index, as a real one does.
+    if (module_name in protocol_constants.native_modules(battle_format)
+            or module_name in protocol_constants.wire_modules(battle_format)):
+        return True
     try:
         from utils.module_utils import get_module
         module = get_module(module_name)
@@ -81,8 +87,8 @@ def module_for_format(battle_format: str):
     The lookup is on the module's declared ``battle_protocol`` and not on its
     name, because names move: the DM module is being renamed to DMOG, and PEN
     already declares PENOG while keeping its own name. An exact name match is
-    preferred first, since several modules can declare one line -- DMGZ, DMH
-    and DMXW all speak DMC, and the DMC module is the one that *is* it.
+    preferred first, since several modules can declare one line -- DMGZ and
+    DMH speak DMC, and the DMC module is the one that *is* it.
 
     Returns None when the player does not own the module, which is the
     ordinary case; the caller then keeps its existing fallback.
@@ -95,9 +101,10 @@ def modules_for_format(battle_format: str):
     """Every installed module reproducing *battle_format*, best match first.
 
     Several modules can declare one line, and on the Colour line that is the
-    ordinary case rather than an oddity: **DMC, DMGZ, DMH and DMXW all speak
-    DMC**, because the Godzilla, Monster Hunter and Xros Wars editions are
-    Digital Monster Colors with their own rosters. The module named after the
+    ordinary case rather than an oddity: **DMC, DMGZ and DMH all speak DMC**,
+    because the Godzilla and Monster Hunter editions are Digital Monster
+    Colors with their own rosters. (The Xros Wars declares its own line,
+    DMXW, and is not among them.) The module named after the
     format is the one that *is* it and comes first; the rest are its
     crossovers, and an opponent that resolves on none of the format's own
     roster can still be one of theirs.
@@ -110,14 +117,20 @@ def modules_for_format(battle_format: str):
     if not canonical:
         return []
     modules = getattr(runtime_globals, 'game_modules', None) or {}
-    names = ([canonical] if canonical in modules else [])
-    names += sorted(name for name in modules if name != canonical)
+    # A line's named owners come first. The modules its wire versions name
+    # are crossovers whatever they declare: the IC module declares IC, and
+    # a real iC on the Mini's wire is still one of its Digimon.
+    native = protocol_constants.native_modules(canonical)
+    participants = protocol_constants.wire_modules(canonical)
+    names = [name for name in native if name in modules]
+    names += [canonical] if canonical in modules and canonical not in names else []
+    names += sorted(name for name in modules if name not in names)
     found = []
     for name in names:
         module = modules.get(name)
         declared = protocol_constants.canonical_format(
             getattr(module, 'battle_protocol', '') or '')
-        if declared == canonical:
+        if declared == canonical or name in native or name in participants:
             found.append(module)
     return found
 
@@ -286,9 +299,14 @@ def pet_to_digimon(pet, battle_format: str, minigame_result: int = 0) -> Digimon
         # The field's width and the device's sprite bank are different
         # limits -- see shot_to_wire.
         bank = SHOT_BANKS.get(limit_name, 'SHOT_COUNT')
-        return protocol_constants.shot_to_wire(
-            value, getattr(limits, limit_name, default),
-            getattr(limits, bank, 0))
+        field_max = getattr(limits, limit_name, default)
+        if getattr(limits, 'SHOT_IS_OMNIPET_NUMBERED', False):
+            # DMM: the wire counts sprites from 1 as Omnipet does, so the
+            # id goes out as it stands -- 0 is still "no sprite", and a real
+            # one stays below the field's all-ones sentinel.
+            return max(0, min(int(value or 0), field_max - 1))
+        return protocol_constants.shot_to_wire(value, field_max,
+                                               getattr(limits, bank, 0))
 
     if limits.NAME == 'DMX':
         # Three shots on this wire: atk_main is the weak one, atk_alt strong,
@@ -298,6 +316,15 @@ def pet_to_digimon(pet, battle_format: str, minigame_result: int = 0) -> Digimon
         shot1 = shot(strong or fallback)
         shot2 = shot(weak or fallback)
         shot_m = shot(mega or fallback, 'MAX_SHOT_M', 0x1F)
+    elif limits.NAME == 'IC':
+        # **The iC's nibble is the attack Kind, not a sprite id**: 4, or 5
+        # at Max Reliability. The receiver draws us from its own library
+        # whatever we put there (IC.KIND_NORMAL), so the only thing worth
+        # saying is whether the Max Reliability flag is set.
+        from battle import ic_attacks
+        shot1 = shot2 = (limits.KIND_MAX_RELIABILITY if ic_attacks.max_reliability(pet)
+                         else limits.KIND_NORMAL)
+        shot_m = 0
     else:
         main, alt = raw('atk_main'), raw('atk_alt')
         fallback = main or alt
@@ -310,6 +337,11 @@ def pet_to_digimon(pet, battle_format: str, minigame_result: int = 0) -> Digimon
     # Review separately from peer parsing; only the resulting wire power is
     # authoritative once sent. Do not reconstruct a peer's private bonuses.
     raw_power = pet.get_power() if hasattr(pet, 'get_power') else getattr(pet, 'power', 50)
+    if limits.NAME == 'IC':
+        # Packet 2's byte is Family(3) | Strength(5), and the strength is
+        # what the hit rate is taken from. So the pet's power here is its
+        # strength; the family goes on when the packet is built.
+        raw_power = ic_attacks.wire_strength(pet)
     raw_hp = pet.get_hp() if hasattr(pet, 'get_hp') else getattr(pet, 'hp', 5)
     power = fit(raw_power, 'MAX_POWER', 0xFF)
     hp = fit(raw_hp, 'MAX_HP', 0xFF)
@@ -355,6 +387,31 @@ def pet_to_digimon(pet, battle_format: str, minigame_result: int = 0) -> Digimon
     #: A compatibility pet announces no version of its own; the wire may
     #: mirror the device's instead (DMX.DCOM_VERSION_ECHO).
     digimon.compatibility = compatibility
+    #: The iC sends its equipped weapon in packet 3. Ours is the active boost
+    #: item from the pet's own module that declares a `protocol_value`;
+    #: using up the boost is the battle's business, not the wire's.
+    digimon.ic_weapon = digimon.ic_weapon_power = 0
+    digimon.ic_mini_power = None
+    if limits.NAME == 'IC':
+        #: Packet 3's Power, which a device sends by stage.
+        digimon.ic_mini_power = limits.stage_value(
+            limits.MINI_POWER_BY_STAGE, getattr(pet, 'stage', 0))
+    #: The pet's family, which says whether it can use its weapon.
+    digimon.digisoul = getattr(pet, 'digisoul', None)
+    if limits.NAME == 'IC':
+        from utils.inventory_utils import active_protocol_value
+        digimon.ic_weapon = active_protocol_value(getattr(pet, 'module', ''))
+        if digimon.ic_weapon:
+            # 16-19 carry their fifth bit in packet 2's Kind, and a weapon
+            # the pet can use raises packet 3's Power.
+            digimon.shot1 = digimon.shot2 = limits.kind_with_weapon(
+                digimon.shot1, digimon.ic_weapon)
+            digimon.ic_weapon_power = limits.weapon_power(
+                digimon.ic_weapon, getattr(pet, 'digisoul', None))
+            runtime_globals.game_console.log(
+                f"[DCom] {digimon.name} has a weapon equipped: sending "
+                f"{digimon.ic_weapon} in packet 3 (Kind {digimon.shot1}, "
+                f"Power +{digimon.ic_weapon_power})")
 
     runtime_globals.game_console.log(
         f"[DCom] {digimon.name}: HP={hp}, Power={power}, attr={attribute}, "
@@ -455,6 +512,14 @@ class DComBattleSimulator:
             f"[DComBattleSimulator] {self.constants.DISPLAY_NAME}: "
             f"{self.wire.NAME} wire, {self.wire.PACKET_COUNT} packets, "
             f"HP={self.wire.FIXED_HP or 'variable'}, minigame={self.constants.MINIGAME}")
+        # A format whose transport the adapter in hand may simply not have
+        # says so here. Without it the failure is indistinguishable from a
+        # device that never answered -- the adapter reports nothing either
+        # way -- and the log is where that gets diagnosed afterwards.
+        note = getattr(self.constants, 'TRANSPORT_NOTE', None)
+        if note:
+            runtime_globals.game_console.log(
+                f"[DComBattleSimulator] {self.constants.NAME} transport: {note}")
 
         # Internal simulator, used for the shared battle/packet logging.
         self.internal_simulator = BattleSimulator(
@@ -648,7 +713,13 @@ class DComBattleSimulator:
         # but only in a listen-and-reply exchange: XOR-against-the-reply is a
         # type-2 feature, and going first there is nothing to reply to.
         replying = turn == protocol_constants.DCOM_TURN_LISTEN
-        final = getattr(self.wire, 'DCOM_FINAL_SEGMENT', None)
+        # A wire whose checksum target depends on what WE are sending works
+        # it out from the packets; the rest name a constant. The iC is the
+        # first of the former: its check skips packet 1's flag bits, so a
+        # side that sets them needs a different `@` digit.
+        builder = getattr(self.wire, 'dcom_final_segment', None)
+        final = (builder(packets) if callable(builder)
+                 else getattr(self.wire, 'DCOM_FINAL_SEGMENT', None))
         self.sent_computed_final = bool(final and replying and hex_packets)
         if self.sent_computed_final:
             hex_packets[-1] = final
@@ -786,6 +857,16 @@ class DComBattleSimulator:
                 # A template only. PacketExchange rolls from transmitted
                 # slots/effort; a cable responder uses the adapter operators.
                 packets = PENOGDevice(digimon).generate_all_packets()
+            elif wire == 'DMM':
+                # Packet 4's hits are a template: the adapter inverts the
+                # device's (DCOM_FINAL_SEGMENT), and PacketExchange resolves
+                # them between two Omnipets.
+                packets = DMMDevice(digimon).generate_all_packets()
+            elif wire == 'IC':
+                # The Mini's packets with an empty one inserted and its own
+                # EOL. Packet 5's hits are a template for the same reason
+                # DMM's packet 4 is -- see IC.DCOM_FINAL_SEGMENT.
+                packets = ICDevice(digimon).generate_all_packets()
             elif wire == 'DM20':
                 packets = DM20Device(digimon).generate_all_packets_for_dcom(order=order)
             elif wire == 'PEN20':
@@ -879,6 +960,8 @@ class DComBattleSimulator:
                 opponent = self._parse_dm_opponent(packet_bytes)
             elif wire == 'PENOG':
                 opponent = self._parse_penog_opponent(packet_bytes)
+            elif wire in ('DMM', 'IC'):
+                opponent = self._parse_dmm_opponent(packet_bytes)
             elif wire == 'DMC':
                 opponent = self._parse_dmc_opponent(packet_bytes)
             else:
@@ -891,9 +974,22 @@ class DComBattleSimulator:
                 # exchanges no sprite ids at all (DM) has already filled in
                 # Omnipet-numbered defaults, so it is left alone.
                 shot_max = getattr(self.wire, 'MAX_SHOT', 0x3F)
-                if shot_max > 0:
+                if shot_max > 0 and not getattr(
+                        self.wire, 'SHOT_IS_OMNIPET_NUMBERED', False):
                     opponent.shot1 = protocol_constants.shot_from_wire(opponent.shot1, shot_max)
                     opponent.shot2 = protocol_constants.shot_from_wire(opponent.shot2, shot_max)
+                # A wire whose device ids are not yet mapped onto its bank
+                # (PENOG) keeps them inside the bank rather than naming a
+                # sprite that does not exist. 0 stays "none".
+                if getattr(self.wire, 'CLAMP_INCOMING_SHOT', False):
+                    bank = self.wire.SHOT_COUNT
+                    raw = (opponent.shot1, opponent.shot2)
+                    opponent.shot1 = min(opponent.shot1, bank)
+                    opponent.shot2 = min(opponent.shot2, bank)
+                    if raw != (opponent.shot1, opponent.shot2):
+                        runtime_globals.game_console.log(
+                            "[DComBattleSimulator] %s shot %s clamped to the "
+                            "%d-sprite bank" % (self.wire.NAME, raw, bank))
                 if hasattr(opponent, 'dmx_shot_m'):
                     opponent.dmx_shot_m = protocol_constants.shot_from_wire(
                         opponent.dmx_shot_m, getattr(self.wire, 'MAX_SHOT_M', 0x1F))
@@ -935,6 +1031,8 @@ class DComBattleSimulator:
             return self._validate_dmc_packets(packets)
         if wire == 'PENOG':
             return self._validate_penog_packets(packets)
+        if wire in ('DMM', 'IC'):
+            return self._validate_dmm_packets(packets)
         return False
 
     def _validate_penog_packets(self, packets: List[bytes]) -> bool:
@@ -968,6 +1066,67 @@ class DComBattleSimulator:
                 f"{total % 16}, expected {limits.CHECKSUM_REMAINDER}")
             return False
         return True
+
+    def mini_family(self):
+        """This wire's limits and packet builder, for the Mini/iC family.
+
+        The Digimon Mini and the Digivice iC are the same layout with a
+        packet inserted: the iC sends five where the Mini sends four, ends
+        every one in 7 rather than 9 and checks to 3 rather than 4, and
+        every field below packet 1 is the Mini's read across. So generation,
+        validation, parsing and replay are shared and take the wire's own
+        limits rather than DMM's -- which is what they used to be pinned to,
+        and would have fought an iC exchange on the Mini's numbers.
+        """
+        wire = self.wire.NAME
+        if wire == 'IC':
+            return protocol_constants.IC, ICDevice
+        return protocol_constants.DMM, DMMDevice
+
+    def _validate_dmm_packets(self, packets: List[bytes]) -> bool:
+        """This wire's packet count, its EOL on every one, its digit sum.
+
+        The only two checks the family is known to carry -- both hold on
+        every PenX, Mini and iC code on record.
+
+        The iC has an exception, and it is the one thing on that wire worth
+        accepting rather than rejecting. Five of the six iC codes sum to 3;
+        dmcomm's "iC you win" sums to F, and it is also the only one with
+        packet 1's two top bits set, which are worth exactly the difference.
+        Both readings -- a Flags(2) | Version(2) nibble, and a check that
+        skips those two bits -- explain the other's exception, and neither is
+        confirmed. A device that sets them is what would confirm both, so a
+        side that lands on the remainder once those bits are taken out is
+        accepted and logged rather than thrown away as malformed.
+        """
+        limits, _device = self.mini_family()
+        if len(packets) != limits.PACKET_COUNT or any(len(p) < 2 for p in packets):
+            return False
+        for position, packet in enumerate(packets, start=1):
+            if (packet[1] & 0xF) != limits.EOL:
+                runtime_globals.game_console.log(
+                    f"[DComBattleSimulator] {limits.NAME} packet {position} ends "
+                    f"in {packet[1] & 0xF:X}, not {limits.EOL:X}")
+                return False
+        total = sum((byte >> 4) + (byte & 0xF) for p in packets for byte in p[:2])
+        if total % 16 == limits.CHECKSUM_REMAINDER:
+            return True
+        flags = (packets[0][0] >> 6) & 0b11
+        if limits.NAME == 'IC' and flags:
+            without = (total - (flags << 2)) % 16
+            if without == limits.CHECKSUM_REMAINDER:
+                runtime_globals.game_console.log(
+                    "[DComBattleSimulator] IC digit sum is %d, and %d once "
+                    "packet 1's two flag bits (%s) are taken out -- accepting. "
+                    "**This is the capture `utilities/IC/protocol.txt` item 6 "
+                    "asks for**: a device, not dmcomm, setting those bits and "
+                    "checking without them."
+                    % (total % 16, without, format(flags, '02b')))
+                return True
+        runtime_globals.game_console.log(
+            f"[DComBattleSimulator] {limits.NAME} digit sum remainder "
+            f"{total % 16}, expected {limits.CHECKSUM_REMAINDER}")
+        return False
 
     def _join_wire_groups(self, packets: List[bytes]) -> List[bytes]:
         """Reassemble DMComm's 16-bit groups into this wire's packets.
@@ -1546,7 +1705,8 @@ class DComBattleSimulator:
 
             runtime_globals.game_console.log(
                 "[DComBattleSimulator] PENOG parsed: slot=%d (stage %d), "
-                "version=%d, sick=%d, effort=%d, attack=%s, hits=%s, shot=%d"
+                "version=%d, sick=%d, effort=%d, attack=%s, hits=%s, "
+                "shot=%d"
                 % (slot, stage, version, first.get('sick', 0),
                    second.get('effort', 0), format(second.get('attack', 0), '05b'),
                    format(third.get('hits', 0), '05b'), fourth.get('shot', 0)))
@@ -1560,6 +1720,7 @@ class DComBattleSimulator:
                 power=second.get('effort', 0), handicap=0, buff=0,
                 mini_game=0, level=1, stage=stage,
                 sick=first.get('sick', 0),
+                # One sprite per Digimon: the same id draws both levels.
                 shot1=fourth.get('shot', 0), shot2=fourth.get('shot', 0),
                 tag_meter=0,
             )
@@ -1573,6 +1734,159 @@ class DComBattleSimulator:
             runtime_globals.game_console.log(
                 f"[DComBattleSimulator] PENOG parse error: {error}")
             return None
+
+    def _parse_dmm_opponent(self, packets: List[bytes]) -> Optional[Digimon]:
+        """Read a Digimon Mini or Digivice iC side, and log every field of it.
+
+        Every field is named by nacatech's analyzer except the final packet's
+        three unnamed bits, which are printed raw so a battle that sets one
+        is on record. The attribute is carried in this wire's own order and
+        put back on Omnipet's here, as the Colour parser does.
+
+        **On the iC every field but packet 1's is a reading**, carried across
+        from the Mini because the two are the same family -- so this logs the
+        two places a capture would disagree (`mini_family`).
+        """
+        from battle.sim.battle_utils import (dmm_counts_for, dmm_pattern_number,
+                                              ic_bars_for_pattern,
+                                              ic_pattern_number)
+
+        limits, device = self.mini_family()
+        fields = device.parse(packets)
+        back = {wire: internal for internal, wire in limits.ATTRIBUTE_MAP.items()}
+        attribute = back.get(fields['attribute'], 3)
+        # The wire carries no stage, so the count is read as a Stage 1-3
+        # Digimon's -- which is only the count for one. The pattern number is
+        # the device's own statement whatever the stage.
+        # Each device names its own row. The pool is shared but the key is
+        # not: the Mini answers with the counts that throw it, the iC with
+        # the bars, so reporting an iC row in the Mini's counts would print
+        # a press count for a charge that never counted presses.
+        if limits.NAME == 'IC':
+            number = ic_pattern_number(fields['rounds'])
+            counts = ic_bars_for_pattern(fields['rounds'])
+            key_name = "bar"
+        else:
+            number = dmm_pattern_number(fields['rounds'])
+            counts = dmm_counts_for(fields['rounds'])
+            key_name = "Stage 1-3 count"
+        runtime_globals.game_console.log(
+            "[DComBattleSimulator] %s parsed: version=%d index=%d projectile=%d "
+            "power=%d attribute=%d (Omnipet %s) shot sizes=%s (pattern #%s; %s "
+            "%s) hits=%s | unnamed bits=%s"
+            % (limits.NAME, fields['version'], fields['index'], fields['projectile'],
+               fields['power'], fields['attribute'], ATTRIBUTE_NAMES.get(attribute),
+               "".join(map(str, fields['rounds'])), number, key_name,
+               ",".join(map(str, counts)) or "none",
+               format(fields['hits'], '05b'), format(fields['flags'], '03b')))
+        # **Everything worth capturing on the iC wire is in these two.**
+        # Packet 4 is 0007 on all six codes on record, and packet 1's top
+        # nibble is read as Flags(2) | Version(2) rather than a 4-bit
+        # version. Neither reading has a device behind it, so anything that
+        # is not the expected value is said out loud rather than parsed
+        # silently into a field that may not exist. See
+        # `utilities/IC/protocol.txt`, items 5 and 6.
+        if limits.NAME == 'IC':
+            # Packet 3 tracks the roster slot, not the charge, and its body
+            # has matched that slot's compatibility-mode Power on both slots
+            # read so far -- see IC.OBSERVED_PACKET3_BY_INDEX. Say what it
+            # was every time, because the interesting log line is the one
+            # that does not fit.
+            known = getattr(limits, 'OBSERVED_PACKET3_BY_INDEX', None) or {}
+            word = (int.from_bytes(bytes(packets[2])[:2], 'big')
+                    if len(packets) > 2 else None)
+            if word is not None:
+                expected = known.get(fields['index'])
+                if expected is None:
+                    note = ("a slot with nothing on record -- **note the body "
+                            "and this Digimon's compatibility-mode Power; "
+                            "they have matched on every slot so far**")
+                # The top nibble is the weapon (`weapon` below), so only the
+                # Power beneath it is the slot's.
+                elif (word >> 4) & 0xFF == (expected >> 4) & 0xFF:
+                    note = ("as every capture at index %d has sent (body %d, "
+                            "which is that slot's compatibility Power)"
+                            % (fields['index'], (expected >> 4) & 0xFFF))
+                else:
+                    note = ("**WHICH IS NOT THE %04X EVERY EARLIER CAPTURE AT "
+                            "INDEX %d SENT -- this is the reading that says "
+                            "what packet 3 really is**"
+                            % (expected, fields['index']))
+                runtime_globals.game_console.log(
+                    "[DComBattleSimulator] IC packet 3 = %04X, body %d: %s"
+                    % (word, (word >> 4) & 0xFFF, note))
+            flags = (fields['version'] >> 2) & 0b11
+            spare = fields.get('pattern_spare', 0)
+            runtime_globals.game_console.log(
+                "[DComBattleSimulator] IC packet 4 = the attack pattern %s"
+                "%s | packet 1 nibble=%X -> flags=%s device=%d"
+                % ("".join(map(str, fields['rounds'])),
+                   "" if not spare else
+                   "  **packet 4's spare 2 bits are %s, and have been 0 on "
+                   "every capture**" % format(spare, '02b'),
+                   fields['version'], format(flags, '02b'),
+                   fields['version'] & 0b11))
+
+        opponent = Digimon(
+            name=FALLBACK_NAMES.get(attribute, "Opponent"), order=1, traited=0,
+            egg_shake=0, index=fields['index'], hp=limits.FIXED_HP,
+            attribute=attribute, power=fields['power'], handicap=0, buff=0,
+            mini_game=counts[0] if counts else 0, level=1, stage=3, sick=0,
+            # One projectile field, kept as the wire sent it. What the
+            # opponent actually DRAWS with is the line's business, not the
+            # packet's -- `DMM.ENEMY_ATTACK_SPRITES` -- because this wire
+            # names the ordinary shot and has no field for the Hyper.
+            shot1=fields['projectile'], shot2=fields['projectile'], tag_meter=0,
+        )
+        # The device number is the low two bits on the iC, not the whole
+        # nibble: announcing 12 for "iC you win" would put the opponent on a
+        # version no roster has, and `module_versions_for_wire` would invert
+        # it to module 13.
+        version = fields['version']
+        if limits.NAME == 'IC':
+            version &= 0b11
+            # **The iC sends no sprite ids.** A receiving iC draws a sender
+            # from its own library, by the Max Reliability flag and the Power
+            # band, so that is what we draw it with too (battle.ic_attacks).
+            from battle import ic_attacks
+            opponent.ic_weapon = fields.get('weapon', 0)
+            # Family(3) | Strength(5): the strength is its power in the hit
+            # rate, and the family is its DigiSoul whether or not a roster
+            # of ours names the Digimon.
+            opponent.power = fields['strength']
+            opponent.digisoul = limits.FAMILY_NAMES.get(fields['family'])
+            main, alt, crit, flagged = ic_attacks.sender_sprites(
+                fields['projectile'], fields['power'], opponent.ic_weapon,
+                opponent.digisoul)
+            opponent.ic_sprites = (main, alt, crit)
+            opponent.ic_max_reliability = flagged
+            runtime_globals.game_console.log(
+                "[DComBattleSimulator] IC kind=%d (%s) byte=%d = family %d (%s), "
+                "strength %d -> ordinary %d, critical %d | weapon %d (%s), "
+                "Mini-mode power %d"
+                % (fields['projectile'],
+                   "Max Reliability" if flagged else "ordinary", fields['power'],
+                   fields['family'], opponent.digisoul or "unread", fields['strength'],
+                   alt if flagged else main, crit if flagged else limits.STANDARD_CRIT,
+                   opponent.ic_weapon, self._weapon_names(opponent.ic_weapon),
+                   fields.get('mini_power', 0)))
+        opponent.version = version
+        self.opponent_device_version = version
+        opponent.penx_fields = fields
+        return opponent
+
+    def _weapon_names(self, value) -> str:
+        """The items whose `protocol_value` is *value* on this line, for a log.
+
+        The value is the weapon's own number, 1-19 (`IC.weapon_id`), so one
+        item matches once every weapon declares its value.
+        """
+        if not value:
+            return "none"
+        names = [item.name for module in modules_for_format(self.battle_format)
+                 for item in (getattr(module, 'items', None) or [])
+                 if getattr(item, 'protocol_value', 0) == value]
+        return ", ".join(names) or "no item of ours declares it"
 
     def _name_opponent(self, opponent: Digimon) -> None:
         """Give the opponent its real name, when the wire actually said one.
@@ -1615,9 +1929,9 @@ class DComBattleSimulator:
                 % (self.battle_format, index, opponent.name))
             return
         # **Several modules can reproduce one line.** On the Colour line that
-        # is the ordinary case: DMC, DMGZ, DMH and DMXW all declare DMC,
-        # because the Godzilla, Monster Hunter and Xros Wars editions are
-        # Digital Monster Colors with rosters of their own. The one named
+        # is the ordinary case: DMC, DMGZ and DMH all declare DMC, because
+        # the Godzilla and Monster Hunter editions are Digital Monster Colors
+        # with rosters of their own. The one named
         # after the format is tried first and answers every ordinary battle;
         # the crossovers are only reached when it has nothing, which is
         # exactly when the device said it was not one of the five.
@@ -1640,6 +1954,21 @@ class DComBattleSimulator:
         versions = protocol_constants.module_versions_for_wire(
             self.battle_format, wire_version)
 
+        # **The version says which DEVICE, even when it cannot say which
+        # Digimon** -- and it has to be spent before the line's own roster is
+        # searched, not only when that search comes up empty. A line whose
+        # devices number themselves apart declares `MODULES_BY_WIRE_VERSION`,
+        # and DMM does: a Mini sends 0 and a Digivice iC sends 1. Applying it
+        # only to the crossovers was enough while the line's namesake module
+        # had no index 8 of its own; once the format was renamed to DMM the
+        # namesake became the Digimon Mini, whose index 8 answers everything,
+        # so an iC side never reached the map and came back as Numemon or
+        # Sukamon.
+        admitted = self._modules_for_wire_version(modules, limits, wire_version)
+        if admitted:
+            modules = admitted
+            module = modules[0]
+
         candidates = module.get_monsters_by_index(index, versions)
         if not candidates and len(modules) > 1:
             # A crossover edition. The Pico Terminal's own analyzer draws the
@@ -1659,15 +1988,21 @@ class DComBattleSimulator:
             #
             # A version is meaningless across rosters that number themselves
             # separately, so it is dropped here and the other fields carry it.
-            for sibling in modules[1:]:
+            #
+            # The version has already picked the devices this could be, so
+            # the crossovers here are the rest of that set.
+            siblings = modules[1:]
+            for sibling in siblings:
                 candidates.extend(sibling.get_monsters_by_index(index, None))
-            candidates = self._narrow_by_power(candidates, opponent)
+            candidates = self._narrow_by_power(
+                candidates, opponent,
+                getattr(limits, 'CARRIES_STAGE', True))
             if candidates:
                 runtime_globals.game_console.log(
                     "[DComBattleSimulator] %s index %d is not on %s's roster;"
                     " trying the crossovers on this line (%s)"
                     % (self.battle_format, index, module.name,
-                       ", ".join(m.name for m in modules[1:])))
+                       ", ".join(m.name for m in siblings)))
         # An index is per-version, so without a version it can name several
         # Digimon -- and how many depends entirely on the line. Not one index
         # on DM20's or PEN20's roster names two Digimon, but 60 of DMX's 76
@@ -1677,14 +2012,31 @@ class DComBattleSimulator:
         # stage takes it to 13 (PENZ 87 -> 53 -> 36). Each is applied only if
         # it leaves something, so a module disagreeing with the wire about a
         # Digimon's stage costs nothing.
-        if versions is None and len(candidates) > 1:
+        #
+        # **Not only when the version is unknown.** This used to be gated on
+        # `versions is None`, on the reasoning that a known version makes the
+        # index exact. It does on most lines -- but a version the wire does
+        # not vary is not a known version: every Digimon Mini announces 0, so
+        # `module_versions_for_wire` hands back EVERY module version, which is
+        # the same set as "unstated" and left the filter switched off. A real
+        # Ver.2 Sukamon came back as "Numemon or Shellmon or Sukamon" with
+        # Shellmon in it, and Shellmon is Data where the packet plainly said
+        # Virus. The filter still only applies when it leaves something.
+        if len(candidates) > 1:
             attribute = ATTRIBUTE_NAMES.get(getattr(opponent, 'attribute', None))
             if attribute:
                 narrowed = [r for r in candidates
                             if r.get('attribute') == attribute]
                 if narrowed:
                     candidates = narrowed
-        if versions is None and len(candidates) > 1:
+        # **Only when the wire said one.** A parser has to put a stage on the
+        # opponent whether the packets carry one or not, and DMM's puts a
+        # flat Child -- so spending it here is spending a value the device
+        # never sent. Filmed battle 35 is what that cost: a real Mini's
+        # Ver.2 Sukamon, an Adult at index 8, came back as "Chuumon or
+        # Goblimon", the iC's two Children at the same index, because the
+        # stage filter had thrown the Mini's own pair away first.
+        if len(candidates) > 1 and getattr(limits, 'CARRIES_STAGE', True):
             stage = getattr(opponent, 'stage', None)
             if stage is not None:
                 narrowed = [r for r in candidates if r.get('stage') == stage]
@@ -1702,6 +2054,24 @@ class DComBattleSimulator:
         if len(names) > 1:
             # Two Digimon answer to this, and nothing on the wire separates
             # them. Naming one would be a coin toss shown as a fact.
+            #
+            # **But knowing the device is not the same as knowing the
+            # Digimon.** A Ver.1 Numemon and a Ver.2 Sukamon are identical on
+            # the DMM wire and both are a Digimon Mini, so when every
+            # surviving candidate comes from one module we have learnt which
+            # toy fired even though the name stays a placeholder -- and that
+            # is what picks the attack library and the sprite format it draws
+            # with.
+            sources = {record.get('module', module.name)
+                       for record in candidates}
+            if len(sources) == 1:
+                opponent.source_module = sources.pop()
+                runtime_globals.game_console.log(
+                    "[DComBattleSimulator] %s index %d could be %s -- one %s "
+                    "device either way, so it draws as one; keeping the name %s"
+                    % (self.battle_format, index, " or ".join(sorted(names)),
+                       opponent.source_module, opponent.name))
+                return
             runtime_globals.game_console.log(
                 "[DComBattleSimulator] %s index %d could be %s; nothing on "
                 "the wire separates them, so keeping %s"
@@ -1721,9 +2091,37 @@ class DComBattleSimulator:
         #: which is the whole reason battle 44's Monster Hunter opponent drew
         #: standard Colour shots. `pvp_payload` reads this.
         opponent.source_module = record.get('module', module.name)
+        # An iC side's family decides whether its weapon changes its sprite.
+        # The wire's own word for it stands where the roster has none.
+        opponent.digisoul = (record.get('digisoul')
+                             or getattr(opponent, 'digisoul', None))
+        if getattr(opponent, 'ic_sprites', None) and getattr(opponent, 'ic_weapon', 0):
+            from battle import ic_attacks
+            fields = getattr(opponent, 'penx_fields', None) or {}
+            opponent.ic_sprites = ic_attacks.sender_sprites(
+                fields.get('projectile', 0), fields.get('power', 0),
+                opponent.ic_weapon, opponent.digisoul)[:3]
 
     @staticmethod
-    def _narrow_by_power(candidates, opponent):
+    def _modules_for_wire_version(modules, limits, wire_version):
+        """The crossover modules a wire version admits, from the line's map.
+
+        `MODULES_BY_WIRE_VERSION` is how a line says that its devices number
+        themselves apart on the wire. A version the map does not name admits
+        everything, and so does a line that declares no map at all -- an
+        unrecognised number is not a statement, and narrowing on one would
+        throw away the right answer.
+        """
+        mapping = getattr(limits, 'MODULES_BY_WIRE_VERSION', None) if limits else None
+        if not mapping or wire_version is None:
+            return list(modules)
+        allowed = mapping.get(wire_version)
+        if not allowed:
+            return list(modules)
+        return [m for m in modules if getattr(m, 'name', None) in allowed]
+
+    @staticmethod
+    def _narrow_by_power(candidates, opponent, carries_stage=True):
         """Whittle *candidates* down with the identity the wire also carries.
 
         Power first, because it is the sharpest -- rosters standardise stats
@@ -1736,6 +2134,10 @@ class DComBattleSimulator:
         `Free` in `ATTRIBUTE_NAMES` and an empty string in a module record,
         which is why matching on the name alone never narrowed a Free
         opponent.
+
+        *carries_stage* is the wire's ``CARRIES_STAGE``, and a wire that
+        sends no stage must not have the parser's stand-in spent on its
+        behalf -- see the note at the caller.
         """
         if len(candidates) <= 1:
             return candidates
@@ -1757,7 +2159,7 @@ class DComBattleSimulator:
                 if narrowed:
                     candidates = narrowed
 
-        if len(candidates) > 1:
+        if len(candidates) > 1 and carries_stage:
             stage = getattr(opponent, 'stage', None)
             if stage is not None:
                 narrowed = [r for r in candidates if r.get('stage') == stage]
@@ -1918,6 +2320,8 @@ class DComBattleSimulator:
                 battle_log = self._simulate_dmx_turns(player, opponent, player_packets, opponent_bytes)
             elif wire == 'PENOG' and have >= 4:
                 battle_log = self._simulate_penog_turns(player, opponent, player_packets, opponent_bytes)
+            elif wire in ('DMM', 'IC') and have >= self.wire.PACKET_COUNT:
+                battle_log = self._simulate_dmm_turns(player, opponent, player_packets, opponent_bytes)
             else:
                 # DM exchanges a verdict rather than a hit pattern, and an
                 # incomplete exchange has nothing to replay either.
@@ -2218,6 +2622,116 @@ class DComBattleSimulator:
         runtime_globals.game_console.log(
             f"[DComBattleSimulator] PENOG battle: {len(battle_log)} rounds, "
             f"device {opponent_hp}, player {player_hp}")
+        return battle_log
+
+    def _simulate_dmm_turns(self, player: Digimon, opponent: Digimon,
+                             player_packets: List[bytes],
+                             opponent_packets: List[bytes]):
+        """The Mini / iC battle, read straight off both sides' packets.
+
+        Each side sends its own five rounds in packet 3 and its own hits in
+        the last packet, and the two masks are each other's inverse -- so one side
+        lands each round, and the Mini's guide says the side that lands takes
+        no damage in that exchange. The side that opened strikes first, as on
+        every other wire. Filmed battle 1 reproduces round for round.
+
+        **On the Mini the five rounds repeat until someone is out** -- a real
+        battle went to round 8 -- so round 6 is round 1 again. MAX_ROUNDS is
+        the ceiling. The iC's is 5: its battles stop after the fifth round
+        with both sides standing, and the side with more HP left has won --
+        unless the bars are level, when a sixth round (round 1 again)
+        settles it (`IC.TIE_ROUNDS`, from the Master Book).
+
+        The iC replays through here too, on its own limits: the rounds, hits
+        and damage scale are the Mini's read across, and its HP bar is an
+        engine choice (`IC.FIXED_HP`) rather than a measurement.
+
+        A round's value draws the projectiles; the HP it costs is the line's
+        HIT_DAMAGE, kept apart so the 4 can be re-scaled without touching
+        what is drawn.
+        """
+        from battle.sim.models import TurnLog, AttackLog, DigimonStatus
+
+        limits, device = self.mini_family()
+        mine = device.parse(player_packets)
+        theirs = device.parse(opponent_packets)
+        runtime_globals.game_console.log(
+            "[DComBattleSimulator] %s rounds - player %s hits %s, device %s hits %s"
+            % (limits.NAME,
+               "".join(map(str, mine['rounds'])), format(mine['hits'], '05b'),
+               "".join(map(str, theirs['rounds'])), format(theirs['hits'], '05b')))
+
+        player_hp = self.get_initial_hp(player)
+        opponent_hp = self.get_initial_hp(opponent)
+        device_first = not self.opening
+
+        def cost(fields, value, side):
+            # A Max Reliability side hits for the Just Attack's 2/3/4/8
+            # where an ordinary one hits for 1/2/3/4 -- read off the iCs at
+            # Reliability 31, and each side's own flag says which
+            # (IC.KIND_MAX_RELIABILITY). A weapon the side can use adds its
+            # Attack to that (IC.weapon_attack), by the side's own family.
+            table = limits.HIT_DAMAGE
+            if (getattr(limits, 'JUST_ATTACK_DAMAGE', None)
+                    and limits.is_max_reliability(fields['projectile'])):
+                table = limits.JUST_ATTACK_DAMAGE
+            damage = table.get(value, value)
+            if getattr(limits, 'weapon_attack', None):
+                damage += limits.weapon_attack(
+                    fields.get('weapon', 0), getattr(side, 'digisoul', None))
+            return damage
+
+        battle_log = []
+        tie_rounds = getattr(limits, 'TIE_ROUNDS', 0)
+        for turn in range(limits.MAX_ROUNDS + tie_rounds):
+            # The rounds past the last are only for a level battle.
+            if turn >= limits.MAX_ROUNDS and player_hp != opponent_hp:
+                break
+            round_ = turn % limits.TURNS
+            my_hit = (mine['hits'] >> round_) & 1
+            their_hit = (theirs['hits'] >> round_) & 1
+            my_value, their_value = mine['rounds'][round_], theirs['rounds'][round_]
+            my_damage = cost(mine, my_value, player)
+            their_damage = cost(theirs, their_value, opponent)
+
+            if device_first:
+                if their_hit:
+                    player_hp = max(0, player_hp - their_damage)
+                if my_hit and player_hp > 0:
+                    opponent_hp = max(0, opponent_hp - my_damage)
+                elif my_hit:
+                    my_hit = 0
+            else:
+                if my_hit:
+                    opponent_hp = max(0, opponent_hp - my_damage)
+                if their_hit and opponent_hp > 0:
+                    player_hp = max(0, player_hp - their_damage)
+                elif their_hit:
+                    their_hit = 0
+
+            battle_log.append(TurnLog(
+                turn=turn + 1,
+                device1_status=[DigimonStatus(name=opponent.name, hp=opponent_hp,
+                                              alive=opponent_hp > 0)],
+                device2_status=[DigimonStatus(name=player.name, hp=player_hp,
+                                              alive=player_hp > 0)],
+                attacks=[
+                    AttackLog(turn=turn + 1, device="device1", attacker=0,
+                              defender=0, hit=bool(their_hit),
+                              damage=their_value, critical=False,
+                              hp_damage=their_damage),
+                    AttackLog(turn=turn + 1, device="device2", attacker=0,
+                              defender=0, hit=bool(my_hit),
+                              damage=my_value, critical=False,
+                              hp_damage=my_damage),
+                ],
+            ))
+            if player_hp == 0 or opponent_hp == 0:
+                break
+
+        runtime_globals.game_console.log(
+            f"[DComBattleSimulator] {limits.NAME} battle: {len(battle_log)} "
+            f"rounds, device {opponent_hp}, player {player_hp}")
         return battle_log
 
     def penc_attributes(self, player: Digimon, opponent: Digimon):

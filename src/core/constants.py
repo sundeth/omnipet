@@ -145,6 +145,13 @@ IDLE_PROBABILITY = 0.2  # 20% chance of idle vs. moving
 CLEANING_SPEED = 6  # Speed of cleaning animation
 RELIABILITY_MIN = 0
 RELIABILITY_MAX = 31
+#: How many DigiSoul DNA feeds a Digimon remembers, newest last; an older one
+#: falls out when another is fed. The leading DNA - the type it holds most
+#: of, the latest fed on a tie - is what its evolution routes read
+#: (GamePet.leading_dna). The owner is still measuring the window on the
+#: devices (2026-10-05); one feed is already enough to take a route.
+DNA_QUEUE_SIZE = 16
+
 DIGISOUL_DNA_TYPES = (
     "Beast", "Bird", "Machine", "Water",
     "Dragon", "Insect", "Holy", "Dark",
@@ -154,19 +161,10 @@ SLEEP_MANUAL_DURATION_HOURS = 1  # Duration when manually sleeping
 SLEEP_DISTURBANCE_THRESHOLD_SECONDS = 7200  # 2 hours threshold for disturbance detection
 # BOOT_TIMER_FRAMES is calculated dynamically based on frame_rate 
 
-MAX_LEVEL = {0: 0, 1: 1, 2: 3, 3: 4, 4: 6, 5: 8, 6: 10, 7: 10, 8: 10}
+# MAX_LEVEL and HP_LEVEL live in core.pet_stats, which the arena engine runs
+# without pygame on the Omninet server.
+from core.pet_stats import MAX_LEVEL, HP_LEVEL  # noqa: E402
 EXPERIENCE_LEVEL = {0: 0, 1: 0, 2: 50, 3: 150, 4: 500, 5: 800, 6: 1000, 7: 1500, 8: 2000, 9: 3000, 10:5000}
-HP_LEVEL = {
-    0: 0,    # Egg
-    1: 0,    # Fresh
-    2: 10,   # In-Training
-    3: 10,   # Rookie
-    4: 12,   # Champion
-    5: 15,   # Ultimate
-    6: 18,   # Mega
-    7: 20,   # Super Ultimate
-    8: 20    # (If used, for extra stage)
-}
 ATK_LEVEL = {
     0: 0,   # Egg
     1: 0,   # Fresh
@@ -187,7 +185,7 @@ ATK_LEVEL = {
 #
 # Source: the official Ver.2.0+3.0 playbook, printed page 102, which gives the
 # threshold per stage. Individual Digimon sit at or above their stage's figure
-# - the per-form values are tabulated in modules/DMM/DMM_RESEARCH.md - and the
+# - the per-form values are tabulated in utilities/DMM/DMM_RESEARCH.md - and the
 # guide stops at LEVEL 6, so stage 7 is taken from the two hidden forms, which
 # both read 29.
 #
@@ -227,6 +225,10 @@ FONT_COLOR_RED = (237, 83, 80)
 FONT_COLOR_YELLOW = (255, 255, 0)
 FONT_COLOR_BLUE = (0, 0, 255)
 FONT_COLOR_ORANGE = (255, 200, 50)
+#: The status power's colour by effort tiers reached (power_bonus_rule
+#: "Effort Tiers"): none yet is the usual yellow; the last repeats past it.
+EFFORT_TIER_COLORS = ((255, 255, 0), (150, 235, 90), (70, 225, 200), (90, 160, 255),
+                      (190, 120, 255), (255, 120, 210), (255, 150, 50), (255, 80, 80))
 BACKGROUND_COLOR = (198, 203, 173)
 
 #=====================================================================
@@ -352,9 +354,9 @@ ROCK1_PATH = "assets/Rock1.png"
 ROCK2_PATH = "assets/Rock2.png"
 TREE1_PATH = "assets/Tree1.png"
 TREE2_PATH = "assets/Tree2.png"
-MOGERA1_PATH = "assets/Mogera1.png"
-MOGERA2_PATH = "assets/Mogera2.png"
-MOGERA3_PATH = "assets/Mogera3.png"
+MOGERA1_PATH = "assets/MOGERA1.png"
+MOGERA2_PATH = "assets/MOGERA2.png"
+MOGERA3_PATH = "assets/MOGERA3.png"
 ANTIG1_PATH = "assets/AntiG1.png"
 ANTIG2_PATH = "assets/AntiG2.png"
 TRAININGHIT1_PATH = "assets/TrainingHit1.png"
@@ -427,6 +429,10 @@ DISCORD_BOT_LOCAL_URL = "http://localhost:5000"
 DISCORD_BOT_MAIN_URL = "http://localhost:5000"
 DISCORD_ENABLED = True
 DISCORD_DEBUG = True  # Enable detailed Discord logging
+
+# WiFi-Com battles are held back for 1.0 (owner, 2026-10-13): the Connect
+# menu offers them only in debug mode, like the upcoming protocol lines
+WIFICOM_BATTLES_RELEASED = False
 
 # Discord UI
 DISCORD_ROOM_REFRESH_RATE = 5  # Seconds between room list refreshes

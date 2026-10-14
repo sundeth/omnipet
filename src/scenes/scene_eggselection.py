@@ -27,7 +27,7 @@ from utils.module_utils import get_module, load_modules
 from utils.utils_unlocks import unlock_item
 from utils import navigation_utils
 from ui.ui_constants import BASE_RESOLUTION, BLUE, GRAY, GREEN, PURPLE, YELLOW, RED
-from models.game_digidex import is_pet_unlocked
+from models.game_digidex import known_pet_keys
 from utils.utils_unlocks import get_unlocked_backgrounds, is_unlocked
 from utils.sprite_utils import load_pet_sprites
 from utils.asset_utils import image_load
@@ -725,11 +725,9 @@ class SceneEggSelection:
         # Calculate Digidex percentage
         all_monsters = module.get_all_monsters()
         total_monsters = len(all_monsters)
-        known_monsters = 0
-        
-        for monster in all_monsters:
-            if is_pet_unlocked(monster["name"], module.name, monster["version"]):
-                known_monsters += 1
+        known_keys = known_pet_keys()          # one read, not one per monster
+        known_monsters = sum(1 for m in all_monsters
+                             if (m["name"], module.name, m["version"]) in known_keys)
         
         stats['digidex_percentage'] = (known_monsters / total_monsters * 100) if total_monsters > 0 else 0
         
@@ -1402,6 +1400,22 @@ class SceneEggSelection:
                 runtime_globals.game_console.log(f"[SceneEggSelection] Starting new journey with focused egg: {egg_data['name']}")
                 self.select_egg(egg_data)
     
+    def _first_background(self, module, egg):
+        """The background a first pet starts on: its device's, else one its
+        egg unlocks, else ver<version> (the older modules' naming; IC, PENGZ,
+        DMXW and DW1 have no such background)."""
+        names = [bg.get("name") for bg in getattr(module, "backgrounds", []) or []]
+        device_bg = (self.selected_device or {}).get("background")
+        if device_bg and device_bg in names:
+            return device_bg
+        unlocks = getattr(module, "unlocks", [])
+        for unlock in unlocks if isinstance(unlocks, list) else []:
+            if unlock.get("type") == "egg" and unlock.get("name") in names:
+                required = unlock.get("version")
+                if required is None or required == egg["version"]:
+                    return unlock["name"]
+        return f"ver{egg['version']}"
+
     def select_egg(self, selected_egg):
         """Create a new pet from the selected egg and add it to the game."""
         runtime_globals.game_console.log(f"[SceneEggSelection] Selected egg: {selected_egg['name']}")
@@ -1445,14 +1459,14 @@ class SceneEggSelection:
         refresh_pet_sizes()
 
 
+        module = get_module(selected_egg["module"])
+
         # Set background if this is the first pet
-        bg_name = f"ver{selected_egg['version']}"
         if not game_globals.game_background:
-            game_globals.game_background = bg_name
+            game_globals.game_background = self._first_background(module, selected_egg)
             game_globals.background_module_name = selected_egg["module"]
         
         # Unlock egg-related items
-        module = get_module(selected_egg["module"])
         module_unlockables = getattr(module, 'unlocks', [])
         unlocks = module_unlockables if isinstance(module_unlockables, list) else []
         for unlock in unlocks:
@@ -1463,6 +1477,12 @@ class SceneEggSelection:
                 required = unlock.get("version")
                 if required is None or required == selected_egg["version"]:
                     unlock_item(selected_egg["module"], "egg", unlock["name"])
+
+        # The egg starts with its device's DigiSoul Plate charged into it
+        # (an egg unlock whose card is a Soul Plate), every egg, not only
+        # the first: the Baby I it hatches into always has a route.
+        from utils.utils_unlocks import charge_egg_plates
+        charge_egg_plates(selected_egg["module"], pet)
         
         # (Coin rewards for egg-related unlocks are granted by unlock_item
         # above when a new item is actually unlocked.)

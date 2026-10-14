@@ -18,6 +18,17 @@ from models.game_freezer import GameFreezer
 from utils.scene_utils import change_scene
 from utils.pygame_utils import sprite_load
 
+
+def _format_lock_time(seconds: float) -> str:
+    """Time left on an arena lock, short enough for a menu row."""
+    minutes = int(seconds // 60)
+    if minutes >= 24 * 60:
+        return f"{minutes // (24 * 60)}d{(minutes // 60) % 24}h"
+    if minutes >= 60:
+        return f"{minutes // 60}h{minutes % 60}m"
+    return f"{max(1, minutes)}m"
+
+
 class SceneFreezerBox:
     def __init__(self):
         # Global background (animated)
@@ -213,6 +224,11 @@ class SceneFreezerBox:
         if getattr(pet, "state", None) == "dead":
             self.menu.open(["Clear", "Stats"], self._on_menu_select, self._on_menu_cancel)
             self.ui_manager.set_active_menu(self.menu)
+        elif game_globals.is_pet_arena_locked(pet):
+            # On an arena team: it stays here until the season ends.
+            remaining = _format_lock_time(game_globals.arena_lock_remaining(pet))
+            self.menu.open([f"Arena {remaining}", "Stats"], self._on_menu_select, self._on_menu_cancel)
+            self.ui_manager.set_active_menu(self.menu)
         else:
             self.menu.open(["Add", "Stats"], self._on_menu_select, self._on_menu_cancel)
             self.ui_manager.set_active_menu(self.menu)
@@ -295,11 +311,19 @@ class SceneFreezerBox:
                         runtime_globals.game_console.log(f"[SceneFreezerBox] Pet {selected_pet.name} not in freezer!")
                     # Refresh freezer grid
                     self.freezer_grid.refresh_from_freezer_page(self.freezer_pets[self.current_freezer_page])
+                elif game_globals.is_pet_arena_locked(selected_pet):
+                    runtime_globals.game_console.log(
+                        f"Cannot add {selected_pet.name}: on an arena team until the season ends.")
+                    runtime_globals.game_sound.play("cancel")
+                    self.menu.close()
+                    return
                 else:
                     # Move from freezer to party
                     if len(game_globals.pet_list) < game_globals.configuration.max_pets:
                         if selected_pet in self.freezer_pets[self.current_freezer_page].pets:
                             self.freezer_pets[self.current_freezer_page].pets.remove(selected_pet)
+                            # A lock that has run out has no further use.
+                            selected_pet.arena_lock = None
                             selected_pet.patch()
                             # Reset position to fix Y coordinate after resolution changes
                             selected_pet.begin_position()

@@ -3,6 +3,7 @@ G-Cell Bar Component - Shows G-Cells as a row of colored indicators with paging 
 """
 import pygame
 from ui.components.component import UIComponent
+from utils import gcell_rules
 from utils.pygame_utils import blit_with_cache
 
 
@@ -36,7 +37,16 @@ class GCellBar(UIComponent):
         """Calculate which cells to display based on G-Cell level and counts"""
         if not self.pet:
             return []
-            
+
+        # PENGZ style: 14 cells of the stage's size, Blue to 7, Red from 8.
+        try:
+            from utils.module_utils import get_module
+            styled = gcell_rules.display_cells(get_module(self.pet.module), self.pet)
+        except Exception:
+            styled = None
+        if styled is not None:
+            return styled
+
         blue_count = self.pet.get_blue_gcells()
         yellow_count = self.pet.get_yellow_gcells()
         red_count = self.pet.get_red_gcells()

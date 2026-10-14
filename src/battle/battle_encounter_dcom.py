@@ -113,6 +113,10 @@ class BattleEncounterDCom(BattleEncounter):
         """
         self.dcom_battle_result = result
         self.global_battle_log = result
+        # A replayed exchange animates every round it holds. Five is as many as
+        # most wires ever fight, but a PenX battle repeats its five rounds
+        # until someone is out, and a real one went to round 8.
+        self.turn_limit = max(self.turn_limit, len(result.battle_log))
         self.victory_status = "Victory" if result.winner == "device2" else "Defeat"
         runtime_globals.game_console.log(
             f"[BattleEncounterDCom] Adopted the exchange: {self.victory_status}, "
@@ -308,9 +312,16 @@ class BattleEncounterDCom(BattleEncounter):
         attr_int_to_str = {0: "Va", 1: "Da", 2: "Vi", 3: "Fr"}
         opp_attribute = attr_int_to_str.get(opp.attribute, "Va") if opp else "Va"
         
-        # Create enemy object from opponent data. The shot ids are already
-        # 1-based here -- parse_opponent shifts them off the 0-based wire on
-        # the way in, so shifting again would point at the next sprite.
+        # Create enemy object from opponent data. **The sprite ids and the
+        # module both come from `pvp_payload`**, which is the other place an
+        # opponent is built and was the only one getting them right: this
+        # had `atk_main`/`atk_alt` the wrong way round, so a device's
+        # strongest shot drew its ordinary sprite, and it handed the enemy
+        # the PLAYER's module instead of the one reproducing the device.
+        from battle.dcom.pvp_payload import (opponent_attack_sprites,
+                                             opponent_module)
+        atk_main, atk_alt, atk_alt_2 = (
+            opponent_attack_sprites(opp, self.battle_format) if opp else (1, 1, 0))
         enemy = GameEnemy(
             name=opponent_status.name,
             power=opp.power if opp else 1,
@@ -318,9 +329,9 @@ class BattleEncounterDCom(BattleEncounter):
             area=0,
             round=0,
             version=opp.version if opp and hasattr(opp, 'version') else 1,
-            atk_main=opp.shot1 if opp else 1,
-            atk_alt=opp.shot2 if opp else 1,
-            atk_alt_2=0,
+            atk_main=atk_main,
+            atk_alt=atk_alt,
+            atk_alt_2=atk_alt_2,
             handicap=0,
             id=opp.index if opp else 0,
             stage=opp.stage if opp else 3,
@@ -335,7 +346,15 @@ class BattleEncounterDCom(BattleEncounter):
         enemy.sick = opp.sick if opp else 0
         enemy.traited = bool(opp.traited) if opp else False
         enemy.shook = bool(opp.egg_shake) if opp else False
-        enemy.module = self.module.name
+        # The device's module, not the player's -- and the roster that named
+        # it, where one did, so a crossover edition draws its own shots.
+        enemy.module = opponent_module(opp, self.battle_format,
+                                       self.module.name) if opp else self.module.name
+        enemy.attack_sprite_module = getattr(opp, "source_module", None) if opp else None
+        # An iC side's own Max Reliability flag, None elsewhere.
+        enemy.ic_max_reliability = getattr(opp, "ic_max_reliability", None) if opp else None
+        enemy.ic_weapon = getattr(opp, "ic_weapon", None) if opp else None
+        enemy.digisoul = getattr(opp, "digisoul", None) if opp else None
 
         # Load sprite for the enemy
         enemy.load_sprite(enemy.module, boss=False)
@@ -396,6 +415,7 @@ class BattleEncounterDCom(BattleEncounter):
         runtime_globals.game_sound.play("happy" if self.victory_status == "Victory" else "fail")
         
         # Update PvP counters (same as parent)
+        connection_results = []
         for i, pet in enumerate(self.battle_player.team1):
             try:
                 pet.pvp_battles += 1
@@ -409,9 +429,23 @@ class BattleEncounterDCom(BattleEncounter):
                     local_won = (self.victory_status == 'Victory')
                 if local_won:
                     pet.pvp_wins += 1
+                    # A connection win is a battle win (the iC's +1 Reliability).
+                    pet._apply_reliability_event('reliability_battle_win')
+                connection_results.append((pet, local_won))
                 runtime_globals.game_console.log(f"[PvP] Pet {getattr(pet,'name',i)} pvp_battles={pet.pvp_battles} pvp_wins={pet.pvp_wins}")
             except Exception as e:
                 runtime_globals.game_console.log(f"[PvP] Error updating pet PvP counters: {e}")
+
+        # Connect Points and the modules' "connection" events, with the
+        # device the other side announced.
+        try:
+            from utils.event_utils import after_connection
+            opponent = getattr(self.dcom_simulator, 'opponent_device_version', None)
+            if opponent is None:
+                opponent = (getattr(runtime_globals, 'pvp_battle_data', None) or {}).get('opponent_device_version')
+            after_connection(connection_results, opponent)
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[Events] connection trigger failed: {exc}")
         
         # PvP-type unlocks (same as parent)
         try:

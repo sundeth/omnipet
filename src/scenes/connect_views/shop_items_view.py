@@ -203,6 +203,9 @@ class ShopItemsView:
                 'status': json_data.get('status', ''),
                 'amount': json_data.get('amount', 1),
                 'boost_time': json_data.get('boost_time', 0),
+                'protocol_value': json_data.get('protocol_value', 0),
+                'attack_sprite': json_data.get('attack_sprite', 0),
+                'digisoul': json_data.get('digisoul', ''),
                 'cross_module': True,
             }
 
@@ -341,8 +344,9 @@ class ShopItemsView:
         def fetch_items():
             try:
                 success, data = omninet_service.get_shop_items()
-                if success and data:
-                    self.items_data = data
+                if success:
+                    # an empty shelf is an answer, not a failure
+                    self.items_data = data or []
                 else:
                     self.items_data = []
                     runtime_globals.game_console.log(f"[ShopItemsView] Failed to load items")

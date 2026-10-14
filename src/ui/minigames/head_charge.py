@@ -60,6 +60,11 @@ class HeadCharge:
             
             left_atk1 = runtime_globals.pet_sprites[self.left_pet][PetFrame.ATK1.value]
             left_atk2 = runtime_globals.pet_sprites[self.left_pet][PetFrame.ATK2.value]
+            # The left pet faces right: its own right-facing frames if the set
+            # has them (6R/7R.png), else these are mirrored below.
+            right_pairs = runtime_globals.pet_sprites_right.get(self.left_pet) or {}
+            left_atk1_right = right_pairs.get(left_atk1)
+            left_atk2_right = right_pairs.get(left_atk2)
             right_atk1 = runtime_globals.pet_sprites[self.right_pet][PetFrame.ATK1.value]
             right_atk2 = runtime_globals.pet_sprites[self.right_pet][PetFrame.ATK2.value]
             
@@ -75,8 +80,14 @@ class HeadCharge:
             # Cache both unflipped and flipped versions for left pet (left pet is drawn flipped)
             self._sprite_cache['left_pet_atk1'] = left_pet_atk1_scaled
             self._sprite_cache['left_pet_atk2'] = left_pet_atk2_scaled
-            self._sprite_cache['left_pet_atk1_flipped'] = pygame.transform.flip(left_pet_atk1_scaled, True, False)
-            self._sprite_cache['left_pet_atk2_flipped'] = pygame.transform.flip(left_pet_atk2_scaled, True, False)
+            self._sprite_cache['left_pet_atk1_flipped'] = (
+                pygame.transform.scale(left_atk1_right, (self.pet_size, self.pet_size))
+                if left_atk1_right is not None
+                else pygame.transform.flip(left_pet_atk1_scaled, True, False))
+            self._sprite_cache['left_pet_atk2_flipped'] = (
+                pygame.transform.scale(left_atk2_right, (self.pet_size, self.pet_size))
+                if left_atk2_right is not None
+                else pygame.transform.flip(left_pet_atk2_scaled, True, False))
             
             # Cache scaled sprites for right pet (unflipped)
             self._sprite_cache['right_pet_atk1'] = pygame.transform.scale(right_atk1, (self.pet_size, self.pet_size))

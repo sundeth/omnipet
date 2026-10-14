@@ -196,10 +196,11 @@ class VersusView:
         
         runtime_globals.game_sound.play("menu")
         
-        # Get the selected pets
-        from core import game_globals
-        pet1 = game_globals.pet_list[self.selected_pets[0]]
-        pet2 = game_globals.pet_list[self.selected_pets[1]]
+        # The selection holds indices into the list shown (the selected pets,
+        # or the party), not into the party: reading pet_list fought other
+        # pets than the two tapped whenever the two lists differed.
+        pet1 = self.pet_selector.pets[self.selected_pets[0]]
+        pet2 = self.pet_selector.pets[self.selected_pets[1]]
         
         # Change to protocol selection view with the selected pets
         self.change_view("protocol", pet1=pet1, pet2=pet2)

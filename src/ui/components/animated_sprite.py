@@ -297,6 +297,36 @@ class AnimatedSprite(UIComponent):
     def _load_combat_sprites(self, *names):
         """Load multiple combat sprites."""
         return [self._load_combat_sprite(name) for name in names]
+
+    # The Digivice iC minigames' own screens (utilities/IC/ui_screens.py):
+    # the LCD's 32 x 32 dots in the middle of the screen, where the minigame
+    # draws its LCD, on their own paper -- which also fills what is left of
+    # a screen they do not cover.
+    def _play_screens(self, names, duration_seconds, frame_rate=2):
+        sprites = self._load_combat_sprites(*names)
+        paper = tuple(sprites[0].get_at((0, 0)))[:3] if sprites and sprites[0] else (0, 0, 0)
+        self.set_animation_data(sprites, [paper] * len(sprites), frame_rate=frame_rate)
+        self.play(duration_seconds)
+
+    def play_ic20_ready(self, duration_seconds=1.0):
+        """The iC 20X's READY (Combat_IC20Ready)."""
+        self._play_screens(["IC20Ready"], duration_seconds)
+
+    def play_ic20_start(self, duration_seconds=1.0):
+        """The iC 20X's START (Combat_IC20Start)."""
+        self._play_screens(["IC20Start"], duration_seconds)
+
+    def play_ic20_clear(self, duration_seconds=1.0):
+        """The iC 20X's CLEAR!, a stage of its minigame cleared (Combat_IC20Clear)."""
+        self._play_screens(["IC20Clear"], duration_seconds)
+
+    def play_shuffle_title(self, duration_seconds=1.0):
+        """The iC 10X Shuffle's SHUFFLE, its two frames twice a second."""
+        self._play_screens(["ShuffleTitle1", "ShuffleTitle2"], duration_seconds)
+
+    def play_shuffle_select(self, duration_seconds=1.0):
+        """The iC 10X Shuffle's SELECT!, its two frames twice a second."""
+        self._play_screens(["ShuffleSelect1", "ShuffleSelect2"], duration_seconds)
     
     # Predefined combat animations
     def play_battle(self, duration_seconds=1.0):

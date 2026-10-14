@@ -52,7 +52,8 @@ def try_set_video_driver():
         if os.path.exists("/usr/bin/batocera-info"):
             drivers = ["kmsdrm", "x11", "wayland", "fbcon"]
         else:
-            drivers = ["x11", "wayland", "fbcon"]
+            # kmsdrm: a console without X11/Wayland (SDL2 has no fbcon)
+            drivers = ["x11", "wayland", "kmsdrm", "fbcon"]
     elif platform.system() == "Windows":
         drivers = ["windows"]
     elif platform.system() == "Darwin":

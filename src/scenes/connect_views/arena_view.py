@@ -14,6 +14,11 @@ Layout (based on the design sketch at Arena.png):
 If the player has no current-season team the team area is replaced with a
 "Create Team" button (when a season is active) or an unselectable
 "Season Not Started" placeholder when no season exists.
+
+A team from a finished season whose results were not seen yet takes the
+view over with a RESULTS button (coins are claimed there). Team pets never
+leave the save: they sit locked in the freezer until their season ends, and
+a season the server reports finished releases them early.
 """
 import threading
 from datetime import datetime, date
@@ -42,10 +47,8 @@ class ArenaView:
         # Server data (filled in by background fetch)
         self._season = None
         self._team = None
-        # Past-season team with reward not yet claimed.  When set, the
-        # view locks out new-season actions and surfaces the reclaim
-        # flow instead (spec: "the player cannot enter a new season if
-        # it still has unclaimed pets/rewards from previous seasons").
+        # Finished-season team whose results (and coins) were not claimed.
+        # When set, the view shows those results before anything else.
         self._pending_team = None
         self._loading = True
         self._fetch_lock = threading.Lock()
@@ -173,10 +176,8 @@ class ArenaView:
                 else:
                     self._team = None
 
-                # Look for past-season teams whose rewards still aren't
-                # claimed.  The server includes those in /teams when
-                # include_past=true regardless of whether they belong
-                # to the current ACTIVE season.
+                # Finished seasons: show unclaimed results first, and free
+                # any freezer locks those seasons still hold.
                 self._pending_team = self._fetch_pending_past_team()
             except Exception as exc:
                 runtime_globals.game_console.log(f"[ArenaView] Refresh error: {exc}")
@@ -188,7 +189,11 @@ class ArenaView:
         threading.Thread(target=_worker, daemon=True).start()
 
     def _fetch_pending_past_team(self) -> dict | None:
-        """Return the first unclaimed past-season team, or None."""
+        """Return the first finished-season team with unclaimed results.
+
+        Also releases the freezer locks of every finished season's team: the
+        lock's own end time is only an upper bound.
+        """
         try:
             ok, payload = omninet_service.get_user_teams(include_past=True)
         except Exception as exc:
@@ -203,20 +208,37 @@ class ArenaView:
         if not teams:
             return None
 
-        current_season_id = (self._season or {}).get('id')
-        for team in teams:
-            if not isinstance(team, dict):
-                continue
-            if team.get('reward_claimed'):
-                continue
-            team_season_id = team.get('season_id')
-            # The current-season team is handled separately via /current —
-            # only past-season unclaimed teams qualify for the reclaim
-            # flow.  Compare loosely (UUID-vs-string).
-            if current_season_id and str(team_season_id) == str(current_season_id):
-                continue
-            return team
+        finished = [t for t in teams if isinstance(t, dict)
+                    and t.get('season_status') == 'completed']
+        try:
+            released = game_globals.release_arena_locks([t.get('id') for t in finished])
+            if released:
+                runtime_globals.game_console.log(
+                    f"[ArenaView] released {released} pets from finished seasons")
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[ArenaView] lock release error: {exc}")
+        for team in finished:
+            if not team.get('reward_claimed'):
+                return self._with_team_details(team)
         return None
+
+    def _with_team_details(self, team: dict) -> dict:
+        """List rows carry only a pet count: fetch the team's pets (and final
+        rank) for the results screen. The row is kept if the fetch fails."""
+        if team.get('pets') or not team.get('id'):
+            return team
+        try:
+            ok, detail = omninet_service.get_team(team['id'])
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[ArenaView] team fetch error: {exc}")
+            return team
+        if not ok or not isinstance(detail, dict):
+            return team
+        merged = dict(team)
+        merged['pets'] = detail.get('pets') or []
+        if merged.get('rank') is None:
+            merged['rank'] = detail.get('final_rank', detail.get('rank'))
+        return merged
 
     def _render_state(self):
         """Update labels + button enablement after a fetch completes."""
@@ -316,10 +338,10 @@ class ArenaView:
         self.score_value.set_value(str(pending.get('score', 0)))
 
         season_name = pending.get('season_name') or "Previous season"
-        self.time_label.set_text(f"{season_name} - ended. Reclaim to continue.")
+        self.time_label.set_text(f"{season_name} has ended.")
 
-        # Find Battle slot becomes the Reclaim entry point
-        self.find_button.text = "RECLAIM TEAM"
+        # Find Battle slot becomes the results entry point
+        self.find_button.text = "SEASON RESULTS"
         self.find_button.enabled = True
         self.find_button.on_click_callback = self._on_reclaim
 
@@ -330,7 +352,7 @@ class ArenaView:
 
     def _format_time_left(self, season: dict) -> str:
         """Format the season's time-left string as 'TIME LEFT: X DAYS Y HOURS'."""
-        end_str = season.get('end_date', '')
+        end_str = season.get('ends_at') or season.get('end_date', '')
         if not end_str:
             return "Season info unavailable"
         try:
@@ -347,6 +369,8 @@ class ArenaView:
                 return "Season ended"
             days = delta.days
             hours = delta.seconds // 3600
+            if days == 0 and hours == 0:
+                return f"TIME LEFT: {max(1, delta.seconds // 60)} MINUTES"
             return f"TIME LEFT: {days} DAYS {hours} HOURS"
         except Exception:
             return f"Ends {end_str}"
@@ -363,7 +387,7 @@ class ArenaView:
         # entry point anyway in case a stale UI click slips through.
         if self._pending_team:
             self.status_label.set_text(
-                "Reclaim your past-season team before creating a new one.")
+                "See your last season's results first.")
             return
         if not self._season:
             self.status_label.set_text("No active season")
@@ -371,7 +395,7 @@ class ArenaView:
         self.change_view("arena_team_creation", season=self._season)
 
     def _on_reclaim(self):
-        """Open the reclaim summary view for the pending past-season team."""
+        """Open the results view for the finished-season team."""
         if not self._pending_team:
             return
         runtime_globals.game_sound.play("menu")
@@ -397,9 +421,13 @@ class ArenaView:
             ok, data = omninet_service.find_battle(team_id)
             self._finding_battle = False
             if ok and isinstance(data, dict) and data.get('battle_found'):
-                # TODO: hand the battle log off to SceneBattle for replay.
-                self.status_label.set_text("Battle complete — replay coming soon")
-                self._refresh_async()
+                from utils.arena_replay import start_replay
+                problem = start_replay(data.get('battle') or {}, team_id,
+                                       return_view="arena")
+                if problem:
+                    # The battle counted; only the playback is unavailable.
+                    self.status_label.set_text(f"Battle done. {problem}")
+                    self._refresh_async()
             else:
                 message = data.get('message') if isinstance(data, dict) else str(data)
                 self.status_label.set_text(message or "No opponent found")

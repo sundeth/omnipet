@@ -48,6 +48,8 @@ class BattleSimulator:
     PROTOCOL_CONSTANTS = {
         BattleProtocol.DMOG_BS: protocol_constants.DMOG,
         BattleProtocol.PENOG_BS: protocol_constants.PENOG,
+        BattleProtocol.DMM_BS: protocol_constants.DMM,
+        BattleProtocol.IC_BS: protocol_constants.IC,
         BattleProtocol.DMC_BS: protocol_constants.DMC,
         BattleProtocol.DM20_BS: protocol_constants.DM20,
         BattleProtocol.DMX_BS: protocol_constants.DMX,
@@ -255,7 +257,7 @@ class DMCDevice:
     This *is* what a real Color device is sent. The document specifies it in
     full -- "Digital Monster Color Battle System", extracted by cyanic -- and
     both of its worked examples are reproduced byte for byte by
-    tests/test_battle_protocols.py. An earlier note here claimed a DCom
+    utilities/claude/tests/test_battle_protocols.py. An earlier note here claimed a DCom
     battle on DMC went out over the DMX 6-packet wire; it did, and that is
     why a real Pendulum Color never answered one.
     """
@@ -528,7 +530,9 @@ class PENOGDevice:
     def __init__(self, digimon: Digimon):
         self.digimon = digimon
         self.sick = digimon.sick
-        self.shot = digimon.shot1
+        #: One sprite per Digimon, so one 8-bit id: `atk_main`, which
+        #: `pet_to_digimon` puts in `shot1`.
+        self.shot = int(digimon.shot1 or 0) & 0xFF
         self.own_packets = []
 
         limits = protocol_constants.PENOG
@@ -718,6 +722,7 @@ class PENOGDevice:
 
     @staticmethod
     def parse_packet4(data: bytes) -> dict:
+        """Check(4) Shot(8) EOL(4) -- one sprite id, not a pair."""
         if len(data) < 2:
             return None
         word = struct.unpack(">H", data[:2])[0]
@@ -725,6 +730,309 @@ class PENOGDevice:
             'check': (word >> 12) & 0xF,
             'shot': (word >> 4) & 0xFF,
             'eol': word & 0xF,
+        }
+
+
+class DMMDevice:
+    """The Pendulum X's battle signal, which the Digimon Mini speaks -- four
+    packets on X timing.
+
+    Layout and provenance are in ``protocol_constants.DMM``: every field is
+    named by nacatech's analyzer, which reads round 1 from the lowest pair of
+    Shot Sizes. Packet 4's three bits above the hits are the one thing it does
+    not name, and they go out clear.
+    """
+
+    def __init__(self, digimon: Digimon):
+        self.digimon = digimon
+        limits = protocol_constants.DMM
+        index = int(getattr(digimon, 'index', 0) or 0)
+        # Index 0 is "an outsider" on other wires, and the Mini's Botamon here.
+        self.index = index if 0 < index <= limits.MAX_INDEX else limits.COMPATIBILITY_INDEX
+
+    @staticmethod
+    def _word(value: int) -> bytes:
+        return struct.pack(">H", value & 0xFFFF)
+
+    def generate_packet1(self, eol=protocol_constants.DMM.EOL) -> bytes:
+        """Version(4) Index(8) EOL(4)."""
+        version = int(getattr(self.digimon, 'version', 0) or 0)
+        return self._word(((version & 0xF) << 12) | ((self.index & 0xFF) << 4)
+                          | (eol & 0xF))
+
+    def generate_packet2(self, eol=protocol_constants.DMM.EOL) -> bytes:
+        """Projectile(4) Power(8) EOL(4)."""
+        projectile = int(getattr(self.digimon, 'shot1', 0) or 0)
+        power = max(0, min(0xFF, int(getattr(self.digimon, 'power', 0) or 0)))
+        return self._word(((projectile & 0xF) << 12) | (power << 4) | (eol & 0xF))
+
+    def default_pattern(self):
+        """This Digimon's Count Bar row for its charge, dealt out afresh.
+
+        Split out so the iC's five-packet builder shares it rather than
+        copying it -- getting the arguments wrong here is silent, since the
+        count and the Digimon are both something `get_dmm_pattern` will take.
+        """
+        from battle.sim.battle_utils import get_dmm_pattern
+        # The Digimon carries this wire's attribute code; the table is
+        # keyed on Omnipet's.
+        limits = protocol_constants.get_constants(
+            getattr(self, 'WIRE_NAME', 'DMM')) or protocol_constants.DMM
+        wire_attribute = int(getattr(self.digimon, 'attribute', 3) or 0)
+        internal = {wire: own for own, wire in
+                    limits.ATTRIBUTE_MAP.items()}.get(wire_attribute, 3)
+        return get_dmm_pattern(getattr(self.digimon, 'mini_game', 0) or 0,
+                               stage=getattr(self.digimon, 'stage', None),
+                               attribute=("Va", "Da", "Vi", "Fr")[internal])
+
+    @staticmethod
+    def pack_rounds(pattern) -> int:
+        """Five damage values, 1-4, as Shot Sizes' ten bits: round 1 lowest."""
+        bits = 0
+        for turn, damage in enumerate(list(pattern)[:protocol_constants.DMM.TURNS]):
+            bits |= ((max(1, min(4, int(damage))) - 1) & 0b11) << (2 * turn)
+        return bits
+
+    @staticmethod
+    def unpack_rounds(bits: int) -> list:
+        return [((bits >> (2 * turn)) & 0b11) + 1
+                for turn in range(protocol_constants.DMM.TURNS)]
+
+    def generate_packet3(self, pattern, eol=protocol_constants.DMM.EOL) -> bytes:
+        """Attribute(2) Shot Sizes(10) EOL(4)."""
+        attribute = int(getattr(self.digimon, 'attribute', 3) or 0) & 0b11
+        return self._word((attribute << 14) | (self.pack_rounds(pattern) << 4)
+                          | (eol & 0xF))
+
+    @staticmethod
+    def generate_packet4(earlier, hits, flags=0,
+                         eol=protocol_constants.DMM.EOL) -> bytes:
+        """Check(4) ???(3) Hit(5) EOL(4), the check bringing the side's
+        sixteen digits to DMM.CHECKSUM_REMAINDER."""
+        body = ((flags & 0x7) << 9) | ((hits & 0x1F) << 4) | (eol & 0xF)
+        total = sum((byte >> 4) + (byte & 0xF) for packet in earlier for byte in packet)
+        total += sum((body >> shift) & 0xF for shift in (0, 4, 8))
+        check = (protocol_constants.DMM.CHECKSUM_REMAINDER - total) % 16
+        return struct.pack(">H", (check << 12) | body)
+
+    def generate_all_packets(self, hits=0, pattern=None) -> list:
+        """The four packets. *pattern* defaults to this Digimon's charge row,
+        shuffled; *hits* is a template the exchange resolves once the device
+        has spoken."""
+        if pattern is None:
+            pattern = self.default_pattern()
+        packets = [self.generate_packet1(), self.generate_packet2(),
+                   self.generate_packet3(pattern)]
+        packets.append(self.generate_packet4(packets, hits))
+        return packets
+
+    # ------------------------------------------------------------------
+    # Reading the other side
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def parse(packets) -> dict:
+        """Every field of a side, with the analyzer's names."""
+        words = [struct.unpack(">H", bytes(p[:2]))[0] for p in packets[:4]]
+        first, second, third, fourth = words
+        return {
+            'version': first >> 12,
+            'index': (first >> 4) & 0xFF,
+            'projectile': second >> 12,
+            'power': (second >> 4) & 0xFF,
+            'attribute': (third >> 14) & 0b11,
+            'rounds': DMMDevice.unpack_rounds((third >> 4) & 0x3FF),
+            'check': fourth >> 12,
+            'flags': (fourth >> 9) & 0x7,
+            'hits': (fourth >> 4) & 0x1F,
+        }
+
+
+class ICDevice(DMMDevice):
+    """The Digivice iC's own battle signal -- five packets on the IR wire.
+
+    **The Mini's wire with a packet inserted, as far as anything is
+    known.** The iC
+    family battles a Digimon Mini over DMM and each other over this, and the
+    two are the same family: `protocol_constants.IC` carries the measured
+    frame -- five packets, EOL 7, an empty packet 4, and packet 1's top
+    nibble naming the device -- and DMM's field positions for everything
+    else, marked there as a reading rather than a measurement.
+
+    So this subclasses DMMDevice and overrides only what the extra packet
+    and the different EOL change.
+
+    **Captured 2026-09-21, corrected 2026-09-22.** The frame, the
+    flag/version split in packet 1, the checksum exception and the identity
+    all read correctly first time. The FIELD POSITIONS did not: the iC has a
+    field the Mini has not, at packet 3, so everything after it sits one
+    packet lower than the Mini's layout put it.
+
+        P1  Flags(2) | Version(2) | Index(8) | EOL   measured
+        P2  Projectile(4) | Power(8)         | EOL   reading
+        P3  ???(2) | slot value(10)          | EOL   measured to track the slot
+        P4  ???(2) | Shot Sizes(10)          | EOL   MEASURED: the pattern
+        P5  Check(4) | ???(3) | Hit(5)       | EOL   measured
+
+    So this is no longer "DMMDevice with an extra packet"; it subclasses it
+    for the frame and the shot packing, and owns packets 3 and 4 outright.
+    """
+
+    #: **Packet 4 is the attack pattern**, measured 2026-09-22 across six
+    #: battles. It was called the empty packet because all six fan-made codes
+    #: carry `0007` -- which under the real reading is simply a zero charge.
+    #: See `ICDevice.generate_packet4`.
+    PATTERN_PACKET_INDEX = 3
+    #: Which constants `default_pattern` reads its attribute order from.
+    WIRE_NAME = "IC"
+
+    def default_pattern(self):
+        """This Digimon's row for its charge, dealt out afresh.
+
+        **The iC's table, not the Mini's.** The two share the pool of rows
+        and key it differently: the Mini reads a press count through a
+        stage/attribute column, the iC reads the 0-10 bar its rate lit, and
+        a bar is a contiguous block of the pool. Inheriting the Mini's
+        lookup ran a bar of 0-10 through a 0-31 count scale, so a full iC
+        charge asked for count 10 and got the Mini's row for it.
+        """
+        from battle.sim.battle_utils import get_ic_pattern
+        return get_ic_pattern(getattr(self.digimon, 'mini_game', 0) or 0)
+
+    def __init__(self, digimon):
+        super().__init__(digimon)
+        limits = protocol_constants.IC
+        index = int(getattr(digimon, 'index', 0) or 0)
+        self.index = (index if 0 < index <= limits.MAX_INDEX
+                      else limits.COMPATIBILITY_INDEX)
+
+    def generate_packet1(self, eol=protocol_constants.IC.EOL) -> bytes:
+        return super().generate_packet1(eol)
+
+    def generate_packet2(self, eol=protocol_constants.IC.EOL) -> bytes:
+        """Kind(4) | Family(3) | Strength(5) | EOL(4).
+
+        What the Mini calls Power is two fields here (`IC.FAMILY_CODES`):
+        the Digimon's power is its strength, and its family sits above it.
+        """
+        limits = protocol_constants.IC
+        kind = int(getattr(self.digimon, 'shot1', 0) or 0)
+        byte = limits.power_byte(getattr(self.digimon, 'digisoul', None),
+                                 getattr(self.digimon, 'power', 0))
+        return self._word(((kind & 0xF) << 12) | (byte << 4) | (eol & 0xF))
+
+    def generate_packet3(self, eol=protocol_constants.IC.EOL) -> bytes:
+        """The field the Mini does not have: Weapon(4) | Power(8) | EOL(4).
+
+        **Not the attack pattern.** A device sends the Power its slot has in
+        the Accel/Mini compatibility mode (22 at index 8, 55 at index 10), and
+        above it the low four bits of the weapon it has equipped: a Ravemon
+        sent 2 with a Beast Claw, 3 with a Water Drop and 4 with a Fowl
+        Tornado. The weapons numbered 16-19 put their fifth bit in packet
+        2's Kind (`IC.WEAPON_HIGH_BIT`), which `pet_to_digimon` sets.
+
+        Ours is the device's for our stage (`IC.MINI_POWER_BY_STAGE`, in
+        `ic_mini_power`). The weapon is our active boost item's `protocol_value`, which
+        `pet_to_digimon` reads (`ic_weapon`); 0 is no weapon. A weapon the
+        pet can use raises the Power here, as it does on a device
+        (`IC.weapon_power`, in `ic_weapon_power`).
+        """
+        base = getattr(self.digimon, 'ic_mini_power', None)
+        if base is None:
+            base = getattr(self.digimon, 'power', 0)
+        power = int(base or 0) + int(getattr(self.digimon, 'ic_weapon_power', 0) or 0)
+        power = max(0, min(0xFF, power))
+        weapon = int(getattr(self.digimon, 'ic_weapon', 0) or 0) & 0xF
+        return self._word((weapon << 12) | (power << 4) | (eol & 0xF))
+
+    def generate_packet4(self, pattern, eol=protocol_constants.IC.EOL) -> bytes:
+        """???(2) | Shot Sizes(10) | EOL(4) -- **the attack pattern**.
+
+        Measured 2026-09-22. Six device sides, and every one decodes to a row
+        of the owner's own bar table at exactly the bar the device was
+        showing: two at 0 RPM / 0 bars sent `000`, which is five weak shots
+        and is bar 0, and a 7-bar charge sent `2AB`, which is `0041` and is a
+        bar 7 row.
+
+        Omnipet used to send this packet as all zero and put the pattern in
+        packet 3 -- so every battle told the device we had a zero charge and
+        gave it a nonsense stat.
+        """
+        return self._word((self.pack_rounds(pattern) << 4) | (eol & 0xF))
+
+    @staticmethod
+    def generate_packet5(earlier, hits, flags=0,
+                         eol=protocol_constants.IC.EOL) -> bytes:
+        """Check(4) ???(3) Hit(5) EOL(4), over five packets rather than four.
+
+        The check brings the side's twenty digits to
+        `IC.CHECKSUM_REMAINDER` **once packet 1's two flag bits are taken
+        out** -- they are worth 4 each in that nibble and the device's own
+        check skips them. A side that sets them and checksums as if they
+        counted is 4 per bit off, and the iC drops the exchange: measured
+        2026-09-22, two packets in and then silence, three times.
+        """
+        body = ((flags & 0x7) << 9) | ((hits & 0x1F) << 4) | (eol & 0xF)
+        total = sum((byte >> 4) + (byte & 0xF)
+                    for packet in earlier for byte in packet)
+        total += sum((body >> shift) & 0xF for shift in (0, 4, 8))
+        own_flags = ((earlier[0][0] >> 6) & 0b11) if earlier else 0
+        target = protocol_constants.IC.CHECKSUM_REMAINDER + own_flags * 4
+        check = (target - total) % 16
+        return struct.pack(">H", (check << 12) | body)
+
+    def generate_all_packets(self, hits=0, pattern=None) -> list:
+        """The five packets. Packet 3 is the slot field, packet 4 the pattern."""
+        if pattern is None:
+            pattern = self.default_pattern()
+        earlier = [self.generate_packet1(), self.generate_packet2(),
+                   self.generate_packet3(), self.generate_packet4(pattern)]
+        return earlier + [self.generate_packet5(earlier, hits)]
+
+    @staticmethod
+    def parse(packets) -> dict:
+        """The five packets' fields.
+
+        **This is not the Mini's layout with a packet inserted.** The iC has
+        a field the Mini has not -- packet 3 -- and everything after it moves
+        down one, so the attack pattern is in packet 4. Reading it the old
+        way took a slot-keyed stat for the pattern and threw the real pattern
+        away as an empty packet.
+
+        `slot_value` is packet 3 raw, because what it means is unread: it is
+        a number equal to that slot's Accel/Mini Power on both slots read.
+
+        `attribute` is reported from packet 3's top two bits, which is where
+        the Mini keeps it -- and it has read 0 on every side, including a
+        Data and a Free Digimon that both state their real attribute in
+        compatibility mode. **So this field is almost certainly not the
+        attribute**; it is kept only so a capture that moves it is visible.
+        """
+        words = [int.from_bytes(packet[:2], "big") for packet in packets]
+        while len(words) < protocol_constants.IC.PACKET_COUNT:
+            words.append(0)
+        first, second, third, fourth, fifth = words[:5]
+        return {
+            'version': (first >> 12) & 0xF,
+            'index': (first >> 4) & 0xFF,
+            'projectile': (second >> 12) & 0xF,
+            # The byte whole, and its two fields: Family(3) | Strength(5).
+            'power': (second >> 4) & 0xFF,
+            'family': protocol_constants.IC.family_of(second >> 4),
+            'strength': protocol_constants.IC.strength_of(second >> 4),
+            'slot_value': (third >> 4) & 0xFFF,
+            # Packet 3 is Weapon(4) | Mini-mode Power(8): a Ravemon sent its
+            # weapon's number there (Beast Claw 2, Water Drop 3, Fowl Tornado
+            # 4), with the fifth bit of 16-19 in packet 2's Kind. Some
+            # weapons raised the Power beside it (179 to 183, 187 or 194).
+            'weapon': protocol_constants.IC.weapon_id(second >> 12, third >> 12),
+            'mini_power': (third >> 4) & 0xFF,
+            'attribute': (third >> 14) & 0b11,
+            'pattern_spare': (fourth >> 14) & 0b11,
+            'rounds': DMMDevice.unpack_rounds((fourth >> 4) & 0x3FF),
+            'check': (fifth >> 12) & 0xF,
+            'flags': (fifth >> 9) & 0b111,
+            'hits': (fifth >> 4) & 0b11111,
         }
 
 
@@ -1707,7 +2015,7 @@ if __name__ == "__main__":
     print()
     
     # NOTE: the maintained protocol test suite lives in
-    # tests/test_battle_protocols.py — this block is just a quick smoke run.
+    # utilities/claude/tests/test_battle_protocols.py — this block is just a quick smoke run.
     protocol_map = {
         'DM20': BattleProtocol.DM20_BS,
         'DMC': BattleProtocol.DMC_BS,

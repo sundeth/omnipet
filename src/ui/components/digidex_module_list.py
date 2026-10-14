@@ -108,10 +108,11 @@ class DigidexModuleList(DigidexList):
 
             is_hovered = (idx == self.hover_index)
             is_selected = (idx == self.selected_index)
-            if is_selected or (is_hovered and self.focused):
+            # The selected row keeps its border; the hover/focus one is not
+            # drawn in touch mode (focus_visible).
+            show_focus = is_hovered and self.focus_visible()
+            if is_selected or show_focus:
                 highlight_color = colors.get("highlight", colors["line"])
-                show_focus = (is_hovered and self.focused) and \
-                    runtime_globals.INPUT_MODE != runtime_globals.TOUCH_MODE
                 border_color = highlight_color if show_focus else colors["line"]
                 border_width = max(1, int(2 * ui_scale))
                 pygame.draw.rect(surface, border_color,

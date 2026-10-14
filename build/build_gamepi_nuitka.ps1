@@ -218,19 +218,8 @@ Write-Status "Copied all compiled dependencies"
 Write-Status "Copying additional assets..."
 Copy-Item (Join-Path $PROJECT_ROOT "assets") "$TEMP_DIR\$BUILD_NAME\" -Recurse
 
-# Copy configuration files with correct names for GamePi
-Write-Status "Copying configuration files..."
-try {
-    $configDestDir = Join-Path $TEMP_DIR\$BUILD_NAME "config"
-    if (-not (Test-Path $configDestDir)) {
-        New-Item -ItemType Directory -Path $configDestDir | Out-Null
-    }
-    Copy-Item (Join-Path $PROJECT_ROOT "config\config_raspberry.json") (Join-Path $configDestDir "config.json")
-    Copy-Item (Join-Path $PROJECT_ROOT "config\input_config.json") (Join-Path $configDestDir "input_config.json")
-} catch {
-    Write-Error-Message "Failed to copy configuration files: $_"
-    exit 1
-}
+# Settings live in the save (GameConfiguration): the config/ folder
+# these builds used to copy was removed in 1.0 (e09369e8).
 
 # Copy documentation
 Write-Status "Copying documentation..."

@@ -11,8 +11,14 @@ module editor's CollectionFile):
                sprites: {front, back}}, ...]
     effects: [{tool, value, lr, effects: [{type, item/dna/unlock/area/round,
                amount, version}]}, ...]
-    packs:   [...]                       (not used by the game yet)
+    packs:   [{id, name, sprite, cards_per_pack, shine_chance,
+               cards: [{id, odds}]}, ...]
 Card sprites live in `modules/<module>/cards/`.
+
+A pack is opened when it is obtained -- bought in a shop, granted by an
+unlock (``card_pack``) or dropped by a battle (``prize_card_pack``): it draws
+``cards_per_pack`` cards weighted by ``odds``, each shiny at ``shine_chance``
+percent where the card can be (`open_pack`).
 
 Cards and effects are intentionally decoupled: effects are keyed by charge
 tool, binary value, and optional exact L/R state, so a foreign physical card
@@ -48,7 +54,15 @@ CARD_TOOL_DIGISOUL = "DigiSoul Charge"
 CARD_TOOLS = [CARD_TOOL_PLATE, CARD_TOOL_DIGISOUL]
 
 # Display order of card types (mirrors the module editor)
-CARD_TYPE_ORDER = ["Soul Plate", "DDP Chip", "iD Plate", "Custom"]
+CARD_TYPE_ORDER = ["Soul Plate", "DDP Chip", "iD Plate", "Custom", "Collectible"]
+
+#: A card to collect and look at, with nothing to use (Digimon World's
+#: cards): its View window offers VIEW, a close-up of front and back.
+CARD_TYPE_COLLECTIBLE = "Collectible"
+
+
+def is_collectible(card) -> bool:
+    return (card or {}).get("type") == CARD_TYPE_COLLECTIBLE
 
 _module_cards_cache = {}   # module_name -> parsed cards.json dict (or None)
 _card_sprite_cache = {}    # (module, filename, w, h) -> Surface
@@ -122,6 +136,50 @@ def ordered_cards(cards):
         c.get("number") or 0,
         (c.get("name") or "").lower(),
     ))
+
+
+def find_pack(module_name, pack_id):
+    """A module's card pack by id, or None."""
+    data = get_module_cards(module_name) or {}
+    return next((pack for pack in data.get("packs") or []
+                 if pack.get("id") == pack_id), None)
+
+
+def open_pack(module_name, pack_id, rng=random):
+    """Open one of *module_name*'s packs into the collection.
+
+    Draws ``cards_per_pack`` cards, each independently by its ``odds``
+    weight (so a card can come twice), and makes each shiny at
+    ``shine_chance`` percent where the card can be shiny. Returns
+    ``[(card, shiny), ...]``; empty for a missing or empty pack.
+    """
+    pack = find_pack(module_name, pack_id)
+    if pack is None:
+        runtime_globals.game_console.log(f"[Cards] Pack '{pack_id}' is missing from {module_name}")
+        return []
+    entries = []
+    for entry in pack.get("cards") or []:
+        card = _module_card_by_id(module_name, entry.get("id"))
+        weight = max(0, int(entry.get("odds", 1) or 0))
+        if card is not None and weight > 0:
+            entries.append((card, weight))
+    if not entries:
+        return []
+    drawn = []
+    shine = float(pack.get("shine_chance", 0) or 0)
+    for _ in range(max(1, int(pack.get("cards_per_pack", 1) or 1))):
+        card = rng.choices([c for c, _w in entries], weights=[w for _c, w in entries])[0]
+        shiny = add_card_copy(module_name, card["id"], shiny=rng.random() * 100 < shine)
+        drawn.append((card, shiny))
+    return drawn
+
+
+def announce_cards(drawn):
+    """A message for each card a pack gave."""
+    for card, shiny in drawn:
+        runtime_globals.game_message.add_slide(
+            f"{card.get('name', 'Card')}{' shiny' if shiny else ''} card obtained!",
+            (255, 255, 0), 56 * runtime_globals.UI_SCALE, runtime_globals.FONT_SIZE_SMALL)
 
 
 def find_card_by_id(card_id):
@@ -358,6 +416,27 @@ def resolve_card_effects(module_name, card, tool=None):
             module_name, card.get("value"), card.get("lr"), tool):
         effects.extend(group.get("effects") or [])
     return effects
+
+
+def charge_plate_into(module_name, card, pet):
+    """Feed a DigiSoul Plate's DNA into one pet, as a DigiSoul Charge does:
+    the card's DNA effects for the pet's version. An egg being started is
+    charged with its device's plate this way (`utils_unlocks.charge_egg_plates`).
+    Returns how many DNA were fed."""
+    fed = 0
+    for effect in resolve_card_effects(module_name, card):
+        if (effect.get("type") or "Item") != "DNA":
+            continue
+        try:
+            version = int(effect.get("version", -1))
+        except (TypeError, ValueError):
+            version = -1
+        if version >= 0 and getattr(pet, "version", None) != version:
+            continue
+        dna = effect.get("dna") or ""
+        for dna_type in (constants.DIGISOUL_DNA_TYPES if dna == "X of each" else [dna]):
+            fed += pet.add_dna(dna_type, effect.get("amount") or 1)
+    return fed
 
 
 def random_effect_group():

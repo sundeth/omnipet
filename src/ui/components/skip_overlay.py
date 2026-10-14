@@ -91,6 +91,7 @@ class SkipOverlay:
         if event_type != "LCLICK" or not event_data or "pos" not in event_data:
             return False
         if self._rect().collidepoint(event_data["pos"]):
+            runtime_globals.game_sound.play("menu")
             try:
                 self.on_skip()
             except Exception as exc:

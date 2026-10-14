@@ -47,6 +47,10 @@ class AdventureBattleView:
             is_special_encounter=self.is_special_encounter,
             encounter_name=self.encounter_name,
         )
+        # A battle wakes a sleeping pet in every mode, as training and versus
+        # already did; check_disturbed_sleep does nothing to one awake.
+        for pet in self.battle_encounter.pets_in_battle():
+            pet.check_disturbed_sleep()
         runtime_globals.game_console.log("[AdventureBattleView] Battle encounter created")
 
     # ------------------------------------------------------------------

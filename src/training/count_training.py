@@ -9,6 +9,7 @@ from ui.minigames.count_match import CountMatch
 from ui.minigames.minigame_session import (count_match_rank,
                                             count_match_super_hits)
 from battle.sim.battle_utils import get_penc_training_pattern
+from utils import pengz_count_match
 from battle import combat_constants
 import core.constants as constants
 from utils.pygame_utils import blit_with_cache
@@ -31,6 +32,12 @@ class CountMatchTraining(Training):
         self.count_match = None
         pet = self.pets[0]
         self.count_match = CountMatch(self.ui_manager, pet, self.animated_sprite)
+        # The PENGZ variant, a hidden rule of this minigame: a first pet of
+        # a PENGZ G-Cell style module plays it (utils.pengz_count_match).
+        # Each PENGZ pet's pool row, and whether Anguirus came.
+        self.pengz = pengz_count_match.applies(pet)
+        self.pengz_rows = {}
+        self.anguirus = False
 
     def update(self):
         """Override base update to include minigame updates."""
@@ -119,6 +126,19 @@ class CountMatchTraining(Training):
             self.super_hits[p] = count_match_super_hits(
                 self.final_color, attr_type, getattr(p, "stage", 1) or 1)
 
+        if self.pengz:
+            # The PENGZ's own table: each PENGZ pet's attribute and G-Cells
+            # pick its pool row from the shared shakes; other pets keep the
+            # Pendulum Color's reading above.
+            for p in pets:
+                if pengz_count_match.applies(p):
+                    row = pengz_count_match.score(p, shakes)
+                    self.pengz_rows[p] = row
+                    self.super_hits[p] = pengz_count_match.super_hits(row)
+            self.anguirus = pengz_count_match.count_training(pet)
+            if self.anguirus:
+                runtime_globals.game_console.log("[Training] Anguirus came to this training")
+
     def prepare_attack(self):
         self.attack_phase = 0
         self.attack_waves = [[] for _ in range(5)]
@@ -135,6 +155,14 @@ class CountMatchTraining(Training):
             if not main_sprite:
                 continue
             count = self.super_hits.get(pet, 0)
+            if pet in self.pengz_rows:
+                # The PENGZ's row: its first five shots, a Megahit drawn as
+                # the usual triple.
+                pattern = ([3] * 5 if count == 5
+                           else pengz_count_match.pattern(self.pengz_rows[pet])[:5])
+                pet_y = start_y + i * spacing + runtime_globals.OPTION_ICON_SIZE // 2 - main_sprite.get_height() // 2
+                self._queue_attack_waves(pattern, main_sprite, alt_sprite, pet_y, s)
+                continue
             # **The measured rows, keyed on this pet's own stage.** A real
             # Pendulum Color was shaken to every colour at every stage and the
             # shots read off the screen; not one of the 28 rows opens with its
@@ -147,21 +175,26 @@ class CountMatchTraining(Training):
                            getattr(pet, "stage", 1) or 1,
                            getattr(self, "color_band", 0) or 0))
             pet_y = start_y + i * spacing + runtime_globals.OPTION_ICON_SIZE // 2 - main_sprite.get_height() // 2
-            for j, kind in enumerate(pattern):
-                x = runtime_globals.SCREEN_WIDTH - runtime_globals.OPTION_ICON_SIZE - (20 * s)
-                y = pet_y
-                sprite = alt_sprite if kind >= 2 else main_sprite
-                if kind == 3:
-                    offsets = [(0, 0), (-int(20 * s), -int(10 * s)), (-int(40 * s), int(10 * s))]
-                    combined = self._combine_sprites(sprite, offsets)
-                    self.attack_waves[j].append((combined, x, y))
-                elif kind == 2:
-                    offsets = [(0, 0), (-int(20 * s), -int(10 * s))]
-                    combined = self._combine_sprites(sprite, offsets)
-                    self.attack_waves[j].append((combined, x, y))
-                else:
-                    self.attack_waves[j].append((sprite, x, y))
+            self._queue_attack_waves(pattern, main_sprite, alt_sprite, pet_y, s)
         self.frame_counter = 0
+
+    def _queue_attack_waves(self, pattern, main_sprite, alt_sprite, pet_y, s):
+        """One pet's shots into the five waves: 1 a single sprite, 2 a pair
+        of the alternate one, 3 (a Megahit) a triple."""
+        for j, kind in enumerate(pattern):
+            x = runtime_globals.SCREEN_WIDTH - runtime_globals.OPTION_ICON_SIZE - (20 * s)
+            y = pet_y
+            sprite = alt_sprite if kind >= 2 else main_sprite
+            if kind == 3:
+                offsets = [(0, 0), (-int(20 * s), -int(10 * s)), (-int(40 * s), int(10 * s))]
+                combined = self._combine_sprites(sprite, offsets)
+                self.attack_waves[j].append((combined, x, y))
+            elif kind == 2:
+                offsets = [(0, 0), (-int(20 * s), -int(10 * s))]
+                combined = self._combine_sprites(sprite, offsets)
+                self.attack_waves[j].append((combined, x, y))
+            else:
+                self.attack_waves[j].append((sprite, x, y))
 
     def move_attacks(self):
         """Handles the attack movement towards the bag, all in one phase."""
@@ -238,20 +271,36 @@ class CountMatchTraining(Training):
         
         # Draw the animated sprite
         self.animated_sprite.draw(screen)
-        
+
+        # Anguirus, when he came (PENGZ rules): his two poses in turn.
+        if self.anguirus:
+            frame = "Anguirus%d" % (1 + (self.frame_counter // max(1, constants.FRAME_RATE // 2)) % 2)
+            sprite = self.ui_manager.load_sprite_integer_scaling("Training", frame)
+            if sprite:
+                blit_with_cache(screen, sprite, (int(8 * runtime_globals.UI_SCALE),
+                                                 screen.get_height() - sprite.get_height()
+                                                 - int(8 * runtime_globals.UI_SCALE)))
+
         # Trophy notification for megahit
         if hits == 5:
             self.draw_trophy_notification(screen, quantity=1)
 
     def check_victory(self):
-        """Apply training results and return to game."""
+        """Apply training results and return to game. The PENGZ needs a
+        single super hit (a building destroyed); the Pendulum Color two."""
+        if self.pengz:
+            return self.super_hits.get(self.pets[0], 0) >= 1
         return self.super_hits.get(self.pets[0], 0) > 1
+
+    def anguirus_for(self, pet):
+        """Whether *pet*'s G-Cells are paid at Anguirus's rate."""
+        return self.anguirus and pet in self.pengz_rows
 
     def check_and_award_trophies(self):
         """Award trophy if super_hits reaches maximum (5)"""
         if self.super_hits.get(self.pets[0], 0) == 5:
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Count training perfect score achieved! Trophy awarded.")
 
     # ...existing code...
@@ -263,6 +312,9 @@ class CountMatchTraining(Training):
         anything under that is a failed training.
         """
         hits = self.super_hits.get(self.pets[0], 0)
+        if self.pengz:
+            # The PENGZ's results: none, 1-2, 3-4 super hits, a Megahit.
+            return pengz_count_match.grade(hits)
         if hits >= 5:
             return 3
         if hits >= 3:

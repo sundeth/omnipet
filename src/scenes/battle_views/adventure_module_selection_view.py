@@ -344,6 +344,9 @@ class AdventureModuleSelectionView:
             area = random.choice(list(limits.keys()))
             round_count = limits[area]
             round_num = random.randint(1, round_count) if round_count > 0 else 1
+            from scenes.battle_views.adventure_area_selection_view import pay_entry_or_refuse
+            if not pay_entry_or_refuse(self.selected_module, area, round_num):
+                return
             game_globals.last_adventure_module = self.selected_module.name
             game_globals.save()
             self.change_view("adventure_battle", module=self.selected_module, area=area, round_num=round_num)

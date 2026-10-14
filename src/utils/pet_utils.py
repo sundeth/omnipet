@@ -10,11 +10,15 @@ def get_selected_pets():
     use non-food items; only food (hunger/strength) is blocked, handled at the
     point of use (SceneInventory).
     """
-    if runtime_globals.selected_pets:
-        pet_list = [pet for pet in runtime_globals.selected_pets if pet.state != "dead" and pet.stage > 0]
-    else:
-        pet_list = [pet for pet in game_globals.pet_list if pet.state != "dead" and pet.stage > 0]
-    return pet_list
+    # A selection can outlive the party it was made in: a pet frozen or
+    # released, or every pet after a save reload (a game-mode switch), is no
+    # longer a target. Feeding one crashed looking it up in the party.
+    party = game_globals.pet_list
+    selected = [pet for pet in runtime_globals.selected_pets if any(pet is p for p in party)]
+    if len(selected) != len(runtime_globals.selected_pets):
+        runtime_globals.selected_pets = selected
+    source = selected if selected else party
+    return [pet for pet in source if pet.state != "dead" and pet.stage > 0]
 
 def get_training_targets():
     """
@@ -23,9 +27,15 @@ def get_training_targets():
     if runtime_globals.strategy_index == 0:
         return [pet for pet in get_selected_pets() if pet.can_train()]
     else:
+        # NEED: pets that still gain from training - effort below full, or
+        # strength below full on a module whose training pays strength.
+        # (Read the per-grade table; the old training_strengh_gain_win field
+        # no longer exists on modules and raised AttributeError here.)
+        def pays_strength(pet):
+            module = runtime_globals.game_modules.get(pet.module)
+            return any((g or 0) > 0 for g in (getattr(module, "training_strength_gain", None) or []))
         return [pet for pet in get_selected_pets() if pet.can_train() and (pet.effort < 16 or (
-            pet.strength < 4 and
-            runtime_globals.game_modules.get(pet.module).training_strengh_gain_win > 0))]
+            pet.strength < 4 and pays_strength(pet)))]
 
 def get_battle_targets():
     """
@@ -299,13 +309,26 @@ def fix_positions_for_current_resolution():
     reposition_for_resolution(old[0], old[1])
 
 
+#: Outline points per sprite frame: tracing a mask every frame cost the Pi
+#: Zero 2W a few ms per frame. The frame itself is kept with its points, so
+#: an id is never reused for another surface while cached.
+_OUTLINE_CACHE = {}
+_OUTLINE_CACHE_SIZE = 64
+
+
 def draw_pet_outline(surface, frame, x, y, color=(255, 255, 0)):
     """
     Draws an outline around a pet sprite frame.
     """
     import pygame
-    mask = pygame.mask.from_surface(frame)
-    outline = mask.outline()
+    key = (id(frame), frame.get_size())
+    cached = _OUTLINE_CACHE.get(key)
+    if cached is None or cached[0] is not frame:
+        if len(_OUTLINE_CACHE) >= _OUTLINE_CACHE_SIZE:
+            _OUTLINE_CACHE.pop(next(iter(_OUTLINE_CACHE)))
+        cached = (frame, pygame.mask.from_surface(frame).outline())
+        _OUTLINE_CACHE[key] = cached
+    outline = cached[1]
     if outline:
         outline = [(x + px, y + py) for px, py in outline]
         pygame.draw.lines(surface, color, True, outline, 2)

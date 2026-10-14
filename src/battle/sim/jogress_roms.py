@@ -130,9 +130,9 @@ def available(protocol):
 def roms(protocol):
     """Every stored code for a line, readable or not.
 
-    Includes the lines Omnipet has no module for yet, which is the point of
-    keeping them: PENX and Accel have no battle format here, and their codes
-    are still on record.
+    Includes the lines Omnipet cannot talk to yet, which is the point of
+    keeping them: Accel has no battle format here and PENX's jogress packets
+    are unread, but their codes are still on record.
     """
     line = _line(protocol)
     return list(line.get("named", [])) if line else []

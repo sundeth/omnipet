@@ -255,9 +255,15 @@ class VirtualPetGame:
         # (Backspace → START by default).  The scene only consumes the key
         # when a text component is focused, so gameplay scenes are unaffected
         # and fall through to the normal mapping below.
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_BACKSPACE:
-            if self.scene.handle_event(event):
-                return
+        # Only offered while a text field has focus: most scenes take input
+        # tuples only, and handing them the raw event raised TypeError in 8 of
+        # 21 scenes, so START never arrived from the keyboard there.
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_BACKSPACE and self._text_field_focused():
+            try:
+                if self.scene.handle_event(event):
+                    return
+            except (TypeError, ValueError, AttributeError):
+                pass
 
         input_event = runtime_globals.game_input.process_event(event)
 
@@ -274,7 +280,7 @@ class VirtualPetGame:
 
         # Pass the input event tuple to the scene if we got one
         if input_event:
-            if self.scene.handle_event(input_event):
+            if self.dispatch_input(input_event):
                 return
 
         # Forward raw text-input events to the scene so a focused
@@ -298,7 +304,92 @@ class VirtualPetGame:
                 if action in ("ANALOG_UP", "ANALOG_DOWN", "ANALOG_LEFT", "ANALOG_RIGHT"):
                     from input.input_event import create_simple_event
                     directional = action.replace("ANALOG_", "")
-                    self.scene.handle_event(create_simple_event(directional))
+                    self.dispatch_input(create_simple_event(directional))
+
+    #: Presses and taps that must answer with a sound (owner rule, 2026-10-13):
+    #: "menu" when something was selected or switched, "cancel" when nothing
+    #: happened. Pointer motion, scrolling, drags and the debug F-keys are not
+    #: presses.
+    SOUNDED_INPUTS = frozenset({"UP", "DOWN", "LEFT", "RIGHT", "A", "B", "START", "SELECT",
+                                "X", "Y", "L", "R", "LCLICK", "RCLICK"})
+
+    def dispatch_input(self, input_event):
+        """Hand an input action to the scene; make sure a press is heard.
+
+        Scenes play their own sounds. When a press reached a scene and nothing
+        played, this answers for it: "menu" if the press changed the screen
+        (a scene or view switch, focus, a phase or selection), "cancel" if it
+        did nothing. A scene running gameplay of its own (a minigame, a
+        battle) says so through ``plays_own_input_sounds()`` and is left alone.
+        Returns what the scene's handler returned.
+        """
+        event_type = input_event[0] if isinstance(input_event, tuple) else None
+        sound = runtime_globals.game_sound
+        watch = (event_type in self.SOUNDED_INPUTS
+                 and not self._scene_plays_own_input_sounds())
+        if watch:
+            before_sounds = getattr(sound, "play_requests", 0)
+            before_state = self._input_fingerprint()
+        handled = self.scene.handle_event(input_event)
+        if watch and getattr(sound, "play_requests", 0) == before_sounds:
+            changed = self._input_fingerprint() != before_state
+            sound.play("menu" if changed else "cancel")
+        return handled
+
+    def _text_field_focused(self):
+        """Whether a text field (a sticky-focus TextInput / CodeEntry) has focus
+        in the scene or its view."""
+        scene = self.scene
+        for owner in (scene, getattr(scene, "current_view", None)):
+            manager = getattr(owner, "ui_manager", None) if owner is not None else None
+            components = getattr(manager, "focusable_components", None) or []
+            index = getattr(manager, "focused_index", -1)
+            if 0 <= index < len(components):
+                focused = components[index]
+                if getattr(focused, "sticky_focus", False) and getattr(focused, "focused", False):
+                    return True
+        return False
+
+    def _scene_plays_own_input_sounds(self):
+        check = getattr(self.scene, "plays_own_input_sounds", None)
+        try:
+            return bool(check()) if callable(check) else False
+        except Exception:
+            return False
+
+    def _input_fingerprint(self):
+        """What a press can visibly change: the scene, its view and phase, focus,
+        an open menu, the focused component's selection."""
+        scene = self.scene
+        parts = [id(scene), runtime_globals.game_state_update, runtime_globals.game_state,
+                 getattr(runtime_globals, "main_menu_index", None), getattr(runtime_globals, "show_hearts", None)]
+        for owner in (scene, getattr(scene, "current_view", None)):
+            if owner is None:
+                continue
+            parts.append(id(owner))
+            for attr in ("phase", "mode", "state", "current_view_name", "page", "current_page",
+                         "selected_index", "current_index", "selection", "view_focus"):
+                value = getattr(owner, attr, None)
+                parts.append(value if value is None or isinstance(value, (str, int, float, bool))
+                             else id(value))
+            manager = getattr(owner, "ui_manager", None)
+            if manager is None:
+                continue
+            menu = getattr(manager, "active_menu", None)
+            parts += [getattr(manager, "focused_index", None),
+                      id(menu) if menu is not None and getattr(menu, "visible", False) else None,
+                      getattr(menu, "selected_index", None) if menu is not None else None,
+                      getattr(manager, "active_tooltip", None) is not None]
+            focusables = getattr(manager, "focusable_components", [])
+            index = getattr(manager, "focused_index", -1)
+            if 0 <= index < len(focusables):
+                focused = focusables[index]
+                for attr in ("selected_index", "active_index", "current_page", "page", "scroll_offset",
+                             "value", "checked", "selected", "cursor", "text"):
+                    value = getattr(focused, attr, None)
+                    if isinstance(value, (str, int, float, bool)):
+                        parts.append((attr, value))
+        return tuple(parts)
 
     def change_scene(self) -> None:
         """

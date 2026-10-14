@@ -268,6 +268,40 @@ class PacketExchange:
         if wire == "PENOG" and last:
             return self._recheck_penog_final(packet)
 
+        # Mini / iC: the last packet carries the sender's hits, and the
+        # reply's are their inverse -- what the adapter's `^1^F` does over a
+        # cable. The opener has heard their power and attribute by now, in
+        # packets 2 and 3, so it rolls against those.
+        #
+        # The iC comes through here on its own limits and its own builder:
+        # five packets rather than four, EOL 7, and a check over twenty
+        # digits. The hit and unnamed fields sit in the same places, which
+        # is a reading carried across from the Mini and not a measurement --
+        # see `protocol_constants.IC`.
+        if wire in ("DMM", "IC") and last:
+            limits, device = self.simulator.mini_family()
+            final = (device.generate_packet5 if wire == "IC"
+                     else device.generate_packet4)
+            flags = (int.from_bytes(packet, "big") >> 9) & 0x7
+            if heard:
+                theirs = int.from_bytes(self.received[index], "big")
+                hits = (~(theirs >> 4)) & 0x1F
+                flags = (theirs >> 9) & 0x7
+            else:
+                mine = device.parse(self.sent + [packet])
+                them = list(self.received) + [self.received[-1]] * (
+                    limits.PACKET_COUNT - len(self.received))
+                them = device.parse(them)
+                rate = protocol_constants.hit_rate(
+                    limits, mine["power"], mine["attribute"],
+                    them["power"], them["attribute"])
+                hits = self._roll(rate, limits.TURNS)
+                runtime_globals.game_console.log(
+                    "[Exchange] %s opener rolled hits %s at %d%% (power %d vs %d)"
+                    % (limits.NAME, format(hits, "05b"), rate,
+                       mine["power"], them["power"]))
+            return final(self.sent[:index], hits, flags)
+
         # The Colour wire's player 1 declares the verdict, and can only do it
         # once it has seen the opponent's first packet.
         if wire == "DMC" and index == 1 and self.received:

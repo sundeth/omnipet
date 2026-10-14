@@ -161,8 +161,14 @@ class SceneBoot:
                     runtime_globals.game_console.log(
                         "[SceneBoot] Sprite database unavailable; skipping sync")
                     return
-                def progress(text):
-                    self._sync_current = text
+                def progress(text, done=None, total=None):
+                    # Boot shows several modules in a row, so the module name
+                    # the service prefixes is worth keeping; the count is what
+                    # the shop's single-module view spends instead.
+                    if total:
+                        self._sync_current = f"{text} ({done * 100 // total}%)"
+                    else:
+                        self._sync_current = text
 
                 completed = True
                 for module in modules:

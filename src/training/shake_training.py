@@ -118,11 +118,11 @@ class ShakeTraining(Training):
         """Award trophy if strength reaches maximum (20)"""
         if self.strength == 20:
             for pet in self.pets:
-                pet.trophies += 2
+                pet.award_trophies(2)
             runtime_globals.game_console.log(f"[TROPHY] Shake training excellent score achieved! Trophy awarded.")
         elif self.strength >= 15:
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Shake training great score achieved! Trophy awarded.")
 
     def draw_charge(self, surface):

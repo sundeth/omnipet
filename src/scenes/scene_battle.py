@@ -17,7 +17,8 @@ from scenes.battle_views import (
     AdventureAreaSelectionView,
     AdventureBattleView,
     SpecialsView,
-    PasswordView
+    PasswordView,
+    ModuleShopView
 )
 
 
@@ -55,6 +56,12 @@ class SceneBattle:
             module = get_module(module_name)
             self._change_view("adventure_battle", module=module, area=area, round_num=round_num,
                               is_special_encounter=True, encounter_name=encounter_name)
+        elif runtime_globals.scene_battle_initial_view:
+            # Coming back from another scene to the view that opened it
+            # (the Specials hub, from the training Bonus list).
+            view, kwargs = runtime_globals.scene_battle_initial_view
+            runtime_globals.scene_battle_initial_view = None
+            self._change_view(view, **kwargs)
         else:
             self._change_view("main_menu")
         
@@ -90,6 +97,7 @@ class SceneBattle:
             "adventure_battle": AdventureBattleView,
             "specials": SpecialsView,
             "password": PasswordView,
+            "module_shop": ModuleShopView,
         }
         
         view_class = view_map.get(view_name)
@@ -130,6 +138,10 @@ class SceneBattle:
         if self.current_view:
             self.current_view.draw(surface)
     
+    def plays_own_input_sounds(self):
+        """A battle in progress reads presses as play (dispatch_input leaves it be)."""
+        return str(self.current_view_name or "").endswith("_battle")
+
     def handle_event(self, event):
         """Handle input events."""
         if not isinstance(event, tuple) or len(event) != 2:

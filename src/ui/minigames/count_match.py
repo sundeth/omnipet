@@ -2,6 +2,7 @@ import pygame
 from ui.ui_manager import UIManager
 import core.constants as constants
 from core import runtime_globals
+from utils import pengz_count_match
 
 
 class ShakeDetector:
@@ -117,6 +118,10 @@ class CountMatch:
             raise ValueError("UIManager cannot be None")
             
         self.pet = pet
+        #: The PENGZ variant (utils.pengz_count_match): its colours arrive at
+        #: 3 / 7 / 11 shakes and READY asks for the one the pet's attribute
+        #: and G-Cells pay a Megahit for.
+        self.pengz = pengz_count_match.applies(pet)
         self.phase = "ready"  # ready, count
         self.press_counter = 0
         self.rotation_index = 3
@@ -173,6 +178,8 @@ class CountMatch:
         """
         if not self.pet:
             return 1
+        if self.pengz:
+            return pengz_count_match.target_colour(self.pet)
 
         attr = getattr(self.pet, "attribute", "")
 
@@ -210,7 +217,8 @@ class CountMatch:
         
         if self.phase == "count" and event_type in ("Y", "SHAKE"):
             self.press_counter += 1
-            self.rotation_index = self.color_for_shakes(self.press_counter)
+            self.rotation_index = (pengz_count_match.colour(self.press_counter) if self.pengz
+                                   else self.color_for_shakes(self.press_counter))
 
             # Update animated sprite frame based on rotation_index
             if self.animated_sprite:

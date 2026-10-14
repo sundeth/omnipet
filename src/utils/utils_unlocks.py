@@ -2,12 +2,19 @@ from core import game_globals, runtime_globals
 
 
 def _grant_card_reward(module, unlock_data):
-    """Grant an unlock's optional collection card exactly once.
+    """Grant an unlock's optional collection card and card pack, once.
 
     Unlock rewards request a shiny copy. Soul/DigiSoul Plates remain ordinary
-    because that physical product family never has shiny variants.
+    because that physical product family never has shiny variants. A card
+    pack (``card_pack``, a cards.json pack id) is opened as a bought one is.
     """
-    card_id = unlock_data.get("card") if isinstance(unlock_data, dict) else None
+    if not isinstance(unlock_data, dict):
+        return
+    pack_id = unlock_data.get("card_pack")
+    if pack_id:
+        from utils.card_utils import announce_cards, open_pack
+        announce_cards(open_pack(module, pack_id))
+    card_id = unlock_data.get("card")
     if not card_id:
         return
     from utils.card_utils import add_card_copy, get_module_cards
@@ -25,6 +32,31 @@ def _grant_card_reward(module, unlock_data):
         f"{card.get('name', 'Card')}{finish} card obtained!",
         (255, 255, 0), 56 * runtime_globals.UI_SCALE,
         runtime_globals.FONT_SIZE_SMALL)
+
+def charge_egg_plates(module, pet):
+    """Feed a newly started egg the DNA of its device's DigiSoul Plate.
+
+    An egg unlock (for the egg's version, or every version) whose card
+    reward is a Soul Plate charges that plate into the egg, every time an
+    egg is started, not only when the unlock is first earned: the devices
+    will not hatch an egg without DNA, and the DNA hatches with it, so the
+    Baby I always has a route. Returns how many DNA were fed.
+    """
+    from utils.card_utils import charge_plate_into, get_module_cards
+    module_obj = runtime_globals.game_modules.get(module)
+    cards = {c.get("id"): c for c in (get_module_cards(module) or {}).get("cards", [])}
+    fed = 0
+    for unlock in getattr(module_obj, "unlocks", None) or []:
+        if unlock.get("type") != "egg" or not unlock.get("card"):
+            continue
+        required = unlock.get("version")
+        if required is not None and required != getattr(pet, "version", None):
+            continue
+        card = cards.get(unlock["card"])
+        if card is not None and card.get("type") == "Soul Plate":
+            fed += charge_plate_into(module, card, pet)
+    return fed
+
 
 # Use a single list of unlocks per module, each unlock has a "type" field
 def ensure_module_key(module: str):

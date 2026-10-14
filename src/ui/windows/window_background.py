@@ -93,6 +93,24 @@ class WindowBackground:
                 out.append(alt)
         return out
 
+    def _shop_paths(self, name):
+        """A background bought in the Omninet shop: the files its download
+        wrote (`bg_<name>.png`, and `bg_<name>_night.png` for a day/night one).
+        Settings lists these under the module name "shop"."""
+        for bg in (getattr(game_globals, "shop_backgrounds", None) or {}).values():
+            if (bg.get("name") or bg.get("id", "")) != name:
+                continue
+            paths = bg.get("sprite_paths") or {}
+            base = f"bg_{bg.get('sprite_name') or ''}"
+            preferred = []
+            if bg.get("day_night") and self.time_of_day:
+                preferred.append(f"{base}_{self.time_of_day}.png")
+            preferred.append(f"{base}.png")
+            out = [paths[f] for f in preferred if f in paths]
+            out += [path for _f, path in sorted(paths.items()) if path not in out]
+            return out
+        return []
+
     def _candidates(self, boot):
         """Every background worth trying, in order of preference.
 
@@ -107,8 +125,10 @@ class WindowBackground:
 
         name = game_globals.game_background
         module_name = game_globals.background_module_name
-        module = self._safe_module(module_name)
-        yield from self._paths_for(module, name)
+        if module_name == "shop":
+            yield from self._shop_paths(name)
+        else:
+            yield from self._paths_for(self._safe_module(module_name), name)
 
         # Other backgrounds this player has earned, same module first.
         try:

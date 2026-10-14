@@ -6,6 +6,7 @@ A status scene showing pet information using the new UI components.
 import pygame
 from core import game_globals, runtime_globals, constants
 from utils.module_utils import get_module
+from utils.power_display import power_display
 from ui.ui_manager import UIManager
 from ui.components.pet_list import PetList
 from ui.components.background import Background
@@ -16,7 +17,7 @@ from ui.components.heart import HeartMeter
 from ui.components.dp_bar import DPBar
 from ui.components.gcell_bar import GCellBar
 from ui.components.reliability_meter import ReliabilityMeter
-from ui.components.status_carousel import StatusCarousel
+from ui.components.status_carousel import StatusCarousel, evolution_silhouette
 from ui.components.experience_bar import ExperienceBar
 from ui.components.numeric_meter import NumericMeter
 from ui.components.heart_meter_condition import HeartMeterCondition
@@ -307,7 +308,7 @@ class SceneStatus:
 
             # G-Cell Bar (alternative to effort meter)
             self.gcell_bar = GCellBar(margin, heart_y, heart_width + 3, heart_height)
-            self.gcell_bar.set_tooltip("G-Cells - evolution requirement indicator with 4 levels.")
+            self.gcell_bar.set_tooltip("G-Cells - evolution requirement indicator.")
             self.gcell_bar.visible = False  # Hidden by default, shown based on visible_stats
             self.ui_manager.add_component(self.gcell_bar)
 
@@ -634,12 +635,13 @@ class SceneStatus:
             
         if "Power" in visible_stats:
             self.power_combined.visible = True
-            power = str(pet.power + getattr(pet, 'bonus_stats', [0,0,0])[2])
+            power, color = power_display(pet)
             # Stars are a Vital Bracelet idea, but the pet carrying one is
             # what decides whether to show it - not the module's ruleset.
             if getattr(pet, 'star', 0) > 0:
                 power += f"({pet.star}★)"
             self.power_combined.set_value(power)
+            self.power_combined.set_value_color(color)
         else:
             self.power_combined.visible = False
             
@@ -686,12 +688,17 @@ class SceneStatus:
             'sleep_disturbances': getattr(pet, 'sleep_disturbances', 0),
             'overfeed': getattr(pet, 'overfeed', 0),
             'injuries': getattr(pet, 'injuries', 0),
+            'virus': getattr(pet, 'virus', 0),
             'evolution_timer': getattr(pet, 'time', '00:00'),
             'timer': getattr(pet, 'timer', 0),
             'evolve': getattr(pet, 'evolve', False),
             'sleeps': getattr(pet, 'sleeps', '00:00'),
             'wakes': getattr(pet, 'wakes', '00:00'),
             'poop_time': getattr(pet, 'poop_timer', '00:00'),
-            'feed_time': getattr(pet, 'hunger_loss', '00:00')
+            'feed_time': getattr(pet, 'hunger_loss', '00:00'),
+            # Only worked out where the module shows it: it runs the
+            # evolution check and loads the coming form's sprite.
+            'next_evolution': (evolution_silhouette(pet)
+                               if "Next Evolution" in visible_stats else None),
         }
         self.status_carousel.set_pet_data(pet_data)

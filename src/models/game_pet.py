@@ -4,17 +4,20 @@ import pygame
 import random
 
 from core import game_globals, runtime_globals
+from core import pet_stats
 from models.animation import Animation, PetFrame
 import core.constants as constants
 from models.game_digidex import register_digidex_entry
-from utils.sprite_utils import load_pet_sprites_resolved, convert_sprites_to_list
+from utils.sprite_utils import (load_pet_sprites_resolved, convert_sprites_to_list,
+                                pair_right_frames, right_facing)
 from models.game_poop import GamePoop
 from utils.module_utils import get_module
-from utils.pygame_utils import blit_with_cache, get_flipped_sprite, sprite_load
+from utils.pygame_utils import blit_with_cache, sprite_load
 from utils.scene_utils import change_scene
 from utils.utils_unlocks import is_unlocked, unlock_item
 from utils.asset_utils import image_load
 from utils.data_compat import availability as read_availability, get_data
+from utils import evolution_rules, gcell_rules
 
 
 #: The crossover Digital Monster Colors, for the save migration below. Each
@@ -29,12 +32,39 @@ COLOUR_CROSSOVER_MODULES = ("DMGZ", "DMH", "DMXW")
 COLOUR_CROSSOVER_VERSION = 5
 
 
+def global_sleep_times():
+    """The player's Settings override (sleep, wake), each a time or None.
+
+    Settings keeps them on game_globals.configuration; reading
+    game_globals.sleep_time / wake_time, as this did, found nothing, so the
+    override never applied (fixed 2026-10-13).
+    """
+    cfg = getattr(game_globals, "configuration", None)
+    return getattr(cfg, "sleep_time", None), getattr(cfg, "wake_time", None)
+
+
 class GamePet:
     def __init__(self, pet_data, traited = False):
         self.hunger = self.strength = self.age = self.injuries = self.poop_count_flag = self.weight = 0
         self.event_communications = 0
         self.item_uses = {}
         self.totalWin = self.totalBattles = 0
+        # The id of the accessory item the pet wears (utils.accessory_utils),
+        # kept through evolutions; None for none.
+        self.accessory = None
+        # When a nap an item started ends (a datetime): the iC's Digi
+        # Bedding sleeps the pet ten minutes. None outside such a nap.
+        self.nap_until = None
+        # Points from battling other devices and pets, kept through
+        # evolution (utils.connect_points), and the next slot of the pet's
+        # pooled-encounter rotation (utils.event_utils).
+        self.connect_points = 0
+        self.encounter_rotation = 0
+        # The one item effect the pet has running, a Vital Bracelet BE item
+        # ({"item", "targets", "amount", "until"}; utils.card_battle), and its
+        # place in each card-battle event's item sequence (event id -> index).
+        self.active_boost = None
+        self.event_sequence = {}
 
         self.traited = traited
         self.shiny = False
@@ -59,13 +89,22 @@ class GamePet:
         reliability_base = getattr(module, 'reliability_base', constants.RELIABILITY_MIN)
         self.reliability = max(constants.RELIABILITY_MIN,
                                min(constants.RELIABILITY_MAX, int(reliability_base)))
-        # Lifetime/per-generation DigiSoul DNA totals. Items and Plate Charge
-        # effects add to this map; ordinary evolution intentionally preserves it.
-        self.dna = {dna_type: 0 for dna_type in constants.DIGISOUL_DNA_TYPES}
+        # DigiSoul DNA fed to this form, oldest first, at most
+        # constants.DNA_QUEUE_SIZE (`add_dna`). An egg's DNA carries into the
+        # Digimon it hatches; every other evolution starts with none.
+        self.dna = []
+        # Injury-rate points from items (the Digimon Twin's special foods),
+        # kept across evolutions. Nothing rolls an injury from them yet.
+        self.injury_rate = 0
         # Reliability's hourly cycle and unflushed-poop episode survive
         # ordinary evolutions, just like the Reliability value itself.
         self._cd_reliability = 60
         self.unflushed_poops = 0
+        # Each uncleaned poop's minutes before it costs a care mistake
+        # (care_poop_mistake_time), and the poops that did: Digimon World's
+        # virus bar, kept through evolutions until a `virus` route spends it.
+        self.poop_mistake_timers = []
+        self.virus = 0
         self._reliability_sleep_call_resolved = False
         self.reset_variables()
         self.load_sprite()
@@ -129,6 +168,19 @@ class GamePet:
         self.hunger_loss = data.get("hunger_loss")
         self.strength_loss = data.get("strength_loss")
         self.power = data.get("power")
+        #: The rate this Digimon's charge asks for, in the Digivice iC's own
+        #: RPM. **Per Digimon, not per stage**: the iC roster gives every
+        #: form a figure between 50 and 85. Sustaining a rhythm earns bars;
+        #: reaching this number once does not grant Hyper x5. 0 means the
+        #: module named none, and the RPM charge
+        #: falls back to the playbook's stage/attribute table
+        #: (`battle_utils.ic_rpm_target`) -- which is what a pet from any
+        #: other module on this wire reads.
+        self.rpm = data.get("rpm", 0)
+        # Per-species chance (%) of an injury on a lost battle (finish_battle).
+        # It was never copied from the record, so DMM never injured and the
+        # iC's Digimon lost their own 5-25%.
+        self.injury_probability = data.get("injury_probability", 0) or 0
         self.attribute = data.get("attribute")
         self.digisoul = data.get("digisoul", "")
         self.energy = data.get("energy")
@@ -147,6 +199,13 @@ class GamePet:
         self.temp_evolve = data.get("temporary-evolution") or []
         self.availability = read_availability(data)
 
+        # The Godzilla devices' scheduled encounters: when this form's
+        # encounters come (a group of the module's events.json schedule) and
+        # whom from (a pool of a "schedule" event). None for neither. See
+        # utils.event_utils.
+        self.encounter_time_group = data.get("encounter_time_group")
+        self.encounter_opponent_group = data.get("encounter_opponent_group")
+
 
     def reset_variables(self):
         self.timer = 0  # Kept for animation/frame counting only
@@ -164,6 +223,12 @@ class GamePet:
         # Ultimate without fighting again.
         if not getattr(get_module(self.module), 'battle_keep_counts_on_evolution', False):
             self.win = self.battles = 0
+        else:
+            # Kept across an evolution, but a pet just hatched has none yet:
+            # without this its first battle (and the Status screen) raised
+            # AttributeError on DMM and the other modules that keep counts.
+            self.win = getattr(self, "win", 0)
+            self.battles = getattr(self, "battles", 0)
         self.animation_counter = self.frame_counter = self.frame_index = 0
         self.care_food_mistake_timer = self.care_strength_mistake_timer = self.care_sleep_mistake_timer = self.care_sick_mistake_timer = 0
 
@@ -176,9 +241,21 @@ class GamePet:
         # Countdown counters: start at max, tick down 1/min, trigger & reset at 0
         self._cd_hunger = self.hunger_loss or 0
         self._cd_strength = self.strength_loss or 0
-        self._cd_poop = self.poop_timer or 0
+        # The poop countdown runs on through an evolution (the owner's Twin kept
+        # its hourly poop minute across two, 2026-10-06); it starts fresh only
+        # when the previous form had none, and never exceeds the new interval.
+        if self._cd_poop > 0 and self.poop_timer:
+            self._cd_poop = min(self._cd_poop, self.poop_timer)
+        else:
+            self._cd_poop = self.poop_timer or 0
         # Evolution count-up: starts at 0, increments 1/min, checks conditions after reaching self.time
         self._evol_minutes = 0
+        # Minutes in this form, asleep or awake (the 48-hour rules), whether
+        # this form has failed to evolve, and the tagged opponents it has
+        # defeated (utils.evolution_rules).
+        self.form_minutes = 0
+        self.evolution_failed = False
+        self.tag_defeats = {}
         self.special_encounter = False
 
         self.enemy_kills = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -246,7 +323,22 @@ class GamePet:
         self.x_range = (0, runtime_globals.SCREEN_WIDTH - runtime_globals.PET_WIDTH)
 
     def get_sprite(self, index):
-        return runtime_globals.pet_sprites[self][index]
+        sprites = runtime_globals.pet_sprites.get(self)
+        if sprites is None:
+            # A sprite-cache reset (display or sprite settings) reloads the
+            # party's art only; a pet outside the party (an arena replay's,
+            # a battle's) loads its own again rather than stopping the draw.
+            self.load_sprite()
+            sprites = runtime_globals.pet_sprites.get(self, [])
+        return sprites[index]
+
+    def get_right_sprite(self, index):
+        """Frame *index* facing right: the set's own right-facing drawing
+        (``<n>R.png``), else the frame mirrored. None when it is missing."""
+        frame = self.get_sprite(index)
+        if frame is None:
+            return None
+        return right_facing(frame, runtime_globals.pet_sprites_right.get(self))
 
     def set_state(self, new_state, force=False):
         if self.state == "dead":
@@ -297,6 +389,7 @@ class GamePet:
         # Load sprites using the new utility function with format parameters.
         # Capture the resolved format ("Color"/"Dot"/"HD") so draw() can pick
         # matching overlay icons (dot pets -> *_dot, HD pets -> *_hd).
+        right = {}
         sprites_dict, self.sprite_format = load_pet_sprites_resolved(
             self.name,
             module_path,
@@ -306,8 +399,12 @@ class GamePet:
             secondary_sprite_format=secondary_format,
             # Pet art is drawn at a whole multiple of its own size rather than
             # squeezed into the slot: the HD library is 54x48, not 48x48.
-            pixel_perfect=True
+            pixel_perfect=True,
+            right=right
         )
+        # The set's own right-facing frames, paired by surface so the
+        # reverse_atk_frames swap below keeps each with its drawing.
+        runtime_globals.pet_sprites_right[self] = pair_right_frames(sprites_dict, right)
 
         # Convert to list format expected by existing code
         sprite_list = convert_sprites_to_list(sprites_dict)
@@ -355,12 +452,22 @@ class GamePet:
                 runtime_globals.game_console.log(
                     f"[!] {self.name}: sprite frame {frame_key} missing, using IDLE1")
 
-        # Flip if facing right (cached — flipping allocated a surface per frame)
+        # Facing right: the set's own right-facing frame, else the frame
+        # flipped (cached — flipping allocated a surface per frame)
         if self.direction == 1:
-            frame = get_flipped_sprite(frame)
+            frame = right_facing(frame, runtime_globals.pet_sprites_right.get(self))
         
-        # Draw base pet sprite
-        blit_with_cache(surface, frame, (self.x, self.y))
+        # Draw base pet sprite, with what it wears (an aura goes under it):
+        # on the main screen's idle, happy and angry frames only, as the
+        # Digivice iC shows them (utils.accessory_utils).
+        if getattr(self, "accessory", None) and frame_key in (
+                PetFrame.IDLE1.value, PetFrame.IDLE2.value, PetFrame.HAPPY.value, PetFrame.ANGRY.value):
+            from utils import accessory_utils
+            accessory_utils.draw_behind(surface, self, frame, (self.x, self.y))
+            blit_with_cache(surface, frame, (self.x, self.y))
+            accessory_utils.draw_over(surface, self, frame, (self.x, self.y))
+        else:
+            blit_with_cache(surface, frame, (self.x, self.y))
         
         # Determine overlay, if any (dead pets show no overlays)
         overlay = None
@@ -474,12 +581,15 @@ class GamePet:
             # loss, so its dedicated countdown runs during both wake and sleep.
             if self.state != "dead":
                 self.update_reliability(minutes_passed)
+                # Time in this form runs asleep and awake alike.
+                self.form_minutes = (getattr(self, "form_minutes", 0) or 0) + minutes_passed
 
             if self.state not in ("nap", "dead"):
                 self._evol_minutes += minutes_passed
                 self.update_evolution()
                 self.update_needs(minutes_passed)
                 self.update_pooping(minutes_passed)
+                self.update_poop_mistakes(minutes_passed)
                 self.update_care_mistakes()
                 self.update_vital_values_loss()
             elif self.state == "nap" and getattr(get_module(self.module), 'count_evolution_while_sleeping', True):
@@ -503,6 +613,57 @@ class GamePet:
             if elapsed_min // 60 > (elapsed_min - minutes_passed) // 60:
                 if self.state not in ("nap", "dead"):
                     self.update_vital_values_gain()
+
+    def android_offline_snapshot(self, wall_time, monotonic_time, restored=False):
+        """Android only: copy care state without invoking pickle/sprite loading.
+
+        Timers in the isolated copy use the checkpoint's wall-time coordinate.
+        The normal update loop and desktop serialization are unaffected.
+        *restored*: the pet was just loaded from the save that *wall_time*
+        dates, so its timers stand as __setstate__ restored them; the time the
+        rest of the load took has not passed at the checkpoint.
+        """
+        import copy
+        import uuid
+        if not getattr(self, 'android_id', None):
+            self.android_id = uuid.uuid4().hex
+        if restored:
+            monotonic_time = getattr(self, '_rt_restored_at', monotonic_time)
+        data = copy.deepcopy({k: v for k, v in self.__dict__.items()
+                              if k not in ('frames', '_rt_restored_at')})
+        elapsed = max(0.0, monotonic_time - self._rt_origin)
+        data['_rt_origin'] = wall_time - elapsed
+        # Only SceneMainGame runs update(), so a party left on another screen
+        # has minutes it has not applied yet. Offline applies them as the one
+        # batch the next update() would; dropping them would lose that care.
+        data['android_pending_minutes'] = max(0, int(elapsed / 60) - self._rt_last_minute)
+        data['_rt_last_minute'] = int(elapsed / 60)
+        data['next_minute'] = wall_time + (60 - elapsed % 60)
+        data['_rt_dead_start'] = (wall_time - max(0, monotonic_time - self._rt_dead_start)
+                                  if self._rt_dead_start else 0)
+        return data
+
+    def android_apply_offline(self, data, wall_time, monotonic_time):
+        """Android only: reveal the final care state, never historical animation."""
+        import copy
+        result = copy.deepcopy(data)
+        result.pop('next_minute', None)
+        self.__dict__.update(result)
+        self._rt_origin = monotonic_time - max(0, wall_time - result['_rt_origin'])
+        self._rt_last_sleep_check = monotonic_time
+        if result.get('_rt_dead_start'):
+            self._rt_dead_start = monotonic_time - max(0, wall_time - result['_rt_dead_start'])
+        if self.state not in ('nap', 'dead', 'dying'):
+            self.state = 'idle'
+        self.animation_frames = getattr(Animation, self.state.upper(), Animation.IDLE)
+        self.frame_index = self.frame_counter = self.animation_counter = 0
+        self.dirty = True
+        self.load_sprite()
+        if self.state == 'dead':
+            dead = sprite_load(constants.DEAD_FRAME_PATH,
+                               size=(runtime_globals.PET_WIDTH, runtime_globals.PET_HEIGHT))
+            runtime_globals.pet_sprites[self][0] = dead
+            runtime_globals.pet_sprites[self][1] = dead
 
     def update_cache(self):
         # Check for changes that require cache invalidation
@@ -627,6 +788,11 @@ class GamePet:
 
         runtime_globals.game_console.log(f"Evolving to {name}")
         runtime_globals.game_sound.play("evolution")
+        # The DNA fed into an egg hatches with it - a DigiSoul Plate's, so
+        # the Baby I always has a way to evolve; any other evolution starts
+        # the new form with none, as the devices do.
+        if int(self.stage or 0) != 0:
+            self.dna = []
         if not hasattr(self, 'evolution_history'):
             self.evolution_history = []
         self.evolution_history.append(self.name)
@@ -744,11 +910,30 @@ class GamePet:
         self.unflushed_poops += 1
         if self.unflushed_poops % 2 == 0:
             self._apply_reliability_event('reliability_two_poops')
+        self.start_poop_timer(module)
         
-        if self.weight > self.min_weight:
+        if self.weight > self.weight_floor():
             self.weight -= 1
         self.update_99g_effect()
         self.set_state("idle")
+
+    def start_poop_timer(self, module):
+        """A new poop has the module's care_poop_mistake_time to be cleaned."""
+        limit = int(getattr(module, "care_poop_mistake_time", 0) or 0)
+        if limit > 0:
+            self.poop_mistake_timers = list(getattr(self, "poop_mistake_timers", None) or []) + [limit]
+
+    def update_poop_mistakes(self, minutes_passed):
+        """A poop left uncleaned past care_poop_mistake_time: a care mistake
+        and a point of virus, once a poop (Digimon World's poop on the
+        ground). Cleaning stops the timers (SceneMainGame)."""
+        timers = getattr(self, "poop_mistake_timers", None) or []
+        if not timers:
+            return
+        self.poop_mistake_timers, expired = pet_stats.tick_poop_timers(timers, minutes_passed)
+        for _ in range(expired):
+            self.virus = int(getattr(self, "virus", 0) or 0) + 1
+            self.add_care_mistake("poop")
 
     def check_death_conditions(self):
         if self.state in ["nap", "dead"]:
@@ -783,9 +968,9 @@ class GamePet:
                 result = True
                 death_cause = "stage_mistakes"
 
-        # 5. Stage VI ou VII + 5+ erros após 2 days
+        # 5. Stage VI ou VII + 5+ erros após 48 hours in this form
         if self.stage >= 6 and module.death_stage67_mistake > 0 and self.mistakes >= module.death_stage67_mistake:
-            if self.age >= 2:
+            if evolution_rules.form_aged(self):
                 result = True
                 death_cause = "stage_mistakes"
 
@@ -852,11 +1037,29 @@ class GamePet:
                 runtime_globals.game_sound.play("happy")
                 runtime_globals.game_console.log(f"[Death Save] {self.name} was saved (cause: {cause})! 60-minute immunity granted.")
 
+    def _death_evolution(self):
+        """Take a death route (``at_death``) instead of dying, if one is met
+        and its chance rolls. True when the pet evolved."""
+        if not any(evolution_rules.is_death_route(e) for e in (self.evolve or [])):
+            return False
+        match = self.find_evolution(kind="death")
+        if match is None:
+            return False
+        self.dying = False
+        self.death_cause = ""
+        runtime_globals.game_console.log(f"{self.name} evolved instead of dying.")
+        self._apply_evolution(match[0])
+        return True
+
     def update_death_check(self, now=None):
         """Checks pet death conditions and updates the sprite accordingly."""
         if now is None:
             now = time.monotonic()
         if self.check_death_conditions() and self.death_save_immunity == 0:
+            # A death route (at_death) may take the pet instead of the death:
+            # the PENGZ's Skull Greymon G. A saved pet never reaches here.
+            if self._death_evolution():
+                return
             # Pet dies (either no save method or save timer expired)
             module = get_module(self.module)
             has_save_method = module.death_save_by_b_press > 0 or module.death_save_by_shake > 0
@@ -880,6 +1083,7 @@ class GamePet:
             if self in game_globals.pet_list:
                 game_globals.pet_list.remove(self)
                 del runtime_globals.pet_sprites[self]
+                runtime_globals.pet_sprites_right.pop(self, None)
                 # One fewer pet in the party means the rest get a bigger slot.
                 from utils.pet_utils import refresh_pet_sizes
                 refresh_pet_sizes()
@@ -902,8 +1106,9 @@ class GamePet:
             hunger_weight_gain = module.meat_weight_gain
             strength_weight_gain = module.protein_weight_gain
         else:
-            hunger_weight_gain = strength_weight_gain = max(
-                0, int(weight_gain))
+            # An item's own weight is made by the inventory to every pet that
+            # takes it, whatever the effect (`item_effects.apply_weight`).
+            hunger_weight_gain = strength_weight_gain = 0
 
         # Can't eat if sleeping and module doesn't allow it
         if not module.can_eat_sleeping and self.state == "nap":
@@ -938,6 +1143,9 @@ class GamePet:
                         self.hunger >= self.stomach):
                     self._apply_reliability_event('reliability_becoming_full')
                 runtime_globals.game_console.log(f"{self.name} ate food (hunger). Hunger {self.hunger}")
+        elif food_type == "strength" and not self.tracks_strength():
+            # No Strength meter on this device (the iC, DW1): nothing to fill.
+            self.set_state("nope")
         elif food_type == "strength":
             self.check_disturbed_sleep()
             self.set_state("eat")
@@ -952,11 +1160,8 @@ class GamePet:
                     self.dp = min(self.energy, self.dp + module.protein_dp_gain)
             self.care_strength_mistake_timer = 0
             
-            # Remove G-Cell points for protein feeding if module uses G-Cells
-            if getattr(module, 'use_gcells', False):
-                gcell_points = getattr(module, 'gcell_protein', 0)
-                if gcell_points != 0:
-                    self.add_gcell_points(gcell_points)
+            # G-Cell points for protein feeding, in the module's style
+            self._gcell_event("protein")
             
             accepted = True
             runtime_globals.game_console.log(f"{self.name} ate food (strength). Strength {self.strength}")
@@ -1049,106 +1254,142 @@ class GamePet:
             runtime_globals.game_console.log(f"[99g] Burpmon sprite not found, keeping original.")
 
     def _has_dna_evolution_criterion(self, evolution):
-        """Return whether an evolution entry explicitly defines DNA criteria.
-
-        An empty type list plus amount 0 is meaningful: it checks that the
-        pet has no DNA of any type. Routes with no DNA requirement omit both
-        keys entirely.
-        """
+        """Whether a route asks for DigiSoul DNA: a non-empty
+        ``digisoul_dna``, the types any of which it takes."""
         dna_types = evolution.get("digisoul_dna")
-        if not ("digisoul_dna" in evolution and
-                "digisoul_amount" in evolution and
-                isinstance(dna_types, (list, tuple))):
-            return False
-        try:
-            return int(evolution["digisoul_amount"]) >= 0
-        except (TypeError, ValueError):
-            return False
+        return isinstance(dna_types, (list, tuple)) and len(dna_types) > 0
 
     def get_dna_total(self, dna_types=None):
-        """Return the DNA stored for the requested DigiSoul types.
+        """How many of the remembered DNA feeds are of *dna_types* (all
+        types when None)."""
+        wanted = None if dna_types is None else {str(t).casefold() for t in dna_types}
+        return sum(1 for dna in getattr(self, "dna", None) or []
+                   if wanted is None or dna.casefold() in wanted)
 
-        With no type list, this returns the pet's total DNA across all known
-        families. Unknown names in module data contribute zero.
+    def leading_dna(self):
+        """The DNA this Digimon's evolution reads: the type it holds most of
+        among the remembered feeds, the one fed latest on a tie. None when it
+        holds none.
+
+        One feed is enough, and the latest feed decides a tie, so a Digimon
+        that has taken Beast and then Bird goes the Bird way (owner,
+        2026-10-05).
         """
-        if dna_types is None:
-            dna_types = constants.DIGISOUL_DNA_TYPES
-        return sum(max(0, int(getattr(self, "dna", {}).get(dna_type, 0) or 0))
-                   for dna_type in dna_types)
+        queue = list(getattr(self, "dna", None) or [])
+        if not queue:
+            return None
+        counts = {}
+        last_fed = {}
+        for position, dna in enumerate(queue):
+            counts[dna] = counts.get(dna, 0) + 1
+            last_fed[dna] = position
+        return max(counts, key=lambda dna: (counts[dna], last_fed[dna]))
 
     def _dna_evolution_requirement_met(self, evolution):
-        """Check one DigiSoul DNA criterion.
-
-        Positive amounts are minimum totals. Zero deliberately means exactly
-        zero, which lets modules express the devices' no-DigiSoul routes.
-        """
+        """A DNA route is taken when the leading DNA is one of its types."""
         if not self._has_dna_evolution_criterion(evolution):
             return True
-        try:
-            amount = max(0, int(evolution.get("digisoul_amount", 0) or 0))
-        except (TypeError, ValueError):
-            return False
-        # An empty list means total DNA across every family. It is used with
-        # amount 0 by the iC tables' explicit "0 DigiSoul" routes.
-        dna_types = evolution["digisoul_dna"] or None
-        total = self.get_dna_total(dna_types)
-        return total == 0 if amount == 0 else total >= amount
+        leading = self.leading_dna()
+        return leading is not None and leading.casefold() in {
+            str(t).casefold() for t in evolution["digisoul_dna"]}
 
     def _ordered_normal_evolution_routes(self):
-        """Order DNA routes by threshold and current group total.
-
-        Normal routes keep their JSON order. Within each consecutive DNA block,
-        a larger configured threshold has priority and the group with the most
-        DNA wins. Exact ties are shuffled, matching the iC's random tie result.
-        Keeping DNA blocks separated by ordinary routes preserves legacy
-        first-match behavior for every module that does not use this feature.
-        """
-        ordered = []
-        dna_block = []
-
-        def flush_dna_block():
-            if not dna_block:
-                return
-            def priority(evolution):
-                try:
-                    amount = max(0, int(evolution.get("digisoul_amount", 0) or 0))
-                except (TypeError, ValueError):
-                    amount = -1
-                dna_types = evolution.get("digisoul_dna") or None
-                return amount, self.get_dna_total(dna_types)
-
-            dna_block.sort(key=priority, reverse=True)
-            # Routes with an explicit chance deliberately use their stored
-            # order (e.g. 20%, 25%, 33%, 50%, fallback for five equal random
-            # outcomes). Only equal-score groups without chance rolls use the
-            # device's tied-leading-DNA randomization.
-            index = 0
-            while index < len(dna_block):
-                end = index + 1
-                current_priority = priority(dna_block[index])
-                while end < len(dna_block) and priority(dna_block[end]) == current_priority:
-                    end += 1
-                tied = dna_block[index:end]
-                if not any("chance" in evolution for evolution in tied):
-                    random.shuffle(tied)
-                ordered.extend(tied)
-                index = end
-            dna_block.clear()
-
-        for evolution in self.evolve:
-            if self._has_dna_evolution_criterion(evolution):
-                dna_block.append(evolution)
-            else:
-                flush_dna_block()
-                ordered.append(evolution)
-        flush_dna_block()
-        return ordered
+        """The routes in their JSON order: the first one met wins. A route
+        without a DNA requirement, listed after the DNA ones, is the way a
+        Digimon that holds no fitting DNA goes."""
+        return list(self.evolve)
 
     def update_evolution(self):
+        module = get_module(self.module)
+        # A defeat-count route (`defeat_tag`) evolves the pet as soon as its
+        # count is reached, whatever the timer says.
+        if any(evolution_rules.is_immediate_route(e) for e in (self.evolve or [])):
+            match = self.find_evolution(kind="immediate")
+            if match is not None:
+                self._apply_evolution(match[0])
+                return
+
         if self._evol_minutes < self.time or self.need_care():
             return
-        
+        # A failed evolution is final (evolution_fail_on_first_try).
+        if getattr(self, "evolution_failed", False):
+            return
+
+        match = self.find_evolution()
+        if match is None:
+            # The first try is the only one for a route that reads the battle
+            # record, on a module that says so; other routes keep waiting.
+            if evolution_rules.should_fail(module, self.evolve or []):
+                self.evolution_failed = True
+                runtime_globals.game_console.log(f"{self.name} failed to evolve.")
+            return
+        self._apply_evolution(match[0])
+
+    def _apply_evolution(self, evo):
+        """Evolve along a route that has been taken: its unlocks, then the form."""
+        # A `virus` route spends the virus (World's Sukamon empties the bar).
+        if "virus" in evo:
+            self.virus = 0
+        # Unlock evolution if present in module unlocks (new format)
+        module = get_module(self.module)
+        unlocks = getattr(module, "unlocks", [])
+        target_stage = None
+        for unlock in unlocks:
+            if unlock.get("type") != "evolution":
+                continue
+            if unlock.get("to") and evo["to"] in unlock["to"]:
+                unlock_item(self.module, "evolution", unlock["name"])
+                continue
+            # An evolution unlock can name a stage instead of a target,
+            # for the devices that hand out a Digitama simply for getting
+            # a Digimon that far. PEN20 opens four of its eggs this way,
+            # "Unlocked by evolving into Child".
+            wanted = unlock.get("stage")
+            if wanted is None:
+                continue
+            if target_stage is None:
+                target_stage = (module.get_monster(evo["to"], self.version)
+                                or {}).get("stage", 0)
+            if target_stage >= wanted:
+                unlock_item(self.module, "evolution", unlock["name"])
+
+        if self.stage == 0 and self.shake_counter >= 99 and get_module(self.module).enable_shaken_egg:
+            self.shook = True
+
+        self.evolve_to(evo["to"], evo.get("version", self.version))
+
+        # Update quest progress for normal evolution
+        from utils.quest_event_utils import update_evolution_quest_progress
+        update_evolution_quest_progress("normal", self.module)
+
+    def preview_evolution(self):
+        """The form this pet would evolve into if it evolved now: the first
+        route whose requirements it meets, a route's % chance counted as a
+        certainty. The target's monster.json record, or None. Neither the
+        evolution timer nor care calls are waited for, and nothing changes."""
+        match = self.find_evolution(roll_chance=False)
+        return match[1] if match else None
+
+    def find_evolution(self, roll_chance=True, kind="normal"):
+        """The first normal evolution route this pet satisfies now, as
+        ``(route, target's monster.json record)``, or None.
+
+        Routes are tried in their order (`_ordered_normal_evolution_routes`);
+        jogress and armor routes are never normal ones. A route's ``chance``
+        is rolled, last, when *roll_chance*; otherwise it counts as met, and
+        so do the module's win-ratio table and a death route's ``at_death``.
+        *kind* picks the routes: "normal" (the timer), "immediate" (defeat
+        counts) or "death" (only ``at_death`` routes; see
+        utils.evolution_rules). A target missing from this version, or a
+        special one still locked, is passed over. Nothing about the pet
+        changes here.
+        """
+        module_obj = get_module(self.module)
+        poops_on_screen = len(game_globals.poop_list)
+        table_roll = evolution_rules.once(lambda: random.random() * 100)
         for evo in self._ordered_normal_evolution_routes():
+            if not evolution_rules.route_wanted(evo, kind):
+                continue
             def in_range(val, r): return r[0] <= val <= r[1]
             def in_time_range(time_range):
                 try:
@@ -1196,6 +1437,8 @@ class GamePet:
                 ("red_gcells" in evo and not in_range(self.get_red_gcells(), evo["red_gcells"])) or
                 ("gcell_level" in evo and not in_range(self.get_gcell_level(), evo["gcell_level"])) or
                 ("gcell_hatch" in evo and not self.gcell_fragment) or
+                # G-Cells in the module's style (PENGZ: 0-14, Red from 8)
+                ("gcells" in evo and not in_range(gcell_rules.cells(module_obj, self), evo["gcells"])) or
                 ("stage-5" in evo and not in_range(self.enemy_kills[5], evo["stage-5"])) or
                 ("stage-6" in evo and not in_range(self.enemy_kills[6], evo["stage-6"])) or
                 ("stage-7" in evo and not in_range(self.enemy_kills[7], evo["stage-7"])) or
@@ -1211,15 +1454,21 @@ class GamePet:
                 ("area" in evo and evo["area"] is not None and
                  getattr(self, "area", 0) < evo["area"]) or
                 ("time_range" in evo and not in_time_range(evo["time_range"])) or
+                # Poops on screen, the lifetime record and tagged defeats.
+                evolution_rules.extra_criteria_fail(self, evo, poops_on_screen) or
                 # "chance" is rolled last, so it is only spent on an entry
                 # whose other requirements are already satisfied. A failed
                 # roll falls through to the next entry, which is how the
                 # device presents a coin flip between two outcomes: give the
                 # first one a chance and leave the second without one.
                 # -1 (or absent) means the criterion is unused.
-                ("chance" in evo and evo["chance"] >= 0 and
+                (roll_chance and "chance" in evo and evo["chance"] >= 0 and
                  random.random() * 100 >= evo["chance"])
             ):
+                continue
+            # Then the module's win-ratio table and a death route's chance.
+            if roll_chance and evolution_rules.rolls_fail(
+                    module_obj, self, evo, lambda: random.random() * 100, kind, table_roll):
                 continue
 
             # The target has to exist on this version before anything else is
@@ -1240,42 +1489,9 @@ class GamePet:
                     if special_key and not is_unlocked(self.module, None, special_key):
                         runtime_globals.game_console.log(f"{self.name} cannot evolve into {evo['to']}—special evolution {special_key} is locked.")
                         continue  # Skip this evolution
-                    else:
-                        runtime_globals.game_console.log("Special evolution check pass")
 
-            # Unlock evolution if present in module unlocks (new format)
-            module = get_module(self.module)
-            unlocks = getattr(module, "unlocks", [])
-            target_stage = None
-            for unlock in unlocks:
-                if unlock.get("type") != "evolution":
-                    continue
-                if unlock.get("to") and evo["to"] in unlock["to"]:
-                    unlock_item(self.module, "evolution", unlock["name"])
-                    continue
-                # An evolution unlock can name a stage instead of a target,
-                # for the devices that hand out a Digitama simply for getting
-                # a Digimon that far. PEN20 opens four of its eggs this way,
-                # "Unlocked by evolving into Child".
-                wanted = unlock.get("stage")
-                if wanted is None:
-                    continue
-                if target_stage is None:
-                    target_stage = (module.get_monster(evo["to"], self.version)
-                                    or {}).get("stage", 0)
-                if target_stage >= wanted:
-                    unlock_item(self.module, "evolution", unlock["name"])
-
-            if self.stage == 0 and self.shake_counter >= 99 and get_module(self.module).enable_shaken_egg:
-                self.shook = True
-                
-            self.evolve_to(evo["to"], evo.get("version", self.version))
-            
-            # Update quest progress for normal evolution
-            from utils.quest_event_utils import update_evolution_quest_progress
-            update_evolution_quest_progress("normal", self.module)
-            
-            break
+            return evo, pet_data
+        return None
 
     def update_needs(self, minutes_passed):
         # Skip hunger/strength decay when pet should be sleeping. The Digimon
@@ -1285,25 +1501,31 @@ class GamePet:
         if sleeping and getattr(get_module(self.module),
                                 'care_needs_decay_while_sleeping', False):
             sleeping = False
+        # Twice as fast after a failed evolution, or at Stage VI+ after 48
+        # hours in the form, where the module fails evolutions (PENGZ).
+        drain = minutes_passed * evolution_rules.needs_factor(self, get_module(self.module))
 
         # Hunger countdown
         if self._cd_hunger > 0 and not sleeping:
             if self.overfeed_timer == 0:
-                self._cd_hunger -= minutes_passed
+                self._cd_hunger -= drain
                 while self._cd_hunger <= 0:
                     if self.hunger > 0:
                         self.hunger -= 1
                     else:
                         self.starvation_counter += 1
                     self._cd_hunger += self.hunger_loss
-        # Strength countdown
-        if self._cd_strength > 0 and not sleeping:
-            self._cd_strength -= minutes_passed
+        # Strength countdown, on a device that has the meter
+        if self._cd_strength > 0 and not sleeping and self.tracks_strength():
+            self._cd_strength -= drain
             while self._cd_strength <= 0:
                 if self.strength > 4:
                     self.strength = 4
                 elif self.strength > 0:
                     self.strength -= 1
+                    if self.strength == 0:
+                        # The empty-strength call costs PENGZ G-Cells.
+                        self._gcell_event("empty_strength")
                 self._cd_strength += self.strength_loss
         if self.overfeed_timer > 0:
             self.overfeed_timer -= 1
@@ -1334,7 +1556,9 @@ class GamePet:
         else:
             self.poop_count_flag = 0
 
-        depletion = minutes_passed * (2 if (self.stage >= 6 and self.age >= 2) else 1)
+        # Twice as fast at Stage VI+ after 48 hours in the form, and after a
+        # failed evolution where the module fails them.
+        depletion = minutes_passed * evolution_rules.poop_factor(self, module)
         self._cd_poop -= depletion
         if self._cd_poop <= 0:
             self.set_state("pooping")
@@ -1355,8 +1579,8 @@ class GamePet:
                     self.add_care_mistake("hunger")
                     sound_alert = True
         
-        #strength call — same single-fire guard
-        if self.strength == 0 and not sleeping:
+        #strength call — same single-fire guard (only where the meter exists)
+        if self.strength_empty() and not sleeping:
             if self.care_strength_mistake_timer < module.protein_care_mistake_time:
                 self.care_strength_mistake_timer += 1
                 if self.care_strength_mistake_timer == module.protein_care_mistake_time:
@@ -1393,7 +1617,7 @@ class GamePet:
 
     def update_vital_values_gain(self):
         """Update vital values every hour - gain if pet is healthy and well-fed"""
-        if self.stage <= 0 or self.state in ("dead", "nap") or self.sick > 0 or self.hunger == 0 or self.strength == 0:
+        if self.stage <= 0 or self.state in ("dead", "nap") or self.sick > 0 or self.hunger == 0 or self.strength_empty():
             return
 
         # only devices that show the meter earn anything, the same rule
@@ -1420,9 +1644,9 @@ class GamePet:
 
     def update_vital_values_loss(self):
         """Update vital values every minute - lose if pet is in poor condition"""
-        if self.stage <= 0 or self.state in ("dead", "nap") or self.sick <= 0 and self.hunger > 0 and self.strength > 0:
+        if self.stage <= 0 or self.state in ("dead", "nap") or self.sick <= 0 and self.hunger > 0 and not self.strength_empty():
             return
-            
+
         module = get_module(self.module)
         vital_loss = getattr(module, 'vital_value_loss', 1)  # Default to 1 if not defined
         
@@ -1444,21 +1668,18 @@ class GamePet:
             self.mistakes += 1
             runtime_globals.game_console.log(f"[!] Care mistake ({mistake_type})! Total: {self.mistakes}")
         
-        # Remove G-Cell points for care mistake if module uses G-Cells
-        if getattr(module, 'use_gcells', False):
-            gcell_points = getattr(module, 'gcell_care_mistake', 0)
-            if gcell_points != 0:
-                self.add_gcell_points(gcell_points)
+        # G-Cell points for a care mistake, in the module's style
+        self._gcell_event("care_mistake")
 
     def need_care(self):
-        return self.stage != 0 and self.state not in ("dead","nap") and (self.hunger == 0 or self.strength == 0 or self.sick > 0 or self.should_sleep()) 
+        return self.stage != 0 and self.state not in ("dead","nap") and (self.hunger == 0 or self.strength_empty() or self.sick > 0 or self.should_sleep())
 
     def call_sign(self):
         if self.stage == 0 or self.state in ("dead","nap"):
             return False
         if self.hunger == 0 and self.care_food_mistake_timer < get_module(self.module).meat_care_mistake_time:
             return True
-        elif self.strength == 0 and self.care_strength_mistake_timer < get_module(self.module).protein_care_mistake_time:
+        elif self.strength_empty() and self.care_strength_mistake_timer < get_module(self.module).protein_care_mistake_time:
             return True
         elif self.should_sleep() and self.care_sleep_mistake_timer < get_module(self.module).sleep_care_mistake_timer:
             return True
@@ -1574,6 +1795,13 @@ class GamePet:
         if rule.startswith("Win Ratio"):
             min_stage = 4 if "Stage 4" in rule else 5
             win_ratio = (self.win * 100) // self.battles if self.battles else 0
+            if evolution_rules.fails_on_first_try(module):
+                # The PENGZ: the lifetime ratio, and only from a pet whose
+                # evolution failed or a Stage VI+ 48 hours in its form.
+                if not (getattr(self, "evolution_failed", False)
+                        or (self.stage >= 6 and evolution_rules.form_aged(self))):
+                    return
+                win_ratio = evolution_rules.total_win_ratio(self)
             if self.stage >= min_stage and win_ratio >= 60:
                 self._grant_traited_egg()
             return
@@ -1607,7 +1835,9 @@ class GamePet:
         if cost_type == "Nothing":
             return True
         elif cost_type == "Hunger":
-            return self.hunger >= cost_amount
+            # A hungry pet cannot battle whatever the cost, so a Hunger cost
+            # of 0 means "free, but not on an empty stomach" - the Mini's rule.
+            return self.hunger > 0 and self.hunger >= cost_amount
         else:  # DP
             return self.dp >= cost_amount
 
@@ -1624,7 +1854,7 @@ class GamePet:
         # modules that don't use it).
         weight_loss = getattr(module, 'battle_weight_loss', 0)
         if weight_loss and self.stage > 1:
-            self.weight = max(self.min_weight, self.weight - weight_loss)
+            self.weight = max(self.weight_floor(), self.weight - weight_loss)
             self.update_99g_effect()
 
     def battle_block_reason(self, entering=True):
@@ -1642,6 +1872,8 @@ class GamePet:
         if not self._has_battle_resources():
             cost_type = getattr(module, 'battle_cost_type', 'DP')
             have = self.hunger if cost_type == "Hunger" else self.dp
+            if cost_type == "Hunger" and have <= 0:
+                return "hungry"
             return (f"{cost_type.lower()}={have} < "
                     f"{getattr(module, 'battle_cost_amount', 1.0)}")
         if not entering:
@@ -1671,6 +1903,9 @@ class GamePet:
         return self.battle_block_reason() is None
     
     def can_train(self):
+        module = get_module(self.module)
+        if self.sick > 0 and not getattr(module, 'care_can_train_while_sick', False):
+            return False
         return self.stage > 0 and self.state != "dead" and self.atk_main > 0 and not self._is_blocked_by_sleep()
 
     def set_back_to_sleep(self):
@@ -1679,32 +1914,45 @@ class GamePet:
     def check_disturbed_sleep(self):
         if self.state == "nap":
             runtime_globals.game_console.log(f"[DEBUG] Sleep disturbance {self.sleep_disturbances}")
+            self.nap_until = None
             self.set_state("idle")
             self.sleep_disturbances += 1
             self.disturbance_penalty += 2
             self.set_back_to_sleep()
+            self._check_disturbance_sickness()
+
+    def _check_disturbance_sickness(self):
+        """Every Nth sleep disturbance makes the pet sick, where a device says so.
+
+        `care_disturbance_sickness_count` is that N and 0 switches it off, the
+        way `care_poop_sickness_count` does for poop. It counts the pet's whole
+        record rather than a run, so the tenth, twentieth and thirtieth each
+        land; `sleep_disturbances` is also an evolution criterion, so it is
+        never reset for this.
+        """
+        module = get_module(self.module)
+        count = getattr(module, 'care_disturbance_sickness_count', 0)
+        if count <= 0 or self.sleep_disturbances % count != 0:
+            return
+        effect = getattr(module, 'care_disturbance_sickness_effect', 'Dots')
+        if effect == "Nothing":
+            return
+        self.set_sick("dots" if effect == "Dots" else "")
+        runtime_globals.game_console.log(
+            f"[!] {self.name} is sick from {self.sleep_disturbances} sleep "
+            f"disturbances! Effect: {effect}")
 
     def get_hp(self):
         if not hasattr(self, 'hp') or self.hp == 0 or self.hp == None:
             self.hp = constants.HP_LEVEL[self.stage]
-        hp = self.hp
 
-        # HP+2 at levels 2, 5, 6, 8 and 10 (+10 by max level), matching the
-        # level table in the Digital Monster X manual.
-        for milestone in (2, 5, 6, 8, 10):
-            if self.level >= milestone:
-                hp += 2
-        
-        # +2 HP for each quarter of the Vital Values bar that is filled, to a
-        # maximum of +6, as the Vital Bracelet manual describes. The cap is
-        # per stage, so a Child at its own maximum gets the full bonus.
+        # Level milestones and the Vital Values quarters; see core.pet_stats.
         # Devices that do not track Vital Values are unaffected: the bonus is
         # gated on the same visible_stats entry the meter itself keys off.
-        if self.tracks_vital_values():
-            ceiling = self.vital_value_cap()
-            if ceiling:
-                quarters = int(self.vital_values * 4 // ceiling)
-                hp += 2 * max(0, min(3, quarters))
+        vital_cap = self.vital_value_cap() if self.tracks_vital_values() else 0
+        hp = pet_stats.hp_with_bonuses(
+            self.hp, level=self.level,
+            vital_values=getattr(self, "vital_values", 0), vital_cap=vital_cap)
 
         # Add bonus from status_change items
         if hasattr(self, 'bonus_stats') and len(self.bonus_stats) > 0:
@@ -1712,68 +1960,52 @@ class GamePet:
 
         return hp
 
-    #: Vital Values are capped per stage, not globally - a Child holds 2500
-    #: where an Ultimate holds 9999. Stages below Child never accumulate any.
-    VITAL_VALUE_CAPS = {3: 2500, 4: 5000, 5: 7500, 6: 9999, 7: 9999, 8: 9999}
+    #: The battle-stat tables live in core.pet_stats, where the arena engine
+    #: reads them too; these names are kept for existing callers.
+    VITAL_VALUE_CAPS = pet_stats.VITAL_VALUE_CAPS
+    STRENGTH_BONUS_WEIGHT_CEILING = pet_stats.STRENGTH_BONUS_WEIGHT_CEILING
+    POWER_STAGE_TABLES = pet_stats.POWER_STAGE_TABLES
 
     def tracks_vital_values(self):
-        """Whether this pet's device has a Vital Values meter at all.
-
-        Keyed on visible_stats, the same way Experience is, so a module that
-        never shows the stat is untouched by anything built on it.
-        """
+        """Whether this pet's device has a Vital Values meter at all."""
         module = get_module(self.module)
-        stats = [str(s).lower() for s in getattr(module, "visible_stats", []) or []]
-        return any("vital" in s for s in stats)
+        return pet_stats.tracks_vital_values(getattr(module, "visible_stats", []))
 
     def vital_value_cap(self):
         """The ceiling for this pet's stage, or 0 where it earns none."""
-        return self.VITAL_VALUE_CAPS.get(self.stage, 0)
-    
-    #: The weight at which the device stops paying the Strength Bonus. "If
-    #: your Digimon is at 99G for weight, or has no Hunger Hearts, the
-    #: Strength Bonus will be removed, reverting it to its base power" -- the
-    #: Ver.20th manual. It is the same 99 the weight meter itself caps at.
-    STRENGTH_BONUS_WEIGHT_CEILING = 99
+        return pet_stats.vital_value_cap(self.stage)
 
-    #: Power added at full Strength Hearts, per stage, per power_bonus_rule.
-    #: Taken from the Power Bonus tables in each device's manual. The Traited
-    #: Egg column is the same figure again, granted independently.
-    POWER_STAGE_TABLES = {
-        "Stage Table":            {3: 5, 4: 8, 5: 15, 6: 25, 7: 25, 8: 25},
-        "Stage Table + Shaken":   {3: 5, 4: 8, 5: 15, 6: 20, 7: 20, 8: 20},
-        "Stage Table Xros":       {3: 5, 4: 10, 5: 20},
-    }
+    def weight_floor(self):
+        """How low losses take this pet's weight: min_weight, or 1 where the
+        module allows going below it (care_allow_below_min_weight). A pet
+        whose module is not loaded keeps min_weight, as before the setting."""
+        try:
+            module = get_module(self.module)
+        except KeyError:
+            module = None
+        return pet_stats.weight_floor(
+            getattr(self, "min_weight", 0),
+            getattr(module, "care_allow_below_min_weight", False))
+
+    def tracks_strength(self):
+        """Whether this pet's device has a Strength meter at all."""
+        module = get_module(self.module)
+        return pet_stats.tracks_strength(getattr(module, "visible_stats", []))
+
+    def strength_empty(self):
+        """Strength at 0 on a device that has the meter. Without one (the
+        iC, DW1) Strength is never filled, and its 0 means nothing."""
+        return self.strength == 0 and self.tracks_strength()
 
     def strength_bonus_blocked(self) -> bool:
-        """Whether the device is withholding the Strength Bonus.
-
-        An overfed pet at the weight ceiling, or a starving one with no
-        Hunger Hearts left, reverts to its base power however full its
-        Strength meter is. From the Ver.20th manual, so it applies to the
-        `Strength Hearts` rule -- which DM20, DMRV and PEN20 all declare.
-        """
-        return (self.weight >= self.STRENGTH_BONUS_WEIGHT_CEILING
-                or self.hunger <= 0)
+        """Whether the device is withholding the Strength Bonus."""
+        return pet_stats.strength_bonus_blocked(self.weight, self.hunger)
 
     def get_power(self, bonus=0):
         """Battle power: the species base plus this device's bonus rule.
 
-        ``power_bonus_rule`` on the module picks the formula:
-
-          None                   base power only
-          Stage Table            full Strength Hearts pay the stage table,
-                                 and a Traited Egg pays it again
-          Stage Table + Shaken   the same, plus a flat +10 for a Shaken Egg
-          Stage Table Xros       the same on the Xros Wars three-stage table
-          Strength and Level     full Strength Hearts plus a level bonus
-          Strength Hearts        +4 per Strength Heart, +16 at full
-          Effort                 the hidden effort stat
-          Star                   base power plus 16 per star
-
-        Every table is keyed on a *full* Strength meter, which is what the
-        manuals say; this used to read ``effort``, and paid the Traited Egg
-        only when that same condition held.
+        The rule itself is ``core.pet_stats.power_with_bonus_rule``, which
+        the module's ``power_bonus_rule`` selects.
         """
         module = get_module(self.module)
         rule = getattr(module, "power_bonus_rule", "Stage Table")
@@ -1783,65 +2015,13 @@ class GamePet:
         if hasattr(self, 'bonus_stats') and len(self.bonus_stats) > 2:
             power += self.bonus_stats[2]
 
-        if rule == "None":
-            return power
-
-        if rule == "Star":
-            # A pet with base power 70 and 10 stars comes out at 230.
-            return int(power + (self.star or 0) * 16)
-
-        if rule == "Strength Hearts":
-            # "each Strength Heart adds 4 points to power, meaning you can
-            # add a total of 16 power to your Digimon" - four hearts of four.
-            # strength is the raw meter and stomach its capacity, so the
-            # bonus is scaled off how full it is rather than counted directly.
-            #
-            # And the device takes the whole bonus away when the pet is
-            # neglected: "if your Digimon is at 99G for weight, or has no
-            # Hunger Hearts, the Strength Bonus will be removed, reverting it
-            # to its base power". Not reduced - removed, however full the
-            # Strength meter is.
-            if self.stomach and not self.strength_bonus_blocked():
-                power += min(16, (16 * self.strength) // self.stomach)
-            return power
-
-        if rule == "Strength and Level":
-            # The X manual ties this to a full strength meter, and gives +16
-            # on XA/XB against +15 on XC through XF.
-            if self.stomach and self.strength >= self.stomach:
-                # The manual names the DEVICES -- XA and XB against XC to XF
-                # -- and on the X those are versions 1 and 2 either way, so
-                # the gameplay version answers it and keeps answering it.
-                # `device_version` does not: the Pendulum Z shares this rule
-                # and its devices are numbered 6-11, because that is what it
-                # announces on the wire. Reading the version leaves both
-                # lines exactly as they were.
-                power += 16 if int(getattr(self, "version", 0)) in (1, 2) else 15
-            for milestone in (3, 6, 9):
-                if self.level >= milestone:
-                    power += 10
-            return power
-
-        if rule == "Effort":
-            # The original Pendulum's effort is a hidden 0-40 battle stat the
-            # manual never puts a table to; this keeps the shape the device
-            # has always been played with here.
-            if self.effort >= 16:
-                power += self.POWER_STAGE_TABLES["Stage Table + Shaken"].get(
-                    self.stage, 0)
-            return power
-
-        table = self.POWER_STAGE_TABLES.get(rule)
-        if table is None:
-            return power
-        step = table.get(self.stage, 0)
-        if self.stomach and self.strength >= self.stomach:
-            power += step
-        if self.traited:
-            power += step
-        if rule == "Stage Table + Shaken" and self.shook:
-            power += 10
-        return power
+        return pet_stats.power_with_bonus_rule(
+            rule, power, stage=self.stage, strength=self.strength,
+            stomach=self.stomach, hunger=self.hunger, weight=self.weight,
+            level=self.level, version=getattr(self, "version", 0),
+            effort=self.effort, traited=self.traited, shook=self.shook,
+            star=self.star, gcell_red=gcell_rules.is_red(module, self),
+            effort_tiers=getattr(module, "effort_power_tiers", None))
 
     def get_attack(self):
         attack = 1 # constants.ATK_LEVEL[self.stage]
@@ -1857,7 +2037,15 @@ class GamePet:
         
         return attack
     
-    def finish_training(self, won = False, grade=0, phase2=False):
+    def award_trophies(self, amount=1):
+        """Trophies a training earned: the VBE's PP, which a running PP
+        multiplier item triples (utils.card_battle.boost_factor)."""
+        from utils.card_battle import boost_factor
+        gained = int(amount) * boost_factor(self, "pp")
+        self.trophies += gained
+        return gained
+
+    def finish_training(self, won = False, grade=0, phase2=False, anguirus=False):
         """Apply one training's result.
 
         ``grade`` is the outcome level every training mode reports, 0-3 for
@@ -1894,26 +2082,14 @@ class GamePet:
             self.set_state("angry")
 
         weight_loss = module.training_weight_loss[level]
-        self.weight = max(self.min_weight, self.weight - weight_loss)
+        self.weight = max(self.weight_floor(), self.weight - weight_loss)
         self.update_99g_effect()
 
-        # Add/Remove G-Cell points for training if module uses G-Cells
-        if getattr(module, 'use_gcells', False):
-            if won:
-                runtime_globals.game_console.log(f"[DEBUG] Training success for {self.name}")
-                gcell_points = getattr(module, 'gcell_training_success', 0)
-            else:
-                # Training failure - different points based on phase
-                if phase2:
-                    runtime_globals.game_console.log(f"[DEBUG] Training phase 2 failure for {self.name}")
-                    gcell_points = getattr(module, 'gcell_training_phase2_failure', 0)
-                else:
-                    runtime_globals.game_console.log(f"[DEBUG] Training phase 1 failure for {self.name}")
-                    gcell_points = getattr(module, 'gcell_training_phase1_failure', 0)
+        # G-Cell points for training, in the module's style: DMGZ pays a
+        # success or the phase failed in, PENGZ the grade.
+        self._gcell_event("training", won=won, grade=grade, phase2=phase2, anguirus=anguirus)
 
-            self.add_gcell_points(gcell_points)
-
-    def finish_versus(self, won=False):
+    def finish_versus(self, won=False, opponent=None):
         self.battles += 1
         self._deduct_battle_cost()
         self.totalBattles += 1
@@ -1922,22 +2098,21 @@ class GamePet:
             self.win += 1
             self.totalWin += 1
             self._apply_reliability_event('reliability_battle_win')
+            # A tagged opponent counts towards a defeat_tag route.
+            if opponent is not None:
+                evolution_rules.record_defeat(
+                    self, get_module(getattr(opponent, "module", None) or self.module),
+                    getattr(opponent, "name", ""), getattr(opponent, "version", None))
             
-            # Add G-Cell points for PvP win if module uses G-Cells
-            module = get_module(self.module)
-            if getattr(module, 'use_gcells', False):
-                gcell_points = getattr(module, 'gcell_battle_win', 0)
-                if gcell_points != 0:
-                    self.add_gcell_points(gcell_points)
-        else:
-            # Remove G-Cell points for PvP loss if module uses G-Cells
-            module = get_module(self.module)
-            if getattr(module, 'use_gcells', False):
-                gcell_points = getattr(module, 'gcell_battle_loose', 0)
-                if gcell_points != 0:
-                    self.add_gcell_points(gcell_points)
+        # G-Cell points for the versus, in the module's style. PENGZ pays a
+        # battle against one of its own pets by stage and one against another
+        # module's pet ("another device") flat.
+        other_device = (opponent is not None
+                        and getattr(opponent, "module", self.module) != self.module)
+        self._gcell_event("battle", won=won, other_device=other_device)
 
-    def finish_battle(self, won, enemy, area, final = False, is_special_encounter=False):
+    def finish_battle(self, won, enemy, area, final = False, is_special_encounter=False,
+                      enemy_module=None):
         self.battles += 1
         self._deduct_battle_cost()
         self.totalBattles += 1
@@ -1968,21 +2143,17 @@ class GamePet:
                 self.enemy_kills = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
             self.enemy_kills[enemy.stage] += 1
+            # A tagged enemy counts towards a defeat_tag route.
+            evolution_rules.record_defeat(
+                self, get_module(enemy_module or self.module),
+                getattr(enemy, "name", ""), getattr(enemy, "version", None))
             
             # G-Cell Fragments are not won in battle: they are left behind on
             # death, alongside the Traited Egg roll (see set_traited_egg).
 
-            # Add G-Cell points for battle win if module uses G-Cells
-            module = get_module(self.module)
-            if getattr(module, 'use_gcells', False):
-                if is_special_encounter:
-                    # Random encounter win
-                    gcell_points = getattr(module, 'gcell_random_encounter_win', 0)
-                else:
-                    # Regular battle win
-                    gcell_points = getattr(module, 'gcell_battle_win', 0)
-                if gcell_points != 0:
-                    self.add_gcell_points(gcell_points)
+            # G-Cell points for the win (a random encounter's own), in the
+            # module's style
+            self._gcell_event("battle", won=True, special=is_special_encounter)
         else:
             # A loss always ends the run - there is no next round to carry on
             # to - so the pet shows its defeat pose whether or not this was
@@ -1996,17 +2167,8 @@ class GamePet:
                 self.set_sick()
             sick_chance = get_module(self.module).battle_base_sick_chance_lose
             
-            # Remove G-Cell points for battle loss if module uses G-Cells
-            module = get_module(self.module)
-            if getattr(module, 'use_gcells', False):
-                if is_special_encounter:
-                    # Random encounter loss
-                    gcell_points = getattr(module, 'gcell_random_encounter_loose', 0)
-                else:
-                    # Regular battle loss
-                    gcell_points = getattr(module, 'gcell_battle_loose', 0)
-                if gcell_points != 0:
-                    self.add_gcell_points(gcell_points)
+            # G-Cell points for the loss, in the module's style
+            self._gcell_event("battle", won=False, special=is_special_encounter)
             if self.protein_overdose > get_module(self.module).protein_overdose_max:
                 self.protein_overdose = get_module(self.module).protein_overdose_max
             sick_chance += self.protein_overdose * get_module(self.module).protein_penalty
@@ -2044,8 +2206,7 @@ class GamePet:
             return False
         
         # Use global sleep/wake if set
-        global_sleep = getattr(game_globals, "sleep_time", None)
-        global_wake = getattr(game_globals, "wake_time", None)
+        global_sleep, global_wake = global_sleep_times()
 
         try:
             now_time = datetime.now().time()
@@ -2078,10 +2239,21 @@ class GamePet:
     def check_wake_up(self):
         now = datetime.now()
 
+        # A nap an item started (Digi Bedding) ends on its own time, unless
+        # it has run into the pet's bedtime, when the pet sleeps on.
+        nap_until = getattr(self, 'nap_until', None)
+        if nap_until is not None:
+            if now < nap_until:
+                return
+            self.nap_until = None
+            if not self.should_sleep():
+                self.set_state("idle")
+            return
+
         if not hasattr(self, 'sleep_start_time'):
             return
 
-        global_wake = getattr(game_globals, "wake_time", None)
+        _, global_wake = global_sleep_times()
 
         try:
             # Use global wake time if set
@@ -2125,6 +2297,7 @@ class GamePet:
         state.pop('_rt_origin', None)
         state.pop('_rt_last_sleep_check', None)
         state.pop('_rt_dead_start', None)
+        state.pop('_rt_restored_at', None)
         # Remove deprecated keys from old system
         state.pop('_rt_age_origin', None)
         return state
@@ -2138,6 +2311,7 @@ class GamePet:
             rt_elapsed = getattr(self, 'timer', 0) / 30
         self._rt_origin = now - rt_elapsed
         self._rt_last_sleep_check = now
+        self._rt_restored_at = now  # the save's moment on this clock (Android checkpoint)
         dead_elapsed = state.get('_rt_dead_elapsed_sec', 0.0)
         self._rt_dead_start = (now - dead_elapsed) if dead_elapsed > 0 else 0.0
         # Ensure minute counter exists
@@ -2157,6 +2331,26 @@ class GamePet:
             self._cd_poop = getattr(self, 'poop_timer', 60) or 60
         if not hasattr(self, 'evolution_history'):
             self.evolution_history = []
+        # A save from before form time: the evolution count-up is the best
+        # record of how long the pet has been in this form.
+        if not hasattr(self, 'form_minutes'):
+            self.form_minutes = getattr(self, '_evol_minutes', 0) or 0
+        if not hasattr(self, 'evolution_failed'):
+            self.evolution_failed = False
+        if not hasattr(self, 'tag_defeats'):
+            self.tag_defeats = {}
+        if not hasattr(self, 'accessory'):
+            self.accessory = None
+        if not hasattr(self, 'nap_until'):
+            self.nap_until = None
+        if not hasattr(self, 'connect_points'):
+            self.connect_points = 0
+        if not hasattr(self, 'encounter_rotation'):
+            self.encounter_rotation = 0
+        if not hasattr(self, 'active_boost'):
+            self.active_boost = None
+        if not hasattr(self, 'event_sequence'):
+            self.event_sequence = {}
         # Clean up serialization-only and deprecated keys
         for key in ('_rt_elapsed_sec', '_rt_age_elapsed_sec', '_rt_dead_elapsed_sec',
                     '_rt_age_origin', '_rt_last_age_day',
@@ -2180,27 +2374,31 @@ class GamePet:
                 self.digisoul = monster.get("digisoul", "")
         except Exception:
             pass
+        # Saves made while a keep-counts module never set them (see reset_variables).
+        if not hasattr(self, "win"):
+            self.win = 0
+        if not hasattr(self, "battles"):
+            self.battles = 0
         if not hasattr(self, "reliability"):
             base = getattr(module, 'reliability_base', constants.RELIABILITY_MIN)
             self.reliability = int(base)
         self.reliability = max(constants.RELIABILITY_MIN,
                                min(constants.RELIABILITY_MAX, int(self.reliability)))
-        old_dna = getattr(self, "dna", {})
-        if not isinstance(old_dna, dict):
-            old_dna = {}
-        normalized_dna = {}
-        for dna_type, value in old_dna.items():
-            try:
-                normalized_dna[str(dna_type)] = max(0, int(value or 0))
-            except (TypeError, ValueError):
-                normalized_dna[str(dna_type)] = 0
-        for dna_type in constants.DIGISOUL_DNA_TYPES:
-            normalized_dna.setdefault(dna_type, 0)
-        self.dna = normalized_dna
+        # The DNA queue (`add_dna`). A save from before it held per-type
+        # totals; those are dropped, not converted (still in development).
+        old_dna = getattr(self, "dna", None)
+        self.dna = ([str(d) for d in old_dna if d in constants.DIGISOUL_DNA_TYPES]
+                    [-constants.DNA_QUEUE_SIZE:] if isinstance(old_dna, list) else [])
         if not hasattr(self, "_cd_reliability"):
             self._cd_reliability = 60
+        if not hasattr(self, "injury_rate"):
+            self.injury_rate = 0
         if not hasattr(self, "unflushed_poops"):
             self.unflushed_poops = 0
+        if not hasattr(self, "poop_mistake_timers"):
+            self.poop_mistake_timers = []
+        if not hasattr(self, "virus"):
+            self.virus = 0
         if not hasattr(self, "_reliability_sleep_call_resolved"):
             self._reliability_sleep_call_resolved = False
         if not hasattr(self, "trophies"):
@@ -2228,6 +2426,12 @@ class GamePet:
             self.gcell_points = 0
         if not hasattr(self, "gcell_fragment"):
             self.gcell_fragment = False
+        if not hasattr(self, "form_minutes"):
+            self.form_minutes = getattr(self, "_evol_minutes", 0) or 0
+        if not hasattr(self, "evolution_failed"):
+            self.evolution_failed = False
+        if not hasattr(self, "tag_defeats"):
+            self.tag_defeats = {}
         if not hasattr(self, "death_save_b_counter"):
             self.death_save_b_counter = 0
         if not hasattr(self, "death_save_shake_counter"):
@@ -2399,14 +2603,20 @@ class GamePet:
         else:
             return 4
 
+    def _gcell_event(self, event, **kwargs):
+        """Apply an event's G-Cell points in the module's style
+        (utils.gcell_rules.gain)."""
+        points = gcell_rules.gain(get_module(self.module), self, event, **kwargs)
+        if points:
+            self.add_gcell_points(points)
+
     def add_gcell_points(self, points):
         """
-        Adds G-Cell points with proper capping (0 minimum, 472 maximum).
+        Adds G-Cell points, kept between 0 and the module style's cap
+        (DMGZ 472; PENGZ 14 cells of the stage's size).
         Returns the actual amount added/subtracted.
         """
-        old_points = self.gcell_points
-        self.gcell_points = max(0, min(472, self.gcell_points + points))
-        actual_change = self.gcell_points - old_points
+        actual_change = gcell_rules.add_points(get_module(self.module), self, points)
         
         if actual_change != 0:
             runtime_globals.game_console.log(f"[G-Cell] {self.name} {'+' if actual_change > 0 else ''}{actual_change} points. Total: {self.gcell_points}")
@@ -2438,11 +2648,9 @@ class GamePet:
         return actual_change
 
     def add_dna(self, digisoul_type, amount):
-        """Add a signed amount to one canonical DigiSoul DNA family.
-
-        DNA has no documented upper cap. Values are clamped at zero and the
-        actual applied change is returned for future item/Plate effects.
-        """
+        """Feed *amount* DigiSoul DNA of one type: each feed joins the end of
+        the queue, and past constants.DNA_QUEUE_SIZE the oldest falls out.
+        Returns how many were fed (0 for an unknown type or no amount)."""
         canonical_type = next(
             (known for known in constants.DIGISOUL_DNA_TYPES
              if known.casefold() == str(digisoul_type).strip().casefold()),
@@ -2456,17 +2664,93 @@ class GamePet:
             amount = int(amount)
         except (TypeError, ValueError):
             return 0
+        if amount <= 0:
+            return 0
+        if not isinstance(getattr(self, "dna", None), list):
+            self.dna = []
+        self.dna.extend([canonical_type] * amount)
+        del self.dna[:-constants.DNA_QUEUE_SIZE]
+        runtime_globals.game_console.log(
+            f"[DigiSoul DNA] {self.name} fed {amount} {canonical_type}. "
+            f"Leading: {self.leading_dna()}")
+        return amount
 
-        if not isinstance(getattr(self, "dna", None), dict):
-            self.dna = {dna_type: 0 for dna_type in constants.DIGISOUL_DNA_TYPES}
-        old_value = max(0, int(self.dna.get(canonical_type, 0) or 0))
-        self.dna[canonical_type] = max(0, old_value + amount)
-        actual_change = self.dna[canonical_type] - old_value
-        if actual_change:
-            runtime_globals.game_console.log(
-                f"[DigiSoul DNA] {self.name} {canonical_type} "
-                f"{actual_change:+d}. Total: {self.dna[canonical_type]}")
-        return actual_change
+    def add_weight(self, amount):
+        """Add an item's signed weight change, at any stage.
+
+        Capped at 99 and floored at the species' minimum weight, so -99
+        takes a pet to its minimum. Returns the change actually made.
+        """
+        try:
+            amount = int(amount)
+        except (TypeError, ValueError):
+            return 0
+        if not amount:
+            return 0
+        old = int(self.weight or 0)
+        if amount > 0:
+            new = min(max(old, 99), old + amount)
+        else:
+            floor = self.weight_floor()
+            new = max(min(old, floor), old + amount)
+        self.weight = new
+        self.update_99g_effect()
+        return new - old
+
+    def add_injury_rate(self, amount):
+        """Add signed injury-rate points, never below zero. Returns the change.
+
+        The Digimon Twin's special foods carry them (+1% injury chance per 4
+        points, utilities/TWIN/TWIN_RESEARCH.md); the injury roll does not
+        read them yet.
+        """
+        try:
+            amount = int(amount)
+        except (TypeError, ValueError):
+            return 0
+        old = max(0, int(getattr(self, "injury_rate", 0) or 0))
+        self.injury_rate = max(0, old + amount)
+        return self.injury_rate - old
+
+    def devolve(self):
+        """Return to the form this pet evolved from (an item's `devolve`).
+
+        `evolution_history` lists the forms the pet has been, oldest first.
+        A jogress also records its partner there, at the stage the pet then
+        had, so the form to return to is the latest entry of a lower stage
+        than the current one -- never an egg. That entry and everything
+        after it leave the history, which is then as it stood while the pet
+        was that form. The pet takes the form as an evolution does
+        (`set_data`, `reset_variables`), without the evolution's sound,
+        Digidex entry or reward.
+
+        Returns False, changing nothing, when no such form is found in the
+        pet's module.
+        """
+        module = get_module(self.module)
+        if module is None:
+            return False
+        history = list(getattr(self, "evolution_history", None) or [])
+        for index in range(len(history) - 1, -1, -1):
+            data = module.find_monster(history[index], self.version)
+            if data is None:
+                continue
+            stage = int(data.get("stage", 0) or 0)
+            if 1 <= stage < int(self.stage or 0):
+                break
+        else:
+            return False
+
+        runtime_globals.game_console.log(f"Devolving {self.name} to {data['name']}")
+        self.dna = []
+        self.evolution_history = history[:index]
+        pet_data = dict(data)
+        pet_data["module"] = module.name
+        self.set_data(pet_data)
+        self.reset_variables()
+        self.load_sprite()
+        self.set_state("happy1")
+        return True
 
     def _apply_reliability_event(self, module_field):
         """Apply one signed Reliability delta configured by the module."""
