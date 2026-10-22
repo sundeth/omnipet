@@ -348,7 +348,8 @@ def matching_route(pet, partner, roster=None):
     presented = presented_pet(partner, roster, partner.get("protocol"))
     routes = [jogress_utils.normalize_evolution(r)
               for r in (getattr(pet, "evolve", None) or [])
-              if jogress_utils.is_jogress(r)]
+              if jogress_utils.is_jogress(r)
+              and jogress_utils.owner_requirements_met(r, pet)]
 
     # A named route wins over an attribute one. Evolution is otherwise
     # first-match-wins on module order, and modules list the attribute routes

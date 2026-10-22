@@ -326,7 +326,8 @@ def system_lines(game):
     if thr:
         out.append(f"power    {thr} (0x0 = never throttled or under-voltage)")
     rev = run(["git", "-C", game, "log", "-1", "--format=%h %cd", "--date=short"])
-    m = re.search(r'^VERSION\s*=\s*"([^"]+)"', read(os.path.join(game, "main.py")) or "", re.M)
+    m = re.search(r'^VERSION\s*=\s*"([^"]+)"', read(os.path.join(game, "src", "core", "version.py"))
+                  or read(os.path.join(game, "main.py")) or "", re.M)
     out.append(f"game     {game} version {m.group(1) if m else '?'}" + (f" (git {rev})" if rev else ""))
     return out
 

@@ -16,6 +16,7 @@ from ui.components.pet_selector import PetSelector
 from ui.ui_constants import BASE_RESOLUTION
 from ui.windows.window_background import WindowBackground
 from core import game_globals, runtime_globals
+from utils import ailments
 from models.game_digidex import register_digidex_entry
 from models.game_pet import GamePet
 from utils.scene_utils import change_scene
@@ -59,7 +60,8 @@ class SceneDebug:
         # Define debug options - will be split into pages of 6
         self.debug_options = [
             ("+60min", self._add_60min, "Add 60 minutes to pet timers"),
-            ("Sick", self._add_sickness, "Add sickness and injuries"), 
+            ("Sick", self._add_sickness, "Add a dose of sickness (Dots) and one to its count"),
+            ("Injury", self._add_injury, "Add a dose of injury (Skull) and one to its count"),
             ("Mistake", self._add_mistake, "Add care mistake or remove condition heart"),
             ("Effort", self._add_effort, "Add to effort counter"),
             ("Overfeed", self._add_overfeed, "Add to overfeed counter"),
@@ -85,6 +87,9 @@ class SceneDebug:
             ("Complete Quests", self._complete_quests, "Complete all available quests"),
             ("Try Event", self._try_event, "Attempt to trigger an event"),
             ("+All Items", self._add_all_items, "Add 1 of each item from all modules"),
+            ("+1k Currency", self._add_currency, "Add 1000 of every module currency"),
+            ("+Card Packs", self._add_card_packs, "Open one of every module's card packs"),
+            ("+Shiny Card", self._add_shiny_card, "Add a random shiny card to every module with cards"),
             ("Add Pet", self._add_pet, "Pick any pet from any module and add it to the party")
         ]
 
@@ -356,14 +361,22 @@ class SceneDebug:
         return True
 
     def _add_sickness(self) -> bool:
-        """Add sickness and injuries."""
+        """A dose of sickness (Dots), and one to the sicknesses count."""
+        return self._add_ailment("sick")
+
+    def _add_injury(self) -> bool:
+        """A dose of injury (Skull), and one to the injuries count."""
+        return self._add_ailment("injury")
+
+    def _add_ailment(self, kind) -> bool:
         selected_pets = get_selected_pets()
         if not selected_pets:
             return False
-            
+
         for pet in selected_pets:
-            pet.sick += 1
-            pet.injuries += 1
+            setattr(pet, kind, ailments.doses(pet, kind) + 1)
+            total = ailments.TOTALS[kind]
+            setattr(pet, total, int(getattr(pet, total, 0) or 0) + 1)
             pet.edited = True
         return True
 
@@ -667,6 +680,59 @@ class SceneDebug:
         
         runtime_globals.game_console.log(f"[SceneDebug] Added {items_added} items to inventory.")
         return items_added > 0
+
+    def _add_currency(self) -> bool:
+        """Add 1000 of every currency a module declares (shop.json), up to
+        the currency's cap where it has one (the iC's 9,999)."""
+        from utils.currency_utils import add_currency
+
+        currencies = 0
+        for module_name, module in runtime_globals.game_modules.items():
+            for currency in getattr(module, "currencies", None) or []:
+                if currency.get("name"):
+                    add_currency(module_name, currency["name"], 1000)
+                    currencies += 1
+
+        runtime_globals.game_console.log(f"[SceneDebug] Added 1000 to {currencies} currencies.")
+        return currencies > 0
+
+    def _add_card_packs(self) -> bool:
+        """Open one of every card pack each module declares (cards.json), as
+        a bought one is: the cards join the collection, and the pack reveal
+        plays back on the main screen. Packs are never held unopened."""
+        from utils import card_utils
+
+        opened = 0
+        for module_name, data in card_utils.modules_with_cards():
+            for pack in data.get("packs") or []:
+                drawn = card_utils.open_pack(module_name, pack.get("id"))
+                if drawn:
+                    card_utils.announce_cards(drawn, module_name, pack.get("id"), wait_for_main=True)
+                    opened += 1
+
+        runtime_globals.game_console.log(f"[SceneDebug] Opened {opened} card packs.")
+        return opened > 0
+
+    def _add_shiny_card(self) -> bool:
+        """A shiny copy of one random card of each module with cards (Soul
+        Plates are never shiny), for testing the holo. Temporary: to be
+        removed (owner, 2026-10-21)."""
+        import random
+        from utils import card_utils
+
+        added = 0
+        for module_name, data in card_utils.modules_with_cards():
+            cards = [card for card in data["cards"]
+                     if card_utils.card_can_be_shiny(module_name, card.get("id"))]
+            if not cards:
+                continue
+            card = random.choice(cards)
+            if card_utils.add_card_copy(module_name, card["id"], shiny=True):
+                card_utils.announce_cards([(card, True)], module_name, wait_for_main=True)
+                added += 1
+
+        runtime_globals.game_console.log(f"[SceneDebug] Added {added} shiny cards.")
+        return added > 0
 
     # Add Pet picker: module -> version -> pet
     def _add_pet(self) -> bool:

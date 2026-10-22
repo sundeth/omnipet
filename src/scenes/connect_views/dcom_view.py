@@ -136,6 +136,7 @@ class DComView:
         self.status_label = None
         self.device_menu = None
         self.protocol_menu = None
+        self.items_menu = None
         self.cancel_button = None
         self.start_button = None
 
@@ -375,6 +376,60 @@ class DComView:
             f"[DComView] {'Capturing' if self._capturing else 'Battle format:'} "
             f"{self.battle_format}")
         self._transport_warning = self._transport_mismatch()
+        self._offer_battle_items()
+
+    # ------------------------------------------------------------------
+    # Battle items
+    # ------------------------------------------------------------------
+
+    def _wire_items(self):
+        """The pet's battle items this line puts on the wire (the iC's
+        weapons, packet 3); none while capturing."""
+        if self._capturing or self.battle_format != "IC" or not self.pet:
+            return []
+        from utils import battle_items
+        module = runtime_globals.game_modules.get(getattr(self.pet, "module", None))
+        return battle_items.wire_items(module, self.pet) if module is not None else []
+
+    def _offer_battle_items(self):
+        """Before the charge: the pet's weapons, as before an adventure
+        round (owner, 2026-10-17: battle items are chosen before a battle,
+        not from the inventory). Nothing to offer goes straight on."""
+        rows = self._wire_items()
+        if not rows:
+            self._start_minigame()
+            return
+        from utils import battle_items
+        self.phase = "battle_items"
+        self.status_label.set_text("Battle items")
+        # A new Menu each time: a Menu closes itself after its on_select.
+        self.items_menu = Menu(width=170, height=60)
+        self.items_menu.open(battle_items.menu_options(rows), on_select=self._on_battle_item,
+                             on_cancel=self._end_battle_items, max_visible=5)
+        self.ui_manager.add_component(self.items_menu)
+        self.ui_manager.set_active_menu(self.items_menu)
+
+    def _on_battle_item(self, index):
+        if index == 0:
+            self._end_battle_items()
+            return
+        from utils import battle_items
+        rows = self._wire_items()
+        if 0 < index <= len(rows):
+            item, _quantity = rows[index - 1]
+            notes = battle_items.use_battle_item(item, [self.pet])
+            runtime_globals.game_sound.play("happy2")
+            for note in [f"{item.name} used!"] + list(notes or []):
+                runtime_globals.game_message.add_slide(
+                    note, (255, 255, 0), 56 * runtime_globals.UI_SCALE,
+                    runtime_globals.FONT_SIZE_SMALL)
+        self._close_menu('items_menu')
+        self._offer_battle_items()
+
+    def _end_battle_items(self):
+        """Fight: on to the charge."""
+        self._close_menu('items_menu')
+        self.status_label.set_text("")
         self._start_minigame()
 
     @property
@@ -1081,6 +1136,10 @@ class DComView:
             self.simulator.log_battle(result)
 
             self._create_dcom_pvp_data(pet, opponent, result)
+            if self.battle_format == "IC":
+                # The weapon sent in this battle is used up with it.
+                from utils import battle_items
+                battle_items.count_down(getattr(pet, "module", ""))
 
             self.dcom_controller.disconnect()
 
@@ -1214,8 +1273,8 @@ class DComView:
         self._cleanup_dcom()
 
         for comp in (self.background, self.title_scene, self.status_label,
-                     self.device_menu, self.protocol_menu, self.cancel_button,
-                     self.start_button):
+                     self.device_menu, self.protocol_menu, getattr(self, "items_menu", None),
+                     self.cancel_button, self.start_button):
             if comp and comp in self.ui_manager.components:
                 self.ui_manager.remove_component(comp)
 

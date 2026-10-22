@@ -31,7 +31,8 @@ Two lives per module:
          ages everyone.
 
 Module traits each party meets on its own data: no Strength meter (iC), the
-failed first try (PENGZ evolution_fail_on_first_try), condition hearts
+failed first try (every pet with a win-rate route; PENC and PENGZ double
+its needs), condition hearts
 (PENC), G-Cells (DMGZ, PENGZ), Vital Values (VB, VBE, VH), Reliability (iC),
 the 99 g Dots/Skull effects, double/triple/jumbo poops (DMX, PENZ, PENC,
 D-3, PENGZ). DW1 is being built elsewhere and takes part only for the
@@ -51,7 +52,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from android_parity import (Clock, Foreground, MODULES_DIR, OfflineWorld, compare,  # noqa: E402
                             load_module, local_ts, pair_offline, release_modules, sanity, species)
 from core import pet_stats  # noqa: E402
-from utils import gcell_rules  # noqa: E402
+from utils import ailments, evolution_rules, gcell_rules  # noqa: E402
 
 SEED = 'and-10'
 DAY = (2026, 9, 14)          # a Monday with no DST change in any zone used here
@@ -149,7 +150,7 @@ class ModuleParityBase(unittest.TestCase):
                            _evol_minutes=max(0, int(adult.get('time') or 0) - 10)))
         lifespan = int(perfect.get('time') or 0)
         pets.append(self.pet(fg, perfect, 'dying', elapsed=53, hunger=2, strength=s(2), sick=1,
-                           injuries=1, care_sick_mistake_timer=max(0, module.death_sick_timer - 3),
+                           sick_total=1, care_sick_mistake_timer=max(0, module.death_sick_timer - 3),
                            gcell_points=30 if gcells else 0,
                            # Past its lifespan and 48 hours in the form: the
                            # traited-egg rules that read the timer can pay.
@@ -163,8 +164,9 @@ class ModuleParityBase(unittest.TestCase):
         s = lambda v: self.strength(module, v)  # noqa: E731
         count = int(getattr(module, 'care_disturbance_sickness_count', 0) or 0)
         disturbed = dict(back_to_sleep=3, hunger=3, strength=s(3), sleep_disturbances=max(count, 1))
-        if count:  # the count-th disturbance made it sick (DMM: tenth, Dots)
-            disturbed.update(sick=1, sick_type='dots', injuries=1)
+        kind = ailments.kind_for_effect(getattr(module, 'care_disturbance_sickness_effect', 'Dots'))
+        if count and kind:  # the count-th disturbance made it sick (DMM: tenth, Dots)
+            disturbed.update({kind: 1, ailments.TOTALS[kind]: 1})
         return [
             self.pet(fg, child, 'sleeper', elapsed=7, state='nap', dp=0, hunger=2, strength=s(2),
                    sleep_start_time=datetime(*DAY, 21, 0)),
@@ -194,9 +196,11 @@ class ModuleParityBase(unittest.TestCase):
                        - getattr(neglected, 'condition_hearts', 0)) if module.use_condition_hearts else 0
         self.assertGreater(neglected.mistakes + hearts_lost, 0, 'the starving Adult made no care mistake')
         if getattr(module, 'care_99g_effect', 'Skull') in ('Dots', 'Skull'):
-            self.assertGreaterEqual(neglected.injuries, 1, '99 g made it sick')
-        if module.evolution_fail_on_first_try:
-            self.assertTrue(failing.evolution_failed, 'the first try failed for good')
+            # 99 g, unless the poop pile's ailment came first (one at a time)
+            self.assertGreaterEqual(neglected.sick_total + neglected.injury_total, 1, '99 g made it sick')
+        if (failing.name == start['failing'].name
+                and evolution_rules.should_fail(start['failing'].evolve or [])):
+            self.assertTrue(failing.evolution_failed, 'the timer took no route: failed for good')
         if gcell_rules.style_of(module) != gcell_rules.DISABLED:
             self.assertNotEqual(neglected.gcell_points, 60, 'care mistakes moved its G-Cells')
         if pet_stats.tracks_vital_values(module.visible_stats):
@@ -215,9 +219,10 @@ class ModuleParityBase(unittest.TestCase):
             spent = awake.mistakes or (module.use_condition_hearts
                                        and awake.condition_hearts < awake.condition_hearts_max)
             self.assertTrue(spent, 'the pet left awake in its sleep window was not called to bed')
-        if disturbed is not None and module.care_disturbance_sickness_count:
-            self.assertEqual((disturbed.sick_type, disturbed.sleep_disturbances),
-                             ('dots', module.care_disturbance_sickness_count))
+        kind = ailments.kind_for_effect(getattr(module, 'care_disturbance_sickness_effect', 'Dots'))
+        if disturbed is not None and module.care_disturbance_sickness_count and kind:
+            self.assertEqual((ailments.kind_of(disturbed), disturbed.sleep_disturbances),
+                             (kind, module.care_disturbance_sickness_count))
 
 
 def _make_tests(name):

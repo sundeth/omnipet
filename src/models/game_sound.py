@@ -61,6 +61,10 @@ class GameSound:
             30: "ic20_ready",
             31: "ic20_start",
             32: "ic_press",
+            # A card pack opening (utilities/claude/make_card_sounds.py).
+            33: "card_pack_open",
+            34: "card_reveal",
+            35: "card_shiny",
         }
 
         # Initialize pygame mixer with a small buffer to minimise playback latency.

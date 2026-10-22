@@ -235,7 +235,6 @@ BACKGROUND_COLOR = (198, 203, 173)
 # Paths: General Resources
 #=====================================================================
 MODULES_FOLDER = "modules"
-ARROW_IMAGE_PATH = "assets/Arrow.png"
 #FOOD_SHEET_PATH = "assets/FoodVitamin.png"
 ATK_FOLDER = "assets/atk"
 ATK_CRIT_FOLDER = "assets/atk_crit"
@@ -365,29 +364,8 @@ TRAININGHIT2_PATH = "assets/TrainingHit2.png"
 #=====================================================================
 # Paths: Training Sprites
 #=====================================================================
-READY_SPRITES_PATHS = {
-    1: "assets/Ready1.png",
-    2: "assets/Ready2.png",
-    3: "assets/Ready3.png"
-}
-
-COUNT_SPRITES_PATHS = {
-    4: "assets/Count4.png",
-    3: "assets/Count3.png",
-    2: "assets/Count2.png",
-    1: "assets/Count1.png"
-}
-
-MEGA_HIT_PATH = "assets/MegaHit.png"
-CLEAR1_PATH = "assets/Clear1.png"
-CLEAR2_PATH = "assets/Clear2.png"
-WARNING1_PATH = "assets/Warning1.png"
-WARNING2_PATH = "assets/Warning2.png"
 HIT_ANIMATION_PATH = "assets/Hit.png"
 KO_PATH = "assets/KO.png"
-
-ITEM_SPRITESHEET = "assets/Items.png"
-ITEM_SPRITE_SIZE = 48  # Each cell is 48x48 in a 5x7 grid
 
 #=====================================================================
 # Paths: Additional Resources (previously hardcoded)
@@ -397,8 +375,6 @@ FONT_ALT_TTF_PATH = "assets/vpet_font_alt.ttf"
 ICON_ON_PATH = "assets/IconOn.png"
 ICON_OFF_PATH = "assets/IconOff.png"
 OMNI_WIFI_PATH = "assets/OmniWifi.png"
-SLEEP_ICON_PATH = "assets/SleepIcon.png"
-WAKE_ICON_PATH = "assets/WakeIcon.png"
 EVO1_PATH = "assets/Evo1.png"
 EVO2_PATH = "assets/Evo2.png" 
 EVO3_PATH = "assets/Evo3.png"
@@ -424,11 +400,12 @@ DMC_SOUNDS_PATH = "assets/dmc_sounds"
 #=====================================================================
 # Discord / Online Settings
 #=====================================================================
-# Discord bot connection
-DISCORD_BOT_LOCAL_URL = "http://localhost:5000"
-DISCORD_BOT_MAIN_URL = "http://localhost:5000"
+# Discord bot connection: the relay runs inside Omninet (owner, 2026-10-17)
+# at <Omninet>/api/v1/discord, where the server has a bot token; the game
+# takes Omninet's address (omninet_service, OMNIPET_OMNINET_URL overrides it)
+DISCORD_API_PATH = "/api/v1/discord"
 DISCORD_ENABLED = True
-DISCORD_DEBUG = True  # Enable detailed Discord logging
+DISCORD_DEBUG = False  # Enable detailed Discord logging
 
 # WiFi-Com battles are held back for 1.0 (owner, 2026-10-13): the Connect
 # menu offers them only in debug mode, like the upcoming protocol lines

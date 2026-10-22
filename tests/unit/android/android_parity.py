@@ -629,11 +629,13 @@ def differences(before, after, path='', limit=12):
 #: Care state that must come out the same open and closed.
 PET_FIELDS = (
     'name', 'stage', 'version', 'hunger', 'strength', 'weight', 'mistakes', 'condition_hearts',
-    'sick', 'sick_type', 'injuries', 'dying', 'death_cause', 'gcell_points', 'reliability',
+    'sick', 'injury', 'sick_total', 'injury_total', 'dying', 'death_cause', 'gcell_points', 'reliability',
     '_cd_reliability', 'form_minutes', '_evol_minutes', '_rt_last_minute', '_cd_hunger',
     '_cd_strength', '_cd_poop', 'care_food_mistake_timer', 'care_strength_mistake_timer',
-    'care_sleep_mistake_timer', 'care_sick_mistake_timer', 'starvation_counter', 'vital_values',
-    'age', '_last_age_date', 'evolution_failed', 'unflushed_poops', 'poop_mistake_timers', 'virus',
+    'care_sleep_mistake_timer', 'care_sick_mistake_timer', 'care_injury_mistake_timer',
+    'starvation_counter', 'vital_values',
+    'debilitation_counter', 'hunger_empty_minutes', 'strength_empty_minutes',
+    'age', '_last_age_date', 'life_minutes', 'evolution_failed', 'unflushed_poops', 'poop_mistake_timers', 'virus',
     'back_to_sleep', 'overfeed_timer', '_99g_triggered', 'burpmon_active', 'death_save_immunity',
     'death_save_b_counter', 'death_save_shake_counter', 'evolution_history', 'dp',
     'sleep_disturbances', 'poop_count_flag', 'dna', '_reliability_sleep_call_resolved', 'nap_until',
@@ -719,10 +721,13 @@ def sanity(world):
     out = []
     for p in world.pet_list:
         d = p.__dict__
-        for f in ('hunger', 'strength', 'weight', 'mistakes', 'injuries', 'sick', 'age',
+        for f in ('hunger', 'strength', 'weight', 'mistakes', 'sick', 'injury', 'sick_total',
+                  'injury_total', 'age',
                   '_evol_minutes', '_rt_last_minute', 'form_minutes', 'care_food_mistake_timer',
                   'care_strength_mistake_timer', 'care_sleep_mistake_timer',
-                  'care_sick_mistake_timer', 'starvation_counter', 'vital_values', 'reliability',
+                  'care_sick_mistake_timer', 'care_injury_mistake_timer', 'starvation_counter',
+                  'vital_values', 'reliability',
+                  'debilitation_counter', 'hunger_empty_minutes', 'strength_empty_minutes',
                   'gcell_points', 'unflushed_poops', 'back_to_sleep', 'death_save_immunity'):
             v = d.get(f, 0)
             if v is None:

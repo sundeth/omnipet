@@ -3,7 +3,7 @@
 import pygame
 from battle.battle_encounter import BattleEncounter, GameBattle
 from battle.sim.battle_simulator import BattleSimulator, BattleProtocol
-from models.animation import PetFrame
+from models.animation import PetFrame, frame_or_fallback
 from utils.sprite_utils import get_right_sprite
 from battle.sim.models import Digimon
 from battle.sim.dcom_battle_simulator import pet_to_digimon
@@ -11,13 +11,10 @@ from battle.sim import protocol_constants
 import core.constants as constants
 from utils.scene_utils import change_scene
 from core import game_globals, runtime_globals
-from utils.utils_unlocks import unlock_item
-from utils.module_utils import get_module
 import ui.ui_constants as ui_constants
 from ui.components.image import Image
 from ui.components.label import Label
 from ui.components.component import UIComponent
-from battle.combat_constants import ANY_OTHER_DEVICE
 
 class BattleEncounterVersus(BattleEncounter):
     def __init__(self, pet1, pet2, protocol: BattleProtocol, battle_format: str = None):
@@ -32,8 +29,11 @@ class BattleEncounterVersus(BattleEncounter):
         # Set pvp_mode flag before calling parent init
         self.pvp_mode = True
         
-        # Call the base class initializer with module="DMC"
-        module = "DMC"
+        # The encounter's module only presents the battle here: each pet keeps
+        # its own rules (finish_versus) and the chosen format fights it. It was
+        # "DMC", so without the DMC module every versus battle raised KeyError
+        # (BAT-F6); the first pet's module is always installed, as DCom uses.
+        module = getattr(pet1, "module", None) or "DMC"
 
         super().__init__(module, 0, 0, pvp_mode=True)
         # The device line this battle is fought on. The base class sets it to
@@ -273,68 +273,48 @@ class BattleEncounterVersus(BattleEncounter):
                 from utils.event_utils import after_connection
                 for pet, won, other in ((winner, True, loser), (loser, False, winner)):
                     after_connection([(pet, won)], getattr(other, 'device_version',
-                                                           getattr(other, 'version', None)))
+                                                           getattr(other, 'version', None)),
+                                     battle_format=self.battle_format)
             except Exception as exc:
                 runtime_globals.game_console.log(f"[Events] connection trigger failed: {exc}")
 
-            # Versus unlock logic: check if both pets are from the same module
-            # and meet version requirements for versus unlocks
-            pet1_module = getattr(self.pet1, 'module', None)
-            pet2_module = getattr(self.pet2, 'module', None)
-            
-            # Only process versus unlocks if both pets are from the same module
-            if pet1_module and pet2_module and pet1_module == pet2_module:
-                pet_module = get_module(pet1_module)
-                if pet_module:
-                    module_unlocks = getattr(pet_module, 'unlocks', []) or []
-                    for unlock in module_unlocks:
-                        if unlock.get('type') == 'versus':
-                            ver_req = unlock.get('version', None)
-                            unlock_name = unlock.get('name')
-                            if unlock_name:
-                                # Check if at least one pet meets the version requirement
-                                pet1_version = getattr(self.pet1, 'version', 0)
-                                pet2_version = getattr(self.pet2, 'version', 0)
-
-                                # Which physical device each pet was hatched on.
-                                # A connection requirement is about the hardware,
-                                # so device_version decides it, not the gameplay
-                                # version used for evolutions.
-                                dev1 = getattr(self.pet1, 'device_version', pet1_version)
-                                dev2 = getattr(self.pet2, 'device_version', pet2_version)
-                                dev_req = unlock.get('device_version', None)
-                                opp_req = unlock.get('opponent_device_version', None)
-
-                                # "Battle XA with XB" style pairing: one side has
-                                # to be the named device and the other its partner.
-                                # An opponent of ANY_OTHER_DEVICE means "any
-                                # device that is not this one", which is how a
-                                # device states "battle with any other version".
-                                if dev_req is not None or opp_req is not None:
-                                    def _side(own, other):
-                                        if dev_req is not None and own != dev_req:
-                                            return False
-                                        if opp_req is None:
-                                            return True
-                                        if opp_req == ANY_OTHER_DEVICE:
-                                            return other != own
-                                        return other == opp_req
-
-                                    paired = _side(dev1, dev2) or _side(dev2, dev1)
-                                    if paired:
-                                        unlock_item(pet1_module, 'versus', unlock_name)
-                                        runtime_globals.game_console.log(f"[Versus] Unlocked {unlock_name} for {pet1_module}")
-                                elif ver_req is not None:
-                                    # Version requirement specified - check if either pet meets it
-                                    if pet1_version == ver_req or pet2_version == ver_req:
-                                        unlock_item(pet1_module, 'versus', unlock_name)
-                                        runtime_globals.game_console.log(f"[Versus] Unlocked {unlock_name} for {pet1_module}")
-                                else:
-                                    # No version requirement - unlock for any versus battle in this module
-                                    unlock_item(pet1_module, 'versus', unlock_name)
-                                    runtime_globals.game_console.log(f"[Versus] Unlocked {unlock_name} for {pet1_module}")
+            self._record_versus_unlocks(winner)
             # Return to the main scene
             change_scene("game")
+
+    def _record_versus_unlocks(self, winner):
+        """Connection (`versus`) unlocks for this battle (utils_unlocks).
+
+        Each side is the device its pet was hatched on (device_version, the
+        hardware, not the gameplay version). Two pets of one module count the
+        battle once for it, whichever pet meets the record ("battle XA with
+        XB" pairs either way round). Pets of two modules are two devices
+        meeting: each module counts the battle against the other pet, but only
+        for records that name the `protocol` fought on (PENGZ's backgrounds,
+        battling a Pendulum Color); older records stay same-module only."""
+        from utils.utils_unlocks import record_connection_battle
+
+        def side(pet):
+            version = getattr(pet, 'version', 0)
+            return {"device_version": getattr(pet, 'device_version', version), "version": version,
+                    "name": getattr(pet, 'name', None)}
+
+        pet1_module = getattr(self.pet1, 'module', None)
+        pet2_module = getattr(self.pet2, 'module', None)
+        one, two = side(self.pet1), side(self.pet2)
+        won1 = winner is self.pet1
+        try:
+            if pet1_module and pet1_module == pet2_module:
+                record_connection_battle(pet1_module, [(one, two, won1), (two, one, not won1)],
+                                         self.battle_format)
+                return
+            for module_name, own, other, won in ((pet1_module, one, two, won1),
+                                                 (pet2_module, two, one, not won1)):
+                if module_name:
+                    record_connection_battle(module_name, [(own, other, won)], self.battle_format,
+                                             protocol_records_only=True)
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[Versus] connection unlocks failed: {exc}")
 
     def draw_result(self, surface: pygame.Surface):
         """
@@ -362,7 +342,7 @@ class BattleEncounterVersus(BattleEncounter):
         if winner_pet:
             # Get the frame (IDLE1 or HAPPY)
             frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.HAPPY.value
-            pet_sprite = winner_pet.get_sprite(frame_id)
+            pet_sprite = frame_or_fallback(winner_pet.get_sprite, frame_id)
             
             # Center the sprite on screen
             pet_x = runtime_globals.SCREEN_WIDTH // 2 - pet_sprite.get_width() // 2
@@ -382,14 +362,14 @@ class BattleEncounterVersus(BattleEncounter):
             # Position for pet1 (left side)
             pet1_x = runtime_globals.SCREEN_WIDTH // 4 - sprite_width // 2
             pet1_y = runtime_globals.SCREEN_HEIGHT // 2 - sprite_height // 2
-            pet1_sprite = self.pet1.get_sprite(frame_id)
+            pet1_sprite = frame_or_fallback(self.pet1.get_sprite, frame_id)
             pet1_sprite = pygame.transform.scale(pet1_sprite, (sprite_width, sprite_height))
             surface.blit(pet1_sprite, (pet1_x, pet1_y))
             
             # Position for pet2 (right side)
             pet2_x = 3 * runtime_globals.SCREEN_WIDTH // 4 - sprite_width // 2
             pet2_y = runtime_globals.SCREEN_HEIGHT // 2 - sprite_height // 2
-            pet2_sprite = self.pet2.get_sprite(frame_id)
+            pet2_sprite = frame_or_fallback(self.pet2.get_sprite, frame_id)
             pet2_sprite = pygame.transform.scale(pet2_sprite, (sprite_width, sprite_height))
             surface.blit(pet2_sprite, (pet2_x, pet2_y))
 

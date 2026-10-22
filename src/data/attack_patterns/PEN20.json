@@ -6,28 +6,28 @@
       "value": 1,
       "damage": 1,
       "sprite_count": 1,
-      "sprite_type": "atk_alt"
+      "sprite_type": "atk_main"
     },
     "single_strong": {
       "value": 2,
       "damage": 2,
       "sprite_count": 1,
-      "sprite_type": "atk_main"
+      "sprite_type": "atk_alt"
     },
     "double_weak": {
       "value": 3,
       "damage": 3,
       "sprite_count": 2,
-      "sprite_type": "atk_alt"
+      "sprite_type": "atk_main"
     },
     "double_strong": {
       "value": 4,
       "damage": 4,
       "sprite_count": 2,
-      "sprite_type": "atk_main"
+      "sprite_type": "atk_alt"
     }
   },
-  "sprite_note": "As on DM20, this line reverses the usual pairing: the WEAK attacks draw atk_alt and the STRONG ones atk_main. A pet with no atk_alt falls back to atk_main throughout and separates the four by count -- 1, 2 and 3 sprites, then a single sprite at double size for 4.",
+  "sprite_note": "Unlike DM20, the WEAK attacks draw atk_main and the STRONG ones atk_alt (protocol_constants.PEN20.WEAK_SHOT_FIELD): the PEN20 module's sprites were re-read from Digimon Researcher's video of every Ver.20th Digimon training and put this way round (2026-10-15). A pet with no atk_alt falls back to atk_main throughout and separates the four by count -- 1, 2 and 3 sprites, then a single sprite at double size for 4.",
   "enemy_note": "Adventure enemies play no minigame, so they read their stage instead. Each row is one of the measured meter rows, picked so total damage rises strictly with the stage.",
   "rounds": 5,
   "single": [

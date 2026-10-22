@@ -16,7 +16,7 @@ Test files: `tests/game/battle/test_adventure_every_area.py`, `test_adventure_re
 | BAT-F6 | High (known) | Versus | Every versus battle needs the DMC module installed | `test_versus_formats.py::test_versus_does_not_need_the_dmc_module` |
 | ~~BAT-F7~~ | Medium | Versus | ~~With part of the party selected, the wrong two pets fight~~ Fixed 2026-10-13 | `test_versus_formats.py::test_the_picked_pets_are_the_ones_that_fight` |
 | ~~BAT-F8~~ | Release gate (known, BAT-06) | Versus, DCom | ~~TWIN is still offered in the protocol grid~~ Fixed 2026-10-13 | `test_versus_formats.py::test_twin_is_not_offered_in_the_versus_grid`, `test_dcom_fake_device.py::test_twin_is_not_offered_in_the_dcom_grid`, `test_release_battle_gates.py::test_only_battle_formats_are_selectable_for_the_release` |
-| BAT-F9 | Medium | Adventure | `adventure` unlocks ignore their `version`: clearing VBE area 1 with a Ver.1 pet grants the Ver.18-22 character unlocks | `test_adventure_rewards.py::test_VBE_boss_win_opens_the_next_area` |
+| ~~BAT-F9~~ | Medium | Adventure | ~~`adventure` unlocks ignore their `version`: clearing VBE area 1 with a Ver.1 pet grants the Ver.18-22 character unlocks~~ Fixed 2026-10-15 | `test_adventure_rewards.py::test_VBE_boss_win_opens_the_next_area` |
 
 ## ~~BAT-F1 — a fresh pet of a counts-keeping module has no battle record (High; BAT-03, BAT-04)~~ Fixed 2026-10-13: `GamePet.reset_variables` and `patch()` give every pet a record
 
@@ -64,7 +64,7 @@ The other battle tests give their pets a record by hand (`battle_flow.ensure_bat
 
 Already in the battle review (`utilities/codex/battle-system-review-2026-09-20.md`, finding 1); this pins it with a test. `BattleEncounterVersus.simulate_combat` (battle_encounter_versus.py:219) and `fixed_charge` (214) look the format up as `BATTLE_FORMATS.get(self.protocol, 'DM20')`, a map from the shared `BattleProtocol` enum, instead of `self.battle_format`. PENC and DMXW share `DMC_BS`, PENZ shares `DMX_BS`, so a PENC versus converts both pets as DMC compatibility pets (index 0, `compatibility=True`) with charge 3 instead of PENC's `VERSUS_CHARGE` 2 (DMXW: 1; PENZ: DMX's version 1 instead of its own 0). Measured: `pet_to_digimon` called with `('DMC', 3)` twice for a PENC battle. **Fix:** use `self.battle_format` in both places.
 
-## BAT-F6 — every Versus battle needs the DMC module (High, known; BAT-02)
+## ~~BAT-F6 — every Versus battle needs the DMC module (High, known; BAT-02)~~ Fixed 2026-10-17: the encounter is built on the first pet's module (always installed, as DCom builds on the player's); each pet keeps its own rules through `finish_versus` (the test is now a plain regression test)
 
 Review finding 2. `BattleEncounterVersus.__init__` builds the encounter on `module = "DMC"` (battle_encounter_versus.py:36); `get_module` is a plain dict lookup, so with DMC not installed every versus battle raises `KeyError: 'DMC'`, whatever line was chosen and whichever modules the pets belong to. CLAUDE.md: each physical protocol must work without its native module -- here it even needs a different one. **Fix:** give the versus encounter a module-independent rules/presentation context (or the first pet's module) and look DMC up only for optional artwork.
 
@@ -80,13 +80,17 @@ Review finding 2. `BattleEncounterVersus.__init__` builds the encounter on `modu
 
 `protocol_constants.OFFERED_UPCOMING = ('TWIN',)` (protocol_constants.py:2137) enables TWIN's box in both protocol grids. Versus refuses it with "TWIN is not ready yet" and DCom only records a capture (both pass in `test_choosing_twin_*`), so it cannot be fought -- but BAT-06 wants unfinished lines not selectable for 1.0. Already listed in `release-1.0.md` (BAT-06 ❌). **Fix:** empty `OFFERED_UPCOMING` for the release build.
 
-## BAT-F9 — adventure unlocks ignore their version (Medium; BAT-03) — needs a data decision
+## ~~BAT-F9 — adventure unlocks ignore their version (Medium; BAT-03)~~ Fixed 2026-10-15: the loop skips a record whose version is not one of the winning pets' (0 counts as every version on a module with no version-0 Digimon, the test's rule)
 
 **What.** The `adventure` unlock loop in `update_result` (battle_encounter.py:2839-2857) grants every `adventure` unlock whose `area` matches (or whose name a beaten enemy carries), whatever its `version`. module-rules.md: "`version` selects gameplay evolutions/unlocks", and the game honours it elsewhere (egg unlocks: utils_unlocks.py:52, scene_eggselection.py:1461; area locks: `GameModule.is_area_unlocked`).
 
 **Effect.** VBE's 141 adventure unlocks are per version (`area_1_ver_22` "Maurice Shoemaker", version 22, area 1, and so on): a Ver.1 pet clearing area 1 unlocks the Ver.18, 20, 21, 22... characters as well. VB, VH, DMGZ, DMH and D-3 also scope adventure unlocks by version; DMC, DMX, DMXW, IC, PEN20, PENC, PENGZ do not.
 
 **Decision needed before the fix.** D-3 writes `version: 0` on unlocks that are plainly for every version (the area-1 background "beach", "bambu", "sakura", "dark_ocean"), and D-3 has no version-0 Digimon. A strict check (`version is None or version == pet.version`) would make those unreachable. The test treats `0` as unscoped only on a module that has no version-0 Digimon (PEN lines do use a real version 0). Either make D-3's data `null`, or define 0 as "every version" where no version-0 Digimon exists. Then filter the loop by the pets' versions (`team1`) -- note the encounter is always built with `version=1` (adventure_battle_view.py:42-46), so it cannot use `self.version`.
+
+## ~~BAT-F10 — the between-round Food menu vanishes after one feed (Medium)~~ Fixed 2026-10-17: a fresh Menu is opened for the next choice (`test_battle_view_menus.py`)
+
+Found while adding the battle item list. `AdventureBattleView._on_feeding_select` reopened `self._menu` from inside the menu's own `on_select`, and `Menu.handle_event` closes the menu after `on_select` returns, so after one Food the menu disappeared with the phase still "feeding": nothing on screen, and only B (Next) went on. The battle item lists open a new Menu each time for the same reason.
 
 ## Notes (not bugs in the game)
 

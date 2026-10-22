@@ -15,6 +15,7 @@ from ui.windows.window_background import WindowBackground
 from ui.windows.window_clock import WindowClock
 from ui.windows.window_mainmenu import WindowMenu
 from core import game_globals, runtime_globals
+from utils import ailments
 import core.constants as constants
 from models.game_evolution_entity import GameEvolutionEntity
 from utils.pet_utils import all_pets_hatched, distribute_pets_evenly, draw_pet_outline, get_selected_pets
@@ -402,14 +403,23 @@ class SceneMainGame:
                 self.event_stage = 0
             elif game_globals.event.type == EventType.SHOP_ACCESS:
                 # A random or scheduled shop event opens the shop when
-                # accepted (a battle-triggered one opened it at once).
-                from utils.event_utils import grant_shop_access, _announce
+                # accepted (a battle-triggered one opened it at once). A
+                # one-visit shop (the iC's DigiShops after a connection) is
+                # entered straight away and gone once left
+                # (ModuleShopView's `visit`).
+                from utils.event_utils import grant_shop_access, _announce, ONE_VISIT
                 event = game_globals.event
-                grant_shop_access(event.module, event.shop, getattr(event, "access_minutes", 0))
-                _announce(f"{event.shop} opened!")
-                runtime_globals.game_sound.play("happy")
                 game_globals.event = None
                 self.event_stage = 0
+                if int(getattr(event, "access_minutes", 0) or 0) == ONE_VISIT:
+                    runtime_globals.game_sound.play("happy")
+                    runtime_globals.scene_battle_initial_view = (
+                        "module_shop", {"shop_key": (event.module, event.shop), "visit": True})
+                    change_scene("battle")
+                else:
+                    grant_shop_access(event.module, event.shop, getattr(event, "access_minutes", 0))
+                    _announce(f"{event.shop} opened!")
+                    runtime_globals.game_sound.play("happy")
 
     def update_gift_animation(self) -> None:
         """
@@ -632,7 +642,7 @@ class SceneMainGame:
                 if not self._ss_show_poop and game_globals.poop_list:
                     self._ss_show_poop = True
                     changed = True
-                if not self._ss_show_sick and any(p.sick > 0 for p in game_globals.pet_list):
+                if not self._ss_show_sick and any(ailments.ailing(p) for p in game_globals.pet_list):
                     self._ss_show_sick = True
                     changed = True
                 # The screensaver clock has no seconds, so it changes 1/min.
@@ -1263,36 +1273,32 @@ class SceneMainGame:
 
     def heal_sick_pets(self) -> None:
         """
-        Heals sick pets. If both Dots and Skull types exist, opens healing scene.
+        Heals sick and injured pets. If the party has both a sickness (Dots)
+        and an injury (Skull), opens the healing scene to pick one.
         Otherwise heals directly.
         """
-        sick_pets = [pet for pet in game_globals.pet_list if pet.sick > 0]
+        sick_pets = [pet for pet in game_globals.pet_list if ailments.ailing(pet)]
 
         if not sick_pets:
             runtime_globals.game_sound.play("cancel")
             runtime_globals.game_console.log("[SceneMainGame] No sick pets to heal.")
             return
 
-        # Check if there are both dots and non-dots sick pets
-        has_dots = any(getattr(pet, 'sick_type', '') == 'dots' for pet in sick_pets)
-        has_skull = any(getattr(pet, 'sick_type', '') != 'dots' for pet in sick_pets)
-
-        if has_dots and has_skull:
+        kinds = {ailments.kind_of(pet) for pet in sick_pets}
+        if len(kinds) > 1:
             # Open healing scene for selection
             self.start_scene("healing")
             return
 
-        # Only one type — heal all directly
+        # Only one kind: heal all directly
         self._do_heal(sick_pets)
 
     def _do_heal(self, pets_to_heal) -> None:
-        """Heal the given list of pets by 1 sickness point."""
+        """Heal the given list of pets by one dose of their ailment."""
         runtime_globals.game_sound.play("fail")
         distribute_pets_evenly()
 
         for pet in pets_to_heal:
-            pet.sick = max(0, pet.sick - 1)
-            if pet.sick == 0:
-                pet.sick_type = ""
+            left = ailments.heal_dose(pet)
             pet.set_state("angry")
-            runtime_globals.game_console.log(f"[SceneMainGame] {pet.name} healed. Remaining sickness: {pet.sick}")
+            runtime_globals.game_console.log(f"[SceneMainGame] {pet.name} healed. Doses left: {left}")

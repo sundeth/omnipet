@@ -405,16 +405,15 @@ class JogressView:
 
     def _apply_jogress_cost(self, pets):
         """Consume the cost: zero the stat on the evolved (surviving) pets."""
-        if not pets:
-            return
-        entry = self.JOGRESS_COST_STATS.get(self._get_jogress_cost(pets[0]))
-        if entry is None:
-            return
-        attr, _ = entry
-        for pet in pets:
+        # Each pet pays its own module's cost: a PENGZ partner of a
+        # Pendulum Color pet pays nothing where the Color pays DP.
+        for pet in pets or []:
+            entry = self.JOGRESS_COST_STATS.get(self._get_jogress_cost(pet))
+            if entry is None:
+                continue
+            attr, _ = entry
             setattr(pet, attr, 0)
-        runtime_globals.game_console.log(
-            f"[Jogress] Consumed {attr} from {len(pets)} evolved pet(s)")
+            runtime_globals.game_console.log(f"[Jogress] {pet.name}: consumed {attr}")
 
     def _check_pet_compatibility(self, pet1, pet2):
         """Check if two pets are compatible for Jogress."""
@@ -426,7 +425,8 @@ class JogressView:
         if is_serial(pet1) or is_serial(pet2):
             return True
 
-        if pet1.module != pet2.module:
+        from utils.jogress_utils import can_pair
+        if not can_pair(pet1, pet2):
             return False
 
         # Checked in BOTH directions: a pairing declared only on the
@@ -711,7 +711,8 @@ class JogressView:
         pet1 = self.selectable_pets[self.selected_pets[0]]
         pet2 = self.selectable_pets[self.selected_pets[1]]
 
-        if pet1.module != pet2.module:
+        from utils.jogress_utils import can_pair
+        if not can_pair(pet1, pet2):
             runtime_globals.game_console.log("[JogressView] Module mismatch")
             return
 
@@ -737,6 +738,8 @@ class JogressView:
         runtime_globals.game_sound.play("evolution")
         from utils.quest_event_utils import update_evolution_quest_progress
         update_evolution_quest_progress("jogress", pet1.module)
+        if is_dual(evo) and pet2.module != pet1.module:
+            update_evolution_quest_progress("jogress", pet2.module)
         change_scene("game")
 
     def _jogress_single(self, pet1, pet2, evo):
@@ -747,7 +750,10 @@ class JogressView:
         # 2->1 fusion: only score the evolution once (pet2 is absorbed), but
         # still evolve pet2 first so the form lands in the digidex.
         pet1.evolve_to(evo["to"], pet1.version)
-        pet2.evolve_to(evo["to"], pet2.version, reward=False)
+        # A partner of another module (utils.jogress_utils.can_pair) has no
+        # such form to record.
+        if pet2.module == pet1.module:
+            pet2.evolve_to(evo["to"], pet2.version, reward=False)
         # Carry the partner's special traits over to the survivor.
         if pet2.traited:
             pet1.traited = True

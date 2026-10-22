@@ -48,7 +48,7 @@ class ArenaReplaySceneTests(unittest.TestCase):
     def tearDownClass(cls):
         os.chdir(cls._cwd)
 
-    def _battle(self, seed):
+    def _battle(self, seed, sizes=(3, 3)):
         from battle.arena import engine
         catalog = engine.Catalog(MODULES)
         installed = set(self.rg.game_modules)
@@ -56,15 +56,16 @@ class ArenaReplaySceneTests(unittest.TestCase):
         rng = random.Random(seed)
         while True:
             teams = []
-            for _ in range(2):
+            for size in sizes:
                 module = rng.choice(modules)
                 try:
                     entries, _ = engine.validate_team(catalog, engine.random_team(
-                        catalog, rng.randrange(10 ** 6), {"allowed_modules": [module]}))
+                        catalog, rng.randrange(10 ** 6), {"allowed_modules": [module]},
+                        team_size=size), team_size=size)
                 except engine.ArenaError:
                     break
                 teams.append(entries)
-            if len(teams) == 2 and all(len(t) == 3 for t in teams):
+            if len(teams) == 2 and [len(t) for t in teams] == list(sizes):
                 break
         outcome = engine.run_battle(teams[0], teams[1], rng.randrange(10 ** 6),
                                     {"charge": "random"})
@@ -108,6 +109,28 @@ class ArenaReplaySceneTests(unittest.TestCase):
                                      [s.hp for s in log.device1_final])
                     self.assertEqual([max(0, h) for h in encounter.battle_player.team2_hp],
                                      [s.hp for s in log.device2_final])
+                    verdict = {"device1": "Victory", "device2": "Defeat"}.get(log.winner, "Draw")
+                    self.assertEqual(encounter.victory_status, verdict)
+
+
+    def test_uneven_teams_replay_from_both_seats(self):
+        # Arena teams hold one to three Digimon. The side with fewer gets
+        # empty lanes: a viewer outnumbered used to crash the scene, and a
+        # lone opponent was drawn as an adventure boss.
+        for sizes in ((1, 3), (2, 3), (3, 1)):
+            battle = self._battle(5, sizes)
+            for viewer in ("A", "B"):
+                with self.subTest(sizes=sizes, viewer=viewer):
+                    encounter = self._replay(battle, viewer)
+                    log = encounter.global_battle_log
+                    want1 = [s.hp for s in log.device1_final]
+                    want2 = [s.hp for s in log.device2_final]
+                    mine = [max(0, h) for h in encounter.battle_player.team1_hp]
+                    theirs = [max(0, h) for h in encounter.battle_player.team2_hp]
+                    self.assertEqual(mine, want1)
+                    self.assertEqual(theirs[:len(want2)], want2)
+                    self.assertFalse(any(theirs[len(want2):]))
+                    self.assertEqual(len(encounter.enemies), len(want2))
                     verdict = {"device1": "Victory", "device2": "Defeat"}.get(log.winner, "Draw")
                     self.assertEqual(encounter.victory_status, verdict)
 

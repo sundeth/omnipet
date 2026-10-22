@@ -14,11 +14,16 @@ class GameBattle:
         #: ahead can knock out a Digimon that a slower lane's log still has
         #: shooting. See _may_fire.
         self.lockstep = False
-        self._lockstep_waits = [0] * len(team1)
+        #: Lanes the battle plays: one per player pet, or one per enemy when
+        #: the other side fields more (an arena team of three against one of
+        #: one or two). A lane with nobody on one side plays like a lane
+        #: whose Digimon was knocked out: that side never fires.
+        self.lanes = max(len(team1), len(team2))
+        self._lockstep_waits = [0] * self.lanes
 
         self.team1_hp = [0] * len(team1)  # HP for each pet in team1
         self.team1_max_hp = [0] * len(team1)  # Max HP for team1
-        self.team2_hp = [0] * len(team1)  # HP for each
+        self.team2_hp = [0] * self.lanes  # HP for each enemy (zero in an empty lane)
         self.team2_max_hp = [0] * len(team2)
 
         self.team1_total_hp = self.get_hp(team1, self.team1_hp, hp_buff)
@@ -32,25 +37,25 @@ class GameBattle:
         self.team2_max_total_hp = self.team2_total_hp  # Store max HP for team2
         self.team2_max_hp = [hp for hp in self.team2_hp]
 
-        self.turns = [1] * len(team1)  # Track turns for each pet
+        self.turns = [1] * self.lanes  # Track turns for each lane
 
-        self.team1_projectiles = [[] for _ in range(len(team1))]  # List of projectiles for the player's team
-        self.team2_projectiles = [[] for _ in range(len(team1))]  # List of projectiles for the enemy team
+        self.team1_projectiles = [[] for _ in range(self.lanes)]  # List of projectiles for the player's team
+        self.team2_projectiles = [[] for _ in range(self.lanes)]  # List of projectiles for the enemy team
         self.team1_bar_counters = [0] * len(team1)  # Bar counters for each pet in team1
         self.team2_bar_counters = [0] * len(team2)  # Bar counters for each pet in team2
-        self.phase = ["pet_charge"] * len(self.team1)
+        self.phase = ["pet_charge"] * self.lanes
         self.victory_status = "Ongoing"  # Track battle status
-        self.winners = [None] * len(self.team1)  # Track winners for each pair
-        self.team1_shot = [False] * len(self.team1)  # Track if a shot was fired
-        self.team2_shot = [False] * len(self.team1)  # Track if a shot was fired by the enemy
-        self.shot_wait = [0] * len(self.team1)  # Track shot wait time for each pet
+        self.winners = [None] * self.lanes  # Track winners for each pair
+        self.team1_shot = [False] * self.lanes  # Track if a shot was fired
+        self.team2_shot = [False] * self.lanes  # Track if a shot was fired by the enemy
+        self.shot_wait = [0] * self.lanes  # Track shot wait time for each lane
         self.xp = 0
         self.bonus = 0
         self.prize_item = None  # Prize item after battle
-        self.level_up = [False] * len(self.team1)  # Track if pets level up
+        self.level_up = [False] * self.lanes  # Track if pets level up
         self.reset_frame_counters()
         self.reset_cooldowns()
-        self.special_attack = [False] * len(self.team1)  # Track if pet is doing a special/critical attack
+        self.special_attack = [False] * self.lanes  # Track if pet is doing a special/critical attack
         self.special_attack_enemy = [False] * len(self.team2)  # Track if enemy is doing a special attack
 
     def get_hp(self, team, team_hp, buff=0):
@@ -80,24 +85,35 @@ class GameBattle:
         for i in range(len(self.frame_counters)):
             self.frame_counters[i] += 1
 
+    def _lane_count(self):
+        return getattr(self, "lanes", len(self.team1))
+
+    def _team1_hp(self, i):
+        """HP of the player's Digimon in lane *i* (0 in an empty lane)."""
+        return self.team1_hp[i] if i < len(self.team1_hp) else 0
+
+    def _team2_hp(self, i):
+        """HP of the enemy in lane *i* (0 in an empty lane)."""
+        return self.team2_hp[i] if i < len(self.team2_hp) else 0
+
     def reset_frame_counters(self):
         """
-        Resets the frame counters for each pet in the player's team.
+        Resets the frame counters for each lane.
         """
-        self.frame_counters = [0] * len(self.team1)
+        self.frame_counters = [0] * self._lane_count()
 
     def reset_cooldowns(self):
         """
-        Resets the cooldowns for each pet in the player's team.
+        Resets the cooldowns for each lane.
         """
-        self.cooldowns = [self.calculate_deterministic_cooldown(i) for i in range(len(self.team1))]
+        self.cooldowns = [self.calculate_deterministic_cooldown(i) for i in range(self._lane_count())]
 
     def reset_cooldowns_staggered(self, stagger_amount=10):
         """
         Resets the cooldowns with staggering to prevent simultaneous attacks.
         Used for PvP synchronization.
         """
-        base_cooldowns = [self.calculate_deterministic_cooldown(i) for i in range(len(self.team1))]
+        base_cooldowns = [self.calculate_deterministic_cooldown(i) for i in range(self._lane_count())]
         # Add staggering based on pet index to prevent simultaneous attacks
         for i in range(len(base_cooldowns)):
             self.cooldowns[i] = base_cooldowns[i] + (i * stagger_amount)
@@ -109,10 +125,11 @@ class GameBattle:
         """
         # Get pet name for consistency
         pet_name = ""
-        if hasattr(self.team1[pet_index], 'name'):
-            pet_name = self.team1[pet_index].name
-        elif hasattr(self.team1[pet_index], 'species'):
-            pet_name = self.team1[pet_index].species
+        pet = self.team1[pet_index] if pet_index < len(self.team1) else None
+        if hasattr(pet, 'name'):
+            pet_name = pet.name
+        elif hasattr(pet, 'species'):
+            pet_name = pet.species
         else:
             pet_name = f"pet_{pet_index}"
         
@@ -175,7 +192,7 @@ class GameBattle:
         """
         self.decrement_cooldowns()
         self.update_bar_counters()
-        for i in range(len(self.team1)):
+        for i in range(self._lane_count()):
             if self.turns[i] > 12:
                 self.phase[i] = "result"
                 continue
@@ -184,7 +201,7 @@ class GameBattle:
                 continue
 
             if self.cooldowns[i] <= 0:
-                if self.phase[i] == "pet_attack" and (self.shot_wait[i] or self.team1_hp[i] <= 0):
+                if self.phase[i] == "pet_attack" and (self.shot_wait[i] or self._team1_hp(i) <= 0):
                     self.shot_wait[i] = False
                     self.phase[i] = "enemy_charge"
                     # For enemy_first mode, increment turn AFTER pet attacks (end of round)
@@ -196,8 +213,8 @@ class GameBattle:
                     if not self._may_fire(i):
                         continue
                     self.phase[i] = "pet_attack"
-                    self.team1_shot[i] = True if self.team1_hp[i] > 0 else False
-                elif self.phase[i] == "enemy_attack" and (self.shot_wait[i] or self.team2_hp[i] <= 0):
+                    self.team1_shot[i] = self._team1_hp(i) > 0
+                elif self.phase[i] == "enemy_attack" and (self.shot_wait[i] or self._team2_hp(i) <= 0):
                     self.shot_wait[i] = False
                     self.phase[i] = "pet_charge"
                     # For normal mode (pet first), increment turn AFTER enemy attacks (end of round)
@@ -209,7 +226,7 @@ class GameBattle:
                     if not self._may_fire(i):
                         continue
                     self.phase[i] = "enemy_attack"
-                    self.team2_shot[i] = True if self.team2_hp[i] > 0 else False
+                    self.team2_shot[i] = self._team2_hp(i) > 0
 
                 if not self.shot_wait[i]:
                     self.cooldowns[i] = self.calculate_deterministic_cooldown(i)
@@ -230,7 +247,7 @@ class GameBattle:
             return True
         mine = self._round_half(i)
         behind = any(self.phase[j] != "result" and self._round_half(j) < mine
-                     for j in range(len(self.team1)) if j != i)
+                     for j in range(self._lane_count()) if j != i)
         if behind and self._lockstep_waits[i] < self.LOCKSTEP_MAX_WAIT:
             self._lockstep_waits[i] += 1
             return False

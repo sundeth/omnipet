@@ -87,8 +87,9 @@ class TableTests(unittest.TestCase):
         self.assertEqual(dmm_column(4, "Data")["name"], "Stage 4 Da")
         self.assertEqual(dmm_column(4, "Fr")["name"], "Stage 4 Va")
         self.assertEqual(dmm_column(5, "Vi")["name"], "Stage 5 Vi")
-        self.assertEqual(dmm_column(7, "Vi")["name"], "Stage 6-7")
-        self.assertEqual(dmm_column(8, "Va")["name"], "Stage 6-7")
+        self.assertEqual(dmm_column(6, "Vi")["name"], "Stage 6")
+        self.assertEqual(dmm_column(7, "Vi")["name"], "Stage 7")
+        self.assertEqual(dmm_column(8, "Va")["name"], "Stage 7")
         self.assertEqual(dmm_column(None, None)["name"], "Stage 1-3")
 
     def test_every_device_reading_is_in_the_table(self):
@@ -101,6 +102,14 @@ class TableTests(unittest.TestCase):
             (4, "Da"): {0: 0, 5: 7, 6: 9, 9: 12, 12: 15, 14: 16, 17: 19,
                         19: 21, 20: 22, 22: 24, 23: 25, 24: 26, 25: 27,
                         26: 29, 27: 30, 28: 30, 29: 31},
+            # A Garurumon and a TyrantKabuterimon in training (2026-10-19).
+            (4, "Va"): {14: 16, 16: 19, 17: 20, 18: 21, 19: 22, 20: 23, 22: 25,
+                        24: 27, 25: 29, 26: 30, 27: 30, 28: 31, 29: 31, 31: 31},
+            (7, "Vi"): {0: 0, 1: 1, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9,
+                        9: 10, 10: 11, 11: 12, 12: 13, 13: 14, 14: 15, 15: 16,
+                        16: 17, 17: 18, 18: 19, 19: 20, 20: 21, 21: 22, 22: 23,
+                        23: 24, 24: 25, 25: 26, 26: 27, 27: 29, 28: 29, 29: 30,
+                        30: 30, 31: 31},
         }
         table = battle_utils._dmm_table()
         for (stage, attribute), cells in readings.items():
@@ -131,13 +140,34 @@ class TableTests(unittest.TestCase):
         # Fully known: Stage 1-3 and both Stage 4 columns that have been read
         # end to end. Stage 4 Data's last assumed cell, count 28, was read in
         # training on a Centarumon.
-        for known in ("Stage 1-3", "Stage 4 Vi", "Stage 4 Da"):
+        # Stage 4 Vaccine joined them on a Garurumon and Stage 7 on a
+        # TyrantKabuterimon, read at every count (2026-10-19).
+        for known in ("Stage 1-3", "Stage 4 Vi", "Stage 4 Da", "Stage 4 Va", "Stage 7"):
             self.assertNotIn(known, assumed)
-        # A Hyper start the guide gives is never an assumption.
+        # A Hyper start the guide gives is never an assumption, and every
+        # column's is the guide's now that MegaKabuterimon (Red) gives Stage 5
+        # Data its own (2026-10-19).
         for column in table["columns"]:
-            if column["name"] != "Stage 5 Da":
-                self.assertNotIn(column["hyper_start"], assumed.get(column["name"], set()),
-                                 column["name"])
+            self.assertNotIn(column["hyper_start"], assumed.get(column["name"], set()),
+                             column["name"])
+
+    def test_every_column_reaches_five_hypers(self):
+        """Every Mini Digimon has a Terahit (nhoko, File Island), and a real
+        WarGreymon sent 4 4 4 4 4 (Digimon Database #623), so no column may
+        stop at #30 -- three used to."""
+        from battle.sim.battle_utils import dmm_counts_for
+        table = battle_utils._dmm_table()
+        for column in table["columns"]:
+            self.assertEqual(column["select"][-1], 31, column["name"])
+        self.assertTrue(dmm_counts_for([4, 4, 4, 4, 4], stage=6, attribute="Va"))
+
+    def test_stage_5_data_starts_hyper_at_megakabuterimon_s_count(self):
+        from battle.sim.battle_utils import dmm_column
+        self.assertEqual(dmm_column(5, "Da")["hyper_start"], 27)
+        # The Database's two captures of a Data MegaKabuterimon (Red) fit it.
+        from battle.sim.battle_utils import dmm_counts_for
+        for row in ([4, 2, 2, 2, 2], [2, 3, 4, 4, 1]):
+            self.assertTrue(dmm_counts_for(row, stage=5, attribute="Da"), row)
 
     def test_rows_are_shuffled_but_keep_their_values(self):
         rng = random.Random(7)
@@ -225,8 +255,9 @@ class LabelTests(unittest.TestCase):
                 middle_y = (ink.top + ink.height / 2 - ui.ui_offset_y) / scale
                 self.assertLessEqual(abs(middle_x - LABEL_CENTER_X), 1, (width, count))
                 self.assertLessEqual(abs(middle_y - LABEL_CENTER_Y), 1, (width, count))
-                # Tall enough to read, and clear of the brackets' opening.
-                self.assertLessEqual(abs(ink.height / scale - 28), 1, (width, count))
+                # Tall enough to read, and clear of the brackets' opening:
+                # DigimonBasic's 8-pixel digits at three times its grid.
+                self.assertLessEqual(abs(ink.height / scale - 24), 1, (width, count))
 
     def test_the_layout_numbers_are_the_sprite_s_own(self):
         """The brackets on `CountMatch2.png` are where the layout says.

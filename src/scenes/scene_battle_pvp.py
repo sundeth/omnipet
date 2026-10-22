@@ -5,6 +5,7 @@ A scene for network battles against other Omnipet devices.
 import pygame
 from ui.windows.window_background import WindowBackground
 from core import game_globals, runtime_globals
+from utils import ailments
 from battle.battle_encounter import BattleEncounter
 from battle.battle_encounter_dcom import BattleEncounterDCom
 from battle.sim import models as sim_models
@@ -55,6 +56,9 @@ class SceneBattlePvP:
                 # An arena replay: a stored server result, the HP it was
                 # fought with and the connect view to return to.
                 self.arena_replay = pvp_data.get('arena_replay')
+                # A WiFi battle plays its host's result the same way, but
+                # with the real pets and counting like any connection battle.
+                self.lan_battle = pvp_data.get('lan_battle')
                 
                 # Validate required data
                 if not self.my_pets:
@@ -192,7 +196,7 @@ class SceneBattlePvP:
                         "atk_alt": pet.atk_alt,
                         "atk_alt_2": getattr(pet, "atk_alt_2", 0),
                         "module": pet.module,
-                        "sick": getattr(pet, "sick", 0) > 0,
+                        "sick": ailments.ailing(pet),
                         "traited": getattr(pet, "traited", False),
                         "shook": getattr(pet, "shook", False)
                     }
@@ -206,14 +210,16 @@ class SceneBattlePvP:
             if getattr(self, 'battle_format', None):
                 self.battle_encounter.battle_format = self.battle_format
             replay = getattr(self, 'arena_replay', None)
+            playback = replay or getattr(self, 'lan_battle', None)
+            if playback:
+                self.battle_encounter.presentation_format = playback.get('presentation_format')
             if replay:
-                self.battle_encounter.presentation_format = replay.get('presentation_format')
                 self.battle_encounter.replay_return = (
                     replay.get('return_view', 'arena'), replay.get('return_kwargs') or {})
             self.battle_encounter.setup_pvp_teams(team1_pets, team2_pet_data, is_host=self.is_host)
-            if replay:
-                self.battle_encounter.apply_replay_hp(replay.get('team1_hp'), replay.get('team2_hp'))
-                if replay.get('enemy_first'):
+            if playback:
+                self.battle_encounter.apply_replay_hp(playback.get('team1_hp'), playback.get('team2_hp'))
+                if playback.get('enemy_first'):
                     # The attacker shot first every round, and from the
                     # defender's seat the attacker is the enemy side.
                     self.battle_encounter.prime_enemy_first()

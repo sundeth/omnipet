@@ -14,10 +14,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from vpet import VirtualPetGame
 from core import constants, game_globals, runtime_globals
+from core.version import VERSION
 from utils.document_utils import build_module_documentation
-
-# Game Version
-VERSION = "1.0.0 Beta 3"
 
 # Check Pygame version for compatibility
 PYGAME_VERSION = tuple(map(int, pygame.version.ver.split('.')))

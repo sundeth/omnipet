@@ -2,8 +2,8 @@
 ArenaRulesView - Display the current arena season's rules.
 
 Shows the season's start/end times, its battle settings (attacks per day,
-charge) and any restrictions that constrain which pets can join: allowed
-stages, attributes, or modules. The restriction keys are the ones the
+charge, team size, rank prizes) and any restrictions that constrain which
+pets can join: allowed stages, attributes, or modules. The restriction keys are the ones the
 server's arena engine (``battle.arena.engine.restriction_error``) checks:
 
     {
@@ -81,19 +81,21 @@ def _format_season_name(season: dict) -> str:
     """Display-friendly season name.
 
     The server auto-generates names like ``"Week of May 10, 2026"`` which
-    overflow the 240px-wide title.  Prefer a derived ``MAY WEEK 1`` label
-    based on the season's start date when available; otherwise try to
-    parse the server name; if all else fails just return the raw name.
+    overflow the 240px-wide title: those become a derived ``MAY WEEK 1``
+    label from the season's start date. A season with a name of its own (a
+    themed or special-rules season) shows that name.
     """
     import re
 
+    raw = (season.get('name', 'No season') if season else 'No season') or ''
+    automatic = re.match(r"\s*Week\s+of\s+", raw, re.IGNORECASE) or not raw.strip()
     start = season.get('start_date') if season else None
-    if start:
+    if start and automatic:
         derived = _format_week_label(start)
         if derived and derived != "?":
             return derived
-
-    raw = (season.get('name', 'No season') if season else 'No season') or ''
+    if not automatic:
+        return raw
     # Match patterns like "Week of May 10, 2026"
     m = re.match(
         r"\s*Week\s+of\s+([A-Za-z]+)\s+(\d{1,2})(?:\s*,\s*\d{4})?\s*$",
@@ -134,8 +136,10 @@ class ArenaRulesView:
         self._add(TitleScene(0, 9, "RULES"))
 
         season_name = _format_season_name(self._season)
+        # The title font fits about 14 characters; a longer name (a themed
+        # season) takes the body font so it stays on one line.
         self._add(Label(
-            w // 2, 32, season_name, is_title=True,
+            w // 2, 32, season_name, is_title=len(season_name) <= 14,
             color_override=(255, 255, 255), center=True,
             word_wrap=True, max_width=w - 20))
 
@@ -152,10 +156,19 @@ class ArenaRulesView:
         self._add(Label(
             10, 76, f"ATTACKS/DAY: {config.get('attacks_per_day', '-')}  CHARGE: {charge_text}",
             color_override=(200, 200, 200)))
+        from scenes.connect_views.arena_team_creation_view import size_text, team_size_range
+        low, high = team_size_range(self._season)
+        prizes = config.get('rank_prizes') or []
+        multiplier = float(self._season.get('reward_multiplier') or 1.0)
+        prize_line = "/".join(str(int(round(int(c) * multiplier))) for c in prizes[:3])
+        self._add(Label(
+            10, 88, f"TEAM: {size_text(low, high)}"
+            + (f"  PRIZES: {prize_line}" if prize_line else ""),
+            color_override=(200, 200, 200)))
 
         # Restrictions block
         restrictions = self._season.get('restrictions') or {}
-        y = 94
+        y = 104
         if not restrictions:
             self._add(Label(
                 w // 2, y, "No restrictions - all pets eligible",

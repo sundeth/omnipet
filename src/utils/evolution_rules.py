@@ -20,16 +20,27 @@ module that wants them:
                         the module's care_poop_mistake_time, over its life.
                         Such a route is tried at once, not on the timer, and
                         taking it spends the virus (World's Sukamon at 16)
+    unlock              a module unlock (module.json ``unlocks`` name) the
+                        player must hold: progress any Digimon makes. DMGZ's
+                        Koromon cannot fight, so its area-7 routes ask for
+                        the unlock clearing area 7 grants (owner, 2026-10-15)
 
   Module fields
     evolution_win_ratio_chance   [[min ratio, chance %], ...]: the chance a
                         route with a win-ratio criterion is taken, by the
                         pet's ratio (the highest row at or below it). Default
                         [[0, 100]]: always, as before.
-    evolution_fail_on_first_try  a route using the battle record is tried
-                        once, when the timer runs out; if none is taken the
-                        pet never evolves (``evolution_failed``), and a failed
-                        pet drains hunger, strength and poop twice as fast.
+    failed_evolution_double_needs  once an evolution has failed, hunger and
+                        strength drain and poop comes twice as fast, and so
+                        at Stage VI+ after 48 hours in the form (the
+                        Pendulum Color and Godzilla manuals).
+
+  Failed evolutions (every module; owner, 2026-10-20)
+    A pet with a route that reads the win rate (``win_ratio``,
+    ``total_win_ratio``) gets one try when its timer runs out: if no route is
+    taken it never evolves on the timer again (``evolution_failed``). Items,
+    Level Reverse, jogress and armor evolutions, death routes and defeat
+    routes still change it, and any new form starts unfailed.
 
   Form time (every module)
     form_minutes        minutes in the current form, asleep or awake; the
@@ -40,9 +51,11 @@ UNBOUNDED = 999999
 FORM_48_HOURS = 2880
 DEFAULT_WIN_RATIO_CHANCE = [[0, 100]]
 
-#: Criteria that read the battle record: a route using one is tried once
-#: when the module fails evolutions on the first try.
+#: Criteria that read the battle record.
 BATTLE_RECORD_KEYS = ("battles", "win_ratio", "win_count", "total_battles", "total_win_ratio")
+#: Criteria that read the win rate: a pet with a route using one fails for
+#: good when the timer's try takes no route.
+WIN_RATE_KEYS = ("win_ratio", "total_win_ratio")
 
 
 def in_range(value, bounds):
@@ -74,6 +87,10 @@ def is_immediate_route(evo):
 
 def uses_battle_record(evo):
     return any(key in evo for key in BATTLE_RECORD_KEYS)
+
+
+def uses_win_rate(evo):
+    return any(key in evo for key in WIN_RATE_KEYS)
 
 
 def route_wanted(evo, kind):
@@ -113,7 +130,19 @@ def extra_criteria_fail(pet, evo, poops_on_screen):
         defeats = (getattr(pet, "tag_defeats", None) or {}).get(evo["defeat_tag"], 0)
         if not in_range(defeats, amount):
             return True
+    if evo.get("unlock") and not unlock_held(pet, evo["unlock"]):
+        return True
     return False
+
+
+def unlock_held(pet, name):
+    """Whether the player holds module unlock *name* for the pet's module: the
+    Android copy asks its world, the game the save (utils_unlocks)."""
+    world = getattr(pet, "world", None)
+    if world is not None and hasattr(world, "is_unlocked"):
+        return bool(world.is_unlocked(pet.module, None, name))
+    from utils.utils_unlocks import is_unlocked
+    return is_unlocked(pet.module, None, name)
 
 
 def win_ratio_chance(module, pet, evo):
@@ -171,15 +200,42 @@ def rolls_fail(module, pet, evo, roll, kind, table_roll=None):
 # Failure and form time
 # --------------------------------------------------------------------------
 
-def fails_on_first_try(module):
-    return bool(getattr(module, "evolution_fail_on_first_try", False))
+def doubles_needs(module):
+    return bool(getattr(module, "failed_evolution_double_needs", False))
 
 
-def should_fail(module, routes):
-    """After an unsuccessful first try: whether the pet now never evolves."""
-    return fails_on_first_try(module) and any(
-        route_wanted(evo, "normal") and not evo.get("jogress") and "item" not in evo
-        and uses_battle_record(evo) for evo in routes)
+def should_fail(routes):
+    """After the timer's try took no route: whether the pet now never
+    evolves on the timer (it has a route that reads the win rate)."""
+    return any(route_wanted(evo, "normal") and not is_immediate_route(evo)
+               and not evo.get("jogress") and "item" not in evo
+               and uses_win_rate(evo) for evo in routes)
+
+
+# --------------------------------------------------------------------------
+# Generations (traited_egg_rule "Generation": the Digivice iC)
+# --------------------------------------------------------------------------
+
+#: The most a generation gives: from the second generation on, each Child or
+#: later form evolves an hour earlier and the pet starts with a point more
+#: Reliability per generation, up to eight (the 10X playbook).
+GENERATION_BONUS_MAX = 8
+
+
+def generation_bonus(module, pet):
+    """The hours and Reliability points *pet*'s generation gives, 0-8; 0 on
+    a module whose Traited Egg rule is not "Generation"."""
+    if getattr(module, "traited_egg_rule", "") != "Generation":
+        return 0
+    return max(0, min(GENERATION_BONUS_MAX, (getattr(pet, "generation", 1) or 1) - 1))
+
+
+def generation_time(module, pet, stage, minutes):
+    """A form's evolution time, shortened by its generation from Child on."""
+    bonus = generation_bonus(module, pet)
+    if not bonus or (stage or 0) < 3 or not minutes:
+        return minutes
+    return max(1, minutes - 60 * bonus)
 
 
 def form_aged(pet, minutes=FORM_48_HOURS):
@@ -188,18 +244,18 @@ def form_aged(pet, minutes=FORM_48_HOURS):
 
 def poop_factor(pet, module):
     """Poop runs twice as fast at Stage VI+ after 48 hours in the form, and
-    (where the module fails evolutions) once an evolution has failed."""
+    (where the module doubles needs) once an evolution has failed."""
     if getattr(pet, "stage", 0) >= 6 and form_aged(pet):
         return 2
-    if fails_on_first_try(module) and getattr(pet, "evolution_failed", False):
+    if doubles_needs(module) and getattr(pet, "evolution_failed", False):
         return 2
     return 1
 
 
 def needs_factor(pet, module):
-    """Hunger and strength drain twice as fast, on a module that fails
-    evolutions, once one has failed or at Stage VI+ after 48 hours."""
-    if not fails_on_first_try(module):
+    """Hunger and strength drain twice as fast, on a module that doubles
+    needs, once an evolution has failed or at Stage VI+ after 48 hours."""
+    if not doubles_needs(module):
         return 1
     if getattr(pet, "evolution_failed", False):
         return 2

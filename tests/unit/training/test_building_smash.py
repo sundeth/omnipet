@@ -77,6 +77,8 @@ class BuildingSmashTests(unittest.TestCase):
             mock.patch.object(runtime_globals, "game_state", "training"),
             mock.patch.object(runtime_globals, "game_modules", {
                 "IC": SimpleNamespace(currencies=[FIGHT_MONEY],
+                                      training_uses_battle_cost=True, battle_cost_type="Hunger",
+                                      battle_cost_amount=1,  # the iC's heart a play
                                       folder_path=os.path.join(REPO_ROOT, "modules", "IC")),
                 "DMC": SimpleNamespace(currencies=[],
                                        folder_path=os.path.join(REPO_ROOT, "modules", "DMC"))}),

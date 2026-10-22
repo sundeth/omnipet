@@ -476,9 +476,8 @@ class MainMenuView:
             self.config_omninet_button.set_text("CONNECT")
             self.config_omninet_button.enabled = False
         
-        # Free Mode has no Omninet account: show only the connection status
-        # and hide the account row and connect button (they rendered as empty
-        # theme-colored rectangles over the section).
+        # Free Mode has no Omninet account: the row says so, and the button
+        # switches the game mode (Omninet accounts are Progress Mode's).
         if is_free:
             if self._omninet_available is None:
                 self.config_omninet_status_label.set_text("Status: Checking...")
@@ -486,10 +485,10 @@ class MainMenuView:
                 self.config_omninet_status_label.set_text("Status: Online")
             else:
                 self.config_omninet_status_label.set_text("Status: Offline")
-            self.config_omninet_account_label.visible = False
-            self.config_omninet_button.visible = False
-            self.config_omninet_button.enabled = False
-            self.config_omninet_button.focusable = False
+            self.config_omninet_account_label.set_text("Free Mode")
+            self.config_omninet_button.set_text("SWITCH MODE")
+            self.config_omninet_button.enabled = True
+            self.config_omninet_button.focusable = True
 
         # Update Discord status.  Discord battles are available in Free Mode
         # too, so the button stays enabled regardless of game mode.
@@ -645,12 +644,17 @@ class MainMenuView:
         self._shop_available = omninet_service.check_availability()
     
     def _check_wifi_availability_async(self):
-        """Background thread to check WiFi availability."""
+        """Background thread to check WiFi availability.
+
+        A WiFi battle needs a local network, not the internet: the button
+        used to stay off on a network without internet access (a phone's
+        hotspot, a router with its line down) where two games can still
+        find each other.
+        """
         runtime_globals.game_console.log("[MainMenuView] Checking WiFi availability...")
         try:
-            import socket
-            socket.create_connection(("8.8.8.8", 53), timeout=2)
-            self._wifi_available = True
+            from battle.lan_link import local_addresses
+            self._wifi_available = bool(local_addresses())
         except Exception:
             self._wifi_available = False
     
@@ -835,9 +839,9 @@ class MainMenuView:
         self.change_view("wificom_warning")
     
     def _on_wifi_selected(self):
-        """WiFi button clicked."""
+        """WiFi button clicked: choose the pets, then host or join."""
         runtime_globals.game_sound.play("menu")
-        self.change_view("wifi_hosting", is_online_mode=False)
+        self.change_view("pet_selection")
     
     def _on_dcom_selected(self):
         """DCom button clicked."""
@@ -865,7 +869,7 @@ class MainMenuView:
     def _on_omninet_connect(self):
         """Omninet Connect/Disconnect button clicked.
 
-        In Free Mode the button reads CHANGE MODE and opens the game-mode
+        In Free Mode the button reads SWITCH MODE and opens the game-mode
         selection instead (Omninet accounts are Progress-Mode-only).
         """
         runtime_globals.game_sound.play("menu")

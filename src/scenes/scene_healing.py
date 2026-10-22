@@ -11,6 +11,7 @@ from ui.components.button import Button
 from ui.components.pet_selector import PetSelector
 from ui.windows.window_background import WindowBackground
 from core import runtime_globals, game_globals
+from utils import ailments
 from utils.pet_utils import distribute_pets_evenly, get_selected_pets
 from utils.scene_utils import change_scene
 from ui.ui_constants import BASE_RESOLUTION
@@ -108,15 +109,11 @@ class SceneHealing:
         all_pets = get_selected_pets()
         enabled_indices = []
 
-        if focused == self.skull_button:
-            for i, pet in enumerate(all_pets):
-                if pet.sick > 0 and getattr(pet, 'sick_type', '') != 'dots':
-                    enabled_indices.append(i)
-        else:
-            # Default to dots
-            for i, pet in enumerate(all_pets):
-                if pet.sick > 0 and getattr(pet, 'sick_type', '') == 'dots':
-                    enabled_indices.append(i)
+        # Skull: the injured; Dots (the default): the sick.
+        kind = "injury" if focused == self.skull_button else "sick"
+        for i, pet in enumerate(all_pets):
+            if ailments.doses(pet, kind) > 0:
+                enabled_indices.append(i)
 
         self.pet_selector.set_enabled_pets(enabled_indices)
 
@@ -153,32 +150,29 @@ class SceneHealing:
             return
 
     def on_dots_button(self):
-        """Heal dots-sick pets."""
-        pets = [p for p in game_globals.pet_list if p.sick > 0 and getattr(p, 'sick_type', '') == 'dots']
-        if not pets:
-            runtime_globals.game_sound.play("cancel")
-            return
-        self._do_heal(pets)
+        """Heal the sick pets (Dots)."""
+        self._heal_kind("sick")
 
     def on_skull_button(self):
-        """Heal skull-sick pets."""
-        pets = [p for p in game_globals.pet_list if p.sick > 0 and getattr(p, 'sick_type', '') != 'dots']
+        """Heal the injured pets (Skull)."""
+        self._heal_kind("injury")
+
+    def _heal_kind(self, kind):
+        pets = [p for p in game_globals.pet_list if ailments.doses(p, kind) > 0]
         if not pets:
             runtime_globals.game_sound.play("cancel")
             return
-        self._do_heal(pets)
+        self._do_heal(pets, kind)
 
-    def _do_heal(self, pets_to_heal):
-        """Heal the given list of pets by 1 sickness point."""
+    def _do_heal(self, pets_to_heal, kind):
+        """Heal the given list of pets by one dose of *kind*."""
         runtime_globals.game_sound.play("fail")
         distribute_pets_evenly()
 
         for pet in pets_to_heal:
-            pet.sick = max(0, pet.sick - 1)
-            if pet.sick == 0:
-                pet.sick_type = ""
+            left = ailments.heal_dose(pet, kind)
             pet.set_state("angry")
-            runtime_globals.game_console.log(f"[SceneHealing] {pet.name} healed. Remaining sickness: {pet.sick}")
+            runtime_globals.game_console.log(f"[SceneHealing] {pet.name} healed. Doses left: {left}")
 
         change_scene("game")
 

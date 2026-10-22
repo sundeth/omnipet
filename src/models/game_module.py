@@ -54,10 +54,41 @@ def _win_ratio_chance_table(value):
     return sorted(rows) or [[0, 100]]
 
 
+#: How a dying pet can be saved (``death_save_by``).
+DEATH_SAVE_METHODS = ("Nothing", "B Press", "Shake")
+
+
+def _death_save(data):
+    """The module's death save as (method, amount, seconds, chance %).
+
+    ``death_save_by`` names the method, ``death_save_amount`` the presses
+    or shakes, ``death_save_seconds`` the time to make them in, and
+    ``death_save_chance`` the chance the pet then lives (the iC: 60 presses
+    in 30 seconds, then 5%). A module from before them names only a count,
+    ``death_save_by_b_press`` or ``death_save_by_shake``: that method, in
+    60 seconds (the minute the pet used to get), always saved. No method or
+    no amount is ("Nothing", 0, 60, 100).
+    """
+    method = data.get("death_save_by")
+    if method is None:
+        presses = int(data.get("death_save_by_b_press", 0) or 0)
+        shakes = int(data.get("death_save_by_shake", 0) or 0)
+        method, amount = (("B Press", presses) if presses > 0
+                          else ("Shake", shakes) if shakes > 0 else ("Nothing", 0))
+    else:
+        amount = int(data.get("death_save_amount", 0) or 0)
+    seconds = int(data.get("death_save_seconds", 60) or 60)
+    chance = data.get("death_save_chance", 100)
+    chance = max(0, min(100, int(100 if chance is None else chance)))
+    if method not in DEATH_SAVE_METHODS[1:] or amount <= 0:
+        return "Nothing", 0, 60, 100
+    return method, amount, max(1, seconds), chance
+
+
 # What a module written before traited_egg_rule / power_bonus_rule existed
 # should fall back to, as ``ruleset -> (traited egg rule, power bonus rule)``.
 # Kept in core.pet_stats so the arena engine resolves the same rule.
-from core.pet_stats import LEGACY_RULESET_RULES  # noqa: E402
+from core.pet_stats import LEGACY_RULESET_RULES, canonical_power_bonus_rule  # noqa: E402
 
 
 class GameModule:
@@ -102,7 +133,9 @@ class GameModule:
                     # How a Traited Egg is earned, and where a pet's power
                     # bonus comes from. See the two tables in game_pet.
                     self.traited_egg_rule = data.get("traited_egg_rule") or _legacy[0]
-                    self.power_bonus_rule = data.get("power_bonus_rule") or _legacy[1]
+                    # "Strength Hearts" is read as "Strength Hearts +16".
+                    self.power_bonus_rule = canonical_power_bonus_rule(
+                        data.get("power_bonus_rule") or _legacy[1])
                     # The "Effort Tiers" rule's rows [stage, effort, power].
                     self.effort_power_tiers = [list(r) for r in data.get("effort_power_tiers") or []
                                                if isinstance(r, (list, tuple)) and len(r) >= 3]
@@ -135,6 +168,11 @@ class GameModule:
                     self.protein_care_mistake_time = int(data.get("care_protein_care_mistake_time"))
                     self.protein_overdose_max = int(data.get("care_protein_overdose_max", 0))
                     self.protein_penalty = int(data.get("care_protein_penalty", 10))
+                    # The most Strength a pet holds, whatever its stomach: the
+                    # Digimon Mini's and the Twin's 0-15 meter. 0 keeps the
+                    # stomach as the cap and the old drain (pet_stats.
+                    # strength_cap / drained_strength).
+                    self.strength_max = max(0, int(data.get("care_strength_max", 0) or 0))
                     self.disturbance_penalty_max = int(data.get("care_disturbance_penalty_max", 0))
 
                     self.care_flush_disturbance_sleep = bool(data.get("care_flush_disturbance_sleep", True))
@@ -164,6 +202,10 @@ class GameModule:
 
                     self.battle_base_sick_chance_win = int(data.get("battle_base_sick_chance_win"))
                     self.battle_base_sick_chance_lose = int(data.get("battle_base_sick_chance_lose"))
+                    # Points a form's injury chance rises after each lost
+                    # battle and falls after each won one, from its own
+                    # `injury_probability` (the iC: 1). 0 keeps it fixed.
+                    self.injury_chance_step = int(data.get("injury_chance_step", 0) or 0)
                     self.battle_attribute_advantage = int(get_data(data, "battle_attribute_advantage", 5))
                     # The X devices add the advantage to Power before working
                     # out the hit rate rather than to the hit rate itself.
@@ -207,6 +249,14 @@ class GameModule:
                         data.get("battle_panic_attribute_bonus", 0))
                     self.battle_cost_type = data.get("battle_cost_type", "DP")
                     self.battle_cost_amount = float(data.get("battle_cost_amount", 1.0))
+                    # Every training costs what a battle does (the iC: one
+                    # hunger heart); GamePet.can_train / pay_training_cost.
+                    self.training_uses_battle_cost = bool(data.get("training_uses_battle_cost", False))
+                    # When battle items (status_boost) are used: "area", at
+                    # the start of an adventure battle, lasting the area (the
+                    # X's chips); "round", before every round, lasting it (the
+                    # iC's weapons). See utils.battle_items.
+                    self.battle_item_use = str(data.get("battle_item_use", "area") or "area").lower()
                     # Weight (g) shed per battle, on top of the cost resource.
                     # 0 for every device that doesn't do this; the original
                     # Digital Monster loses 4g a fight.
@@ -227,6 +277,13 @@ class GameModule:
                     # known to allow it, so this defaults off where
                     # `care_can_battle_while_sick` defaults to refusing.
                     self.care_can_train_while_sick = bool(data.get("care_can_train_while_sick", False))
+                    # An injury (Skull) apart from a sickness (Dots) since
+                    # 2026-10-21 (utils.ailments); a module from before has
+                    # one flag for both.
+                    self.care_can_battle_while_injured = bool(data.get(
+                        "care_can_battle_while_injured", self.care_can_battle_while_sick))
+                    self.care_can_train_while_injured = bool(data.get(
+                        "care_can_train_while_injured", self.care_can_train_while_sick))
                     # Weight may fall below the species' min_weight, down to
                     # 1 (Digimon World: starving a Digimon down is how some
                     # evolutions are reached). Off, min_weight is the floor.
@@ -245,24 +302,47 @@ class GameModule:
                     # The chance a route with a win-ratio criterion is taken,
                     # by the pet's ratio: [[min ratio, chance %], ...], the
                     # highest row at or below it. [[0, 100]]: always, as before.
-                    # A failed first try is final when the module says so,
-                    # for routes that read the battle record (the PENGZ).
                     # See utils.evolution_rules.
                     self.evolution_win_ratio_chance = _win_ratio_chance_table(
                         data.get("evolution_win_ratio_chance"))
-                    self.evolution_fail_on_first_try = bool(data.get("evolution_fail_on_first_try", False))
+                    # Once an evolution has failed (any pet with a win-rate
+                    # route whose timer try took none), hunger, strength and
+                    # poop run twice as fast; so at Stage VI+ after 48 hours
+                    # (PENC, PENGZ). A module from before names the old
+                    # evolution_fail_on_first_try, which brought this.
+                    legacy_fail = bool(data.get("evolution_fail_on_first_try", False))
+                    self.failed_evolution_double_needs = bool(
+                        data.get("failed_evolution_double_needs", legacy_fail))
+                    # That flag also marked the PENGZ's Traited Egg rule.
+                    if legacy_fail and self.traited_egg_rule == "Win Ratio (Stage 5)":
+                        self.traited_egg_rule = "Win Ratio (Failed or Aged, Lifetime)"
 
+                    # Injuries (Skull) and sicknesses (Dots) in one form,
+                    # counted apart, and the minutes each may go untreated
+                    # (utils.ailments). A module from before the split names
+                    # one count and one timer for both: each kind gets them.
                     self.death_max_injuries = int(data.get("death_max_injuries"))
+                    self.death_max_sicknesses = int(data.get("death_max_sicknesses", self.death_max_injuries))
                     self.death_sick_timer = int(data.get("death_sick_timer"))
+                    self.death_injury_timer = int(data.get("death_injury_timer", self.death_sick_timer))
                     self.death_hunger_timer = int(data.get("death_hunger_timer"))
                     self.death_starvation_count = int(data.get("death_starvation_count"))
+                    # Strength's starvation counter: the meter found empty
+                    # this many times without being filled kills (the Xros
+                    # Wars Color's Debilitation counter, 18). 0 disables it.
+                    self.death_debilitation_count = int(data.get("death_debilitation_count", 0) or 0)
                     self.death_strength_timer = int(data.get("death_strength_timer"))
                     self.death_stage45_mistake = int(data.get("death_stage45_mistake"))
                     self.death_stage67_mistake = int(data.get("death_stage67_mistake"))
                     self.death_care_mistake = int(data.get("death_care_mistake",999999))
-                    self.death_save_by_b_press = int(data.get("death_save_by_b_press",0))
-                    self.death_save_by_shake = int(data.get("death_save_by_shake",0))
+                    (self.death_save_by, self.death_save_amount,
+                     self.death_save_seconds, self.death_save_chance) = _death_save(data)
                     self.death_old_age = int(data.get("death_old_age",0))
+                    # How a pet's life ends (utils.lifespan_rules): None,
+                    # Activity Time, Old Age or Age 5. A module from before
+                    # names only death_old_age, which was Old Age.
+                    self.lifespan_rule = str(data.get(
+                        "lifespan_rule", "Old Age" if self.death_old_age > 0 else "None") or "None")
                     
                     self.hp_max_item_boost = int(data.get("hp_max_item_boost", 0))
                     self.atk_max_item_boost = int(data.get("atk_max_item_boost", 0))
@@ -450,8 +530,11 @@ class GameModule:
 
         ``currency``: [{name, icon, unit, training_gain[4], cap}];
         ``shop``: [{name, unlock, icon, currency, items: [{item, price,
-        unlock, card_pack, versions}]}], each item an item.json name, or a
-        card pack (cards.json pack id) in its place; ``versions`` (optional)
+        unlock, card_pack, card_offer, rarity_prices, versions}]}], each item
+        an item.json name, or a card pack (cards.json pack id) in its place,
+        or a card offer (``card_offer``, a pack id: one card of that pack, a
+        different one each day, priced by its rarity in ``rarity_prices``,
+        {"Common": 500, ...}, else at ``price``); ``versions`` (optional)
         the pet versions it is sold to. A module without the file has
         neither. Balances and buying: utils.currency_utils.
         """
@@ -599,6 +682,8 @@ class GameModule:
                 trigger=str(entry.get("trigger", "random") or "random"),
                 outcome=str(entry.get("outcome", "win") or "win"),
                 opponent_device_version=entry.get("opponent_device_version"),
+                protocol=str(entry.get("protocol", "") or ""),
+                draw=str(entry.get("draw", "") or ""),
                 versions=entry.get("versions") or None,
                 pools=entry.get("pools") or None,
                 pool_field=str(entry.get("pool_field", "") or ""),

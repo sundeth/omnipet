@@ -1488,7 +1488,13 @@ class UIManager:
             self.master_ui_surface = rle_accelerate(
                 pygame.Surface((self.ui_width, self.ui_height), pygame.SRCALPHA))
             self._overlay_rle = True
-        
+        elif self._overlay_rle:
+            # pygame.draw into an RLE-encoded surface (one blitted since it was
+            # encoded) is an access violation in pygame 2.6: the frame border
+            # below and any component drawing into it crashed the game on
+            # every non-square screen. Decode it for the rebuild.
+            self.master_ui_surface.set_alpha(255)
+
         # Clear the master surface
         self.master_ui_surface.fill((0, 0, 0, 0))
         
@@ -1522,7 +1528,10 @@ class UIManager:
                     border_size = 2
                     border_rect = pygame.Rect(0, 0, self.ui_width, self.ui_height)
                     pygame.draw.rect(self.master_ui_surface, border_color, border_rect, width=border_size)
-        
+
+        if self._overlay_rle:
+            rle_accelerate(self.master_ui_surface)
+
         # Mark as clean
         self.master_ui_dirty = False
     

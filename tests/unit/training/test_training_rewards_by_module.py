@@ -115,7 +115,9 @@ class TrainingRewardTests(unittest.TestCase):
                         pet = self.fresh(name)
                         before_weight = pet.weight
                         self.train(pet, won, grade)
-                        level = grade if won else 0
+                        # The grade picks the row, won or lost (2026-10-17: Mogera's
+                        # lost Phase 2 is a Good; elsewhere won == (grade > 0))
+                        level = grade
                         self.assertEqual(pet.effort, effort[level], "effort")
                         if strength[level] < 0:
                             self.assertGreaterEqual(pet.strength, 4, "a -1 fills the meter")
@@ -206,7 +208,7 @@ class TrainingRewardTests(unittest.TestCase):
                     with self.subTest(module=name, anguirus=anguirus, won=won, grade=grade):
                         pet = self.fresh(name, gcell_points=10)
                         self.train(pet, won, grade, anguirus=anguirus)
-                        level = grade if won else 0
+                        level = grade
                         self.assertEqual(pet.gcell_points, 10 + data[field][level])
 
     def test_g_cells_stay_between_zero_and_the_cap(self):

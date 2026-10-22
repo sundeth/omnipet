@@ -52,9 +52,11 @@ RESULT_PATH = "assets/CountMatch2.png"
 #: cannot push it off the marks.
 LABEL_CENTER_X = 120
 LABEL_CENTER_Y = 77
-#: DigimonBasic's digits are 711/1024 of the em, so 40 draws them 28 tall,
-#: which clears the brackets' 42-pixel opening.
-LABEL_FONT_SIZE = 40
+#: DigimonBasic is a 12-pixel font whose digits are 8 pixels tall, so 36
+#: (three times its pixel grid) draws them 24 tall with even strokes, which
+#: clears the brackets' 42-pixel opening. Off the grid (40 drew them 28 tall)
+#: some strokes came out a pixel wider than others.
+LABEL_FONT_SIZE = 36
 #: What every count's vertical extent is measured against, so the number does
 #: not bob a pixel as its digits change.
 LABEL_REFERENCE = "0123456789"

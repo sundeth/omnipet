@@ -30,7 +30,8 @@ def module(**overrides):
                 sleep_care_mistake_timer=20, death_max_injuries=0, death_sick_timer=0,
                 death_hunger_timer=0, death_strength_timer=0, death_stage45_mistake=0,
                 death_stage67_mistake=0, death_starvation_count=0, death_care_mistake=0,
-                death_old_age=0, death_save_by_b_press=0, death_save_by_shake=0,
+                death_old_age=0, death_save_by='Nothing', death_save_amount=0,
+                death_save_seconds=60, death_save_chance=100, injury_chance_step=0,
                 care_poop_chance=[100, 0, 0, 0], care_poop_sickness_count=0,
                 traited_egg_rule='None', get_monster=lambda *_: None,
                 get_all_monsters=lambda: [], load_events_json=lambda: [],
@@ -138,8 +139,9 @@ class OfflineTests(unittest.TestCase):
         state = snapshot([p])
         world = OfflineWorld(state, {'Test': mod}).advance(state['at'] + 180)
         self.assertEqual(len(world.poop_list), 3)
-        self.assertGreater(world.pet_list[0].sick, 0)
-        self.assertEqual(world.pet_list[0].injuries, 1)
+        # The module's poop effect (Skull by default) is an injury.
+        self.assertGreater(world.pet_list[0].injury, 0)
+        self.assertEqual((world.pet_list[0].injury_total, world.pet_list[0].sick_total), (1, 0))
         self.assertEqual(world.pet_list[0].unflushed_poops, 3)
 
     def test_pending_poop_completes_without_waiting_for_another_minute(self):
@@ -184,8 +186,8 @@ class OfflineTests(unittest.TestCase):
         self.assertEqual(world.xai_date, datetime(2026, 9, 13).date())
 
     def test_death_removal_occurs_at_existing_minute_boundary(self):
-        mod = module(death_old_age=1)
-        state = snapshot([pet(mod, age=1)])
+        mod = module(death_old_age=1, lifespan_rule='Old Age')
+        state = snapshot([pet(mod, life_minutes=1440)])
         world = OfflineWorld(state, {'Test': mod})
         world.advance(state['at'] + 60)
         self.assertEqual(world.pet_list[0].state, 'dead')
@@ -253,9 +255,9 @@ class OfflineTests(unittest.TestCase):
             self.assertEqual(getattr(p, field), getattr(world.pet_list[0], field), field)
 
     def test_notification_call_is_invalid_after_evolution_or_death(self):
-        mod = module(death_old_age=1)
+        mod = module(death_old_age=1, lifespan_rule='Old Age')
         at = datetime(2026, 9, 12, 23, 55).timestamp()
-        p = pet(mod, hunger=1, _cd_hunger=1)
+        p = pet(mod, hunger=1, _cd_hunger=1, life_minutes=1435)  # a day old at midnight
         state = snapshot([p], at=at)
         world = OfflineWorld(state, {'Test': mod}).advance(at + 600)
         calls = [n for n in world.notices if n['kind'] == 'call']

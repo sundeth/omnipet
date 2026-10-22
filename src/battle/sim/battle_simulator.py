@@ -740,7 +740,8 @@ class DMMDevice:
     Layout and provenance are in ``protocol_constants.DMM``: every field is
     named by nacatech's analyzer, which reads round 1 from the lowest pair of
     Shot Sizes. Packet 4's three bits above the hits are the one thing it does
-    not name, and they go out clear.
+    not name, and they go out clear (likely Pendulum Progress data, the
+    owner's reading: protocol_constants.DMM).
     """
 
     def __init__(self, digimon: Digimon):

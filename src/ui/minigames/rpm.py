@@ -34,9 +34,11 @@ BACKGROUND_PATH = "assets/RPM.png"
 #: because this is the screen that number always belonged to.
 LABEL_LEFT = 107
 LABEL_CENTER_Y = 53
-#: DigimonBasic's digits are 711/1024 of the em, so 40 draws them 28 tall --
-#: taller than the RPM text, as the design has them.
-LABEL_FONT_SIZE = 40
+#: DigimonBasic is a 12-pixel font whose digits are 8 pixels tall, so 36
+#: (three times its pixel grid) draws them 24 tall with even strokes --
+#: taller than the RPM text, as the design has them. 48 would run three
+#: digits into the marks beside them.
+LABEL_FONT_SIZE = 36
 #: What every reading's vertical extent is measured against, so the number
 #: does not bob a pixel as its digits change.
 LABEL_REFERENCE = "0123456789"

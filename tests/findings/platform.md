@@ -32,7 +32,7 @@ Bugs and gaps found by `tests/platform/` (Linux/WSL suite and case check, Raspbe
 - **Effect**: noise and an empty folder only, since the game now takes its settings from `GameConfiguration` defaults plus the save (`models/game_configuration.py`, `game_globals.load`). The texts that still tell players to edit `config.json` / `input_config.json` are stale, though: `launch.sh:4,55`, `utilities/setup.sh` (last line), `Documentation/pages/manual.html:59,1055,1088`, `Documentation/pages/installation-guide.html:234,347-349,682-695`, and `build/BUILD_REQUIREMENTS.md` ("config/ ... must be present").
 - **Fix**: remove the config copy blocks (or ship a README in `config/` saying settings are in the game's Settings menu), and update the docs. `tests/platform/pi/input_check.py` reads the mapping the way the game does and notes any leftover `config/input_config*.json` it finds on the Pi.
 
-### P-05 Linux launch: `fbcon` is not an SDL2 driver; `Omnipet_FULLSCREEN` is never read (BLD-01)
+### ~~P-05 Linux launch: `fbcon` is not an SDL2 driver; `Omnipet_FULLSCREEN` is never read (BLD-01)~~ Fixed 2026-10-14: `launch.sh` exports `kmsdrm` and `OMNIPET_FULLSCREEN`; `main.py` tries `kmsdrm` before `fbcon` (heading struck 2026-10-17)
 
 - **Where**:
   - `launch.sh:25` exports `SDL_VIDEODRIVER=fbcon` when no X11/Wayland session is found. `main.py:55,61` lists `x11, wayland, fbcon` for non-Batocera Linux. SDL2 (pygame 2) has no `fbcon` driver. With the variable set, `main.setup_pygame` calls `pygame.display.init()` outside any `try` (`main.py:86`), and the game dies with a `pygame.error`. Without a desktop session, the game therefore cannot start through `launch.sh` on a console-only Pi (Raspberry Pi OS Lite); `kmsdrm` is the SDL2 console driver.
@@ -51,16 +51,23 @@ Bugs and gaps found by `tests/platform/` (Linux/WSL suite and case check, Raspbe
 - **Where**: `src/input/input_manager.py:126`: `self.device = "PC" if platform.system() != "Linux" else "Pi"`. On desktop Linux, Batocera and WSL it tries gpiozero and logs "[Input] GPIO unavailable: gpiozero not installed or import failed" at every start. That line was seen in every WSL run and matches the release scripts' error markers. On a non-Pi with gpiozero installed, it would try to claim pins.
 - **Fix**: decide "Pi" from `/proc/device-tree/model` (contains "Raspberry Pi"), and log the missing gpiozero as information, not as a failure.
 
-### P-07 Module-guide builder points at a template that does not exist (low)
+### ~~P-07 Module-guide builder points at a template that does not exist (low)~~ Fixed 2026-10-17 (decision 20): the template is `Documentation/templates/module-guide_template.html` with markers the builder fills (the old splicing had also written a second copy of the page into it); the page is written only when it changes (`tests/unit/ui/test_module_guide.py`)
 
 - **Where**: `src/utils/document_utils.py:21`: the template path is `game/core/utils/module-guide_template.html`, and there is no `game/` folder. Every start prints "Template not found: .../game/core/utils/module-guide_template.html" (`main.py:237-238`), and `Documentation/pages/module-guide.html` is never rebuilt.
 - **Fix**: point it at the template's current location, or drop the start-up build.
 
-### P-08 `build_gamepi.ps1` needs an unversioned file; setup.sh is stale (BLD-01, low) — partly fixed 2026-10-14: `setup.sh` and `input_test` moved to `build/gamepi/` and `build/batocera/` (versioned; utilities/ is no longer tracked); setup.sh's Omnimon names, icon path and update hint are still to fix
+### ~~P-08 `build_gamepi.ps1` needs an unversioned file; setup.sh is stale (BLD-01, low)~~ Fixed: 2026-10-14 `setup.sh` and `input_test` moved to `build/gamepi/` and `build/batocera/` (versioned; utilities/ is no longer tracked); 2026-10-17 setup.sh says Omnipet (desktop entry, `omnipet.service`), the icon is `assets/icon.png`, the update hint says to copy a new release over the folder, and it installs pygame for the first Python 3.10+ it finds (as `launch.sh` picks it) or stops saying 3.10 is needed
 
 - `build/build_gamepi.ps1:33-36` stops when `utilities/setup.sh` is missing, and `utilities/` is gitignored. A clean checkout therefore cannot build the GamePi package.
 - `utilities/setup.sh` still says "Omnimon" in its messages, installs `omnimon.service` and an `Omnimon.desktop` whose icon is `resources/icon.png` (no such file), and points to `./update.sh` (no such file). It also runs `sudo apt-get upgrade -y`.
 - **Fix**: move `setup.sh` into a versioned folder (for example `build/gamepi/`), rename it to Omnipet, and fix the icon path and the update hint.
+
+### ~~P-10 Every non-square screen crashed at an overlay rebuild: pygame.draw into the RLE-encoded UI overlay (UI-05, PERF-01; release-blocking)~~ Fixed 2026-10-17: `UIManager._rebuild_master_ui_surface` turns the overlay's RLE off while it draws and back on after (`tests/game/ui/test_overlay_rle_draw.py`)
+
+- **What**: the 2026-10-17 release run's scene sweep lost its child process at all six non-square sizes (exit 0xC0000005, access violation); the square ones passed. The Status scene was the one that crashed (faulthandler: `ui_manager.py` `_rebuild_master_ui_surface`, `pygame.draw.rect` of the frame border).
+- **Why**: the PERF-01 work (2026-10-14) RLE-encodes the UI manager's overlay (`pygame_utils.rle_accelerate`). SDL encodes it at its first blit; from then on `fill()` and blits into it still work, but `pygame.draw` into it is an access violation in pygame 2.6.1 (`rle_draw_repro`: draw after a blit crashes, draw after `set_alpha(255)` does not). The rebuild draws the frame border only when the screen is larger than the 240x240 UI, so square screens never reached it, and the last full scene sweep (2026-10-14 00:39) ran before the RLE change. The crawl and the Pi runs use 240x240.
+- **Effect**: on any screen not square (320x240 and 640x480 handhelds, 800x480 panels, desktop windows), the game closed without an error at the first overlay rebuild after a still frame: opening Status, and any focus move or menu change in a scene whose overlay had been drawn once.
+- **Also**: `rle_accelerate`'s docstring said drawing into an encoded surface still worked; corrected. The training border and the tutorial overlay are drawn before encoding and rebuilt as new surfaces, so they were not affected.
 
 ## Module data (letter case)
 

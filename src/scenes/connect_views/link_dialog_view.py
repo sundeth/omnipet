@@ -113,6 +113,8 @@ class LinkDialogView:
                         self.change_view("pet_selection", is_online_mode=True)
                     else:
                         self.change_view(self.return_view)
+                elif getattr(self.discord, "last_error", None) == "offline":
+                    self.instruction_label.set_text("Discord is offline")
                 else:
                     self.instruction_label.set_text("Invalid or expired code")
             else:

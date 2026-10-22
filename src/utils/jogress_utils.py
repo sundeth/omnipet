@@ -111,11 +111,31 @@ def normalize_evolution(evo: dict) -> dict:
     return out
 
 
+def normalize_item_route(evo: dict) -> dict:
+    """The old use-count shape (``item_use`` + ``item_use_amount``: the
+    Twin's five Bombs for Digitamamon) as the one item route, ``item`` +
+    ``item_amount`` (owner, 2026-10-15: a single item field and an amount,
+    1 by default). Returns *evo* itself when there is nothing to migrate."""
+    if "item_use" not in evo:
+        return evo
+    out = dict(evo)
+    name = out.pop("item_use")
+    amount = out.pop("item_use_amount", None)
+    out.setdefault("item", name)
+    try:
+        if amount is not None and int(amount) > 1:
+            out.setdefault("item_amount", int(amount))
+    except (TypeError, ValueError):
+        pass
+    return out
+
+
 def normalize_evolutions(evolutions) -> list:
-    """Normalise a whole ``evolve`` list (returns a new list)."""
+    """Normalise a whole ``evolve`` list (returns a new list): the old
+    jogress shapes and the old item-use shape."""
     if not evolutions:
         return evolutions or []
-    return [normalize_evolution(e) if isinstance(e, dict) else e
+    return [normalize_item_route(normalize_evolution(e)) if isinstance(e, dict) else e
             for e in evolutions]
 
 
@@ -130,6 +150,8 @@ def matches_partner(evo: dict, owner, partner) -> bool:
     for a named route, which is how the old format behaved.
     """
     if not is_jogress(evo):
+        return False
+    if not can_pair(owner, partner):
         return False
 
     attribute = evo.get("jogress_attribute")
@@ -146,6 +168,10 @@ def matches_partner(evo: dict, owner, partner) -> bool:
     name = evo.get("jogress_name")
     if not name:
         return False
+    # A pet of another module on the same protocol (can_pair) answers a
+    # named route by name and version too: DMRV's WarGreymon (Anime) names
+    # the DM20's MetalGarurumon (Anime) v9 ("the connection data is entirely
+    # identical to the DM20", humulos).
     partner_name = getattr(partner, "name", "") or ""
     if evo.get("jogress_prefix"):
         if not partner_name.startswith(name):
@@ -153,8 +179,12 @@ def matches_partner(evo: dict, owner, partner) -> bool:
     elif partner_name != name:
         return False
 
+    # A named route without a version means the owner's; a prefix route
+    # without one takes the name in any version (D-3's "Ancient" Warriors
+    # for Susanomon, PENZ's "Jogress with Metal Garurumon"), as its migration
+    # always meant: it was held to the owner's version all the same.
     version = evo.get("jogress_version")
-    if version is None:
+    if version is None and not evo.get("jogress_prefix"):
         version = getattr(owner, "version", None)
     if version is not None and getattr(partner, "version", None) != version:
         return False
@@ -165,6 +195,28 @@ def matches_partner(evo: dict, owner, partner) -> bool:
     return True
 
 
+def owner_requirements_met(evo: dict, owner) -> bool:
+    """Whether *owner* meets the route's requirements on itself, apart from
+    the partner: its level (Pendulum Z: Level 1-5 gives one result, Level 6
+    another, with the same partner), the area it has reached (VBE's Examon)
+    or a module unlock the player holds (Pendulum Color: a partner of the
+    same attribute gives one Digimon once the version's Slot 6/7 is unlocked
+    and another before). They were ignored, so the first route for a partner
+    always won.
+    """
+    level = evo.get("level")
+    if level and not (level[0] <= (getattr(owner, "level", 0) or 0) <= level[1]):
+        return False
+    area = evo.get("area")
+    if area is not None and (getattr(owner, "area", 0) or 0) < area:
+        return False
+    if evo.get("unlock"):
+        from utils.evolution_rules import unlock_held
+        if not unlock_held(owner, evo["unlock"]):
+            return False
+    return True
+
+
 def find_route(pet, partner):
     """The first jogress route on *pet* that *partner* satisfies, or None.
 
@@ -172,13 +224,32 @@ def find_route(pet, partner):
     in order and never sorts it.
     """
     for evo in (getattr(pet, "evolve", None) or []):
-        if is_jogress(evo) and matches_partner(evo, pet, partner):
+        if (is_jogress(evo) and owner_requirements_met(evo, pet)
+                and matches_partner(evo, pet, partner)):
             return evo
     return None
 
 
 def is_dual(evo: dict) -> bool:
     return evo.get("jogress") == DUAL
+
+
+def protocol_of(module_name) -> str:
+    """The module's `battle_protocol`, upper case; "" when it sets none."""
+    from utils.module_utils import get_module
+    value = str(getattr(get_module(module_name), "battle_protocol", "") or "").strip()
+    return "" if value.lower() in ("", "none") else value.upper()
+
+
+def can_pair(pet1, pet2) -> bool:
+    """Whether these two pets may jogress at all: the same module, or two
+    modules setting the same `battle_protocol` (PENGZ and the Pendulum Color
+    connect on the PENC wire; the device's connection jogress)."""
+    module1, module2 = getattr(pet1, "module", None), getattr(pet2, "module", None)
+    if module1 == module2:
+        return True
+    protocol = protocol_of(module1)
+    return bool(protocol) and protocol == protocol_of(module2)
 
 
 def compatible(pet1, pet2) -> bool:
@@ -190,6 +261,6 @@ def compatible(pet1, pet2) -> bool:
     """
     if not pet1 or not pet2 or pet1 is pet2:
         return False
-    if getattr(pet1, "module", None) != getattr(pet2, "module", None):
+    if not can_pair(pet1, pet2):
         return False
     return find_route(pet1, pet2) is not None or find_route(pet2, pet1) is not None

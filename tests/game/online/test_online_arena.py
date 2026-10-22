@@ -79,7 +79,7 @@ class OnlineArenaTests(unittest.TestCase):
         return game, v
 
     def _create_team(self):
-        """CREATE TEAM, three pets tapped, CONFIRM; back on the hub."""
+        """CREATE TEAM, three pets tapped, CONFIRM, SURE?; back on the hub."""
         env = self.env
         game, hub = self._arena()
         tap_button(env, game, "CREATE TEAM")
@@ -94,7 +94,12 @@ class OnlineArenaTests(unittest.TestCase):
             tap_pet(env, game, v.pet_selector, i)
         self.assertEqual(v._selected_pet_indices, [0, 1, 2])
         self.assertTrue(v.confirm_button.enabled)
-        tap_button(env, game, "CONFIRM", frames=0)
+        tap_button(env, game, "CONFIRM")
+        # The first press only warns that the pets stay locked until the
+        # season ends; nothing is sent yet.
+        self.assertIn("Locks them in the freezer until", v.status_label.text)
+        self.assertEqual(self.fake.calls("/api/v1/teams", "POST"), [])
+        tap_button(env, game, "SURE?", frames=0)
         self.assertTrue(wait_for(lambda: view(game) == "arena"), "team creation never returned")
         hub = game.scene.current_view
         self.assertTrue(settle(env, game, lambda: not hub._loading))
@@ -141,8 +146,8 @@ class OnlineArenaTests(unittest.TestCase):
             self.assertAlmostEqual(pet.arena_lock["until"], until, delta=1)
             self.assertTrue(env.gg.is_pet_arena_locked(pet))
         # the hub shows the team
-        self.assertEqual([lbl.text for lbl in hub.pet_labels], [p.name[:7] if len(p.name) <= 7
-                                                                else p.name[:6] + "." for p in self.chosen])
+        from scenes.connect_views.arena_view import short_name
+        self.assertEqual([lbl.text for lbl in hub.pet_labels], [short_name(p.name) for p in self.chosen])
         self.assertEqual(hub.find_button.text, "FIND BATTLE (10 LEFT)")
         self.assertTrue(hub.history_button.enabled)
         self.assertIsNone(button(game, "CREATE TEAM"))
@@ -167,7 +172,7 @@ class OnlineArenaTests(unittest.TestCase):
         game, hub = self._create_team()
         tap_button(env, game, "FIND BATTLE (10 LEFT)", frames=0)
         self.assertTrue(wait_for(lambda: env.rg.game_state == "battle_pvp"
-                                 or hub.status_label.text not in ("", "Finding battle...")),
+                                 or hub.status_label.text not in ("", "Finding an opponent...")),
                         "find battle never answered")
         self.assertEqual(env.rg.game_state, "battle_pvp", hub.status_label.text)
         replay = env.rg.pvp_battle_data["arena_replay"]
@@ -251,11 +256,11 @@ class OnlineArenaTests(unittest.TestCase):
             self.assertIsNone(pet.arena_lock, f"{pet.name} still locked after the season ended")
         self.assertEqual(hub.find_button.text, "SEASON RESULTS")
         self.assertIn(f"{self.season['name']} has ended.", labels(game))
-        self.assertFalse(hub.history_button.enabled)
+        self.assertTrue(hub.history_button.enabled)   # its battles stay watchable
         tap_button(env, game, "SEASON RESULTS")
         self.assertEqual(view(game), "arena_reclaim")
         shown = labels(game)
-        self.assertIn(f"Rank: {mine['final_rank']}", shown)
+        self.assertTrue(any(t.startswith(f"Rank: {mine['final_rank']}") for t in shown), shown)
         self.assertIn(f"Reward: {reward} coins", shown)
         env.tap(game, (120, 120))                           # any tap dismisses
         self.assertTrue(wait_for(lambda: view(game) == "arena"), "results never closed")
@@ -281,9 +286,9 @@ class OnlineArenaTests(unittest.TestCase):
         self.fake.end_season(self.season)
         _game, hub = self._arena()
         self.assertEqual(hub.find_button.text, "SEASON RESULTS")
+        from scenes.connect_views.arena_view import short_name
         self.assertEqual([lbl.text for lbl in hub.pet_labels if lbl.text],
-                         [e["name"][:7] if len(e["name"]) <= 7 else e["name"][:6] + "."
-                          for e in mine["entries"]])
+                         [short_name(e["name"]) for e in mine["entries"]])
 
     def test_a_lock_past_its_date_frees_the_pet_without_the_server(self):
         """No pet stays locked past its season even if Omninet never answers."""

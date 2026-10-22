@@ -13,7 +13,7 @@ def _grant_card_reward(module, unlock_data):
     pack_id = unlock_data.get("card_pack")
     if pack_id:
         from utils.card_utils import announce_cards, open_pack
-        announce_cards(open_pack(module, pack_id))
+        announce_cards(open_pack(module, pack_id), module, pack_id, wait_for_main=True)
     card_id = unlock_data.get("card")
     if not card_id:
         return
@@ -185,6 +185,128 @@ def check_digidex_unlocks(module_name: str):
     for unlock in pending:
         if known >= unlock["amount"]:
             unlock_item(module_name, "digidex", unlock["name"])
+
+
+# --------------------------------------------------------------------------
+# Connection unlocks ("versus")
+# --------------------------------------------------------------------------
+
+def _versions(value):
+    """An opponent requirement as a list of device versions, or None for any."""
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return [int(v) for v in value]
+    return [int(value)]
+
+
+def versus_record_matches(unlock, own, opponent, battle_format=None, won=None):
+    """Whether one connection battle qualifies for a `versus` unlock record.
+
+    *own* and *opponent* are {"device_version": ..., "version": ...} of the two
+    sides (a physical toy has no gameplay version). The record's fields:
+
+      device_version            the pet's own device (hardware) version
+      opponent_device_version   the other side's, or ANY_OTHER_DEVICE (any
+                                device but this one)
+      opponent_device_versions  the other side's, any of a list (PENGZ:
+                                Pendulum Color 0-7 and the Godzilla, 8)
+      version                   without either device field: the pet's
+                                gameplay version
+      protocol                  the battle format the connection is fought on
+                                ("PENC", "DMC" ...); absent: any
+      outcome                   "win": won battles only; absent or "any": any
+      own_names / opponent_names  the two sides' species, any of each list
+                                (PEN20: Jesmon must beat an Alphamon); absent,
+                                any. A side without a name never matches one.
+    """
+    from battle.combat_constants import ANY_OTHER_DEVICE
+    dev = own.get("device_version")
+    opp = opponent.get("device_version")
+    dev_req = unlock.get("device_version")
+    opp_req = unlock.get("opponent_device_versions") or unlock.get("opponent_device_version")
+    if dev_req is not None or opp_req is not None:
+        if dev_req is not None and dev != dev_req:
+            return False
+        if opp_req is not None:
+            wanted = _versions(opp_req)
+            if wanted == [ANY_OTHER_DEVICE]:
+                if opp is None or opp == dev:
+                    return False
+            elif opp not in wanted:
+                return False
+    elif unlock.get("version") is not None and own.get("version") != unlock.get("version"):
+        return False
+    protocol = unlock.get("protocol")
+    if protocol and str(protocol).upper() != str(battle_format or "").upper():
+        return False
+    if (unlock.get("outcome") or "any") == "win" and not won:
+        return False
+    for field, side in (("own_names", own), ("opponent_names", opponent)):
+        names = unlock.get(field)
+        if names and side.get("name") not in names:
+            return False
+    return True
+
+
+def _versus_key(unlock):
+    """The save key of one versus record's progress: its name and requirements
+    (one name can repeat as alternative records, each counted on its own)."""
+    return "|".join(str(unlock.get(k)) for k in (
+        "name", "device_version", "opponent_device_version", "opponent_device_versions",
+        "version", "protocol", "outcome"))
+
+
+def record_connection_battle(module_name, sides, battle_format=None, protocol_records_only=False):
+    """Count one connection battle (Versus or DCom) for *module_name*'s
+    `versus` unlocks and grant each record it completes. Returns their names.
+
+    *sides* lists the readings the battle may be taken in, as
+    ``(own, opponent, won)``: a local versus between two of the module's own
+    pets passes when either pet meets the record, and still counts once.
+
+    A record with ``amount`` above 1 needs that many qualifying battles, kept
+    in ``game_globals.versus_progress``; with ``distinct`` it needs that many
+    different opponent device versions other than the pet's own instead
+    (DMC's File Island: "all 4 other versions"). Without them a single
+    qualifying battle grants it, as before. *protocol_records_only* limits it
+    to records naming a ``protocol`` (a pet of another module as opponent).
+    """
+    module_obj = runtime_globals.game_modules.get(module_name)
+    unlocks = [u for u in (getattr(module_obj, "unlocks", []) or [])
+               if isinstance(u, dict) and u.get("type") == "versus" and u.get("name")
+               and (u.get("protocol") or not protocol_records_only)]
+    granted = []
+    for unlock in unlocks:
+        name = unlock["name"]
+        if is_unlocked(module_name, "versus", name):
+            continue
+        match = next(((own, opponent) for own, opponent, won in sides
+                      if versus_record_matches(unlock, own, opponent, battle_format, won)), None)
+        if match is None:
+            continue
+        try:
+            amount = int(unlock.get("amount") or 1)
+        except (TypeError, ValueError):
+            amount = 1
+        distinct = bool(unlock.get("distinct"))
+        if amount <= 1 and not distinct:
+            unlock_item(module_name, "versus", name)
+            granted.append(name)
+            continue
+        store = game_globals.versus_progress.setdefault(module_name, {})
+        progress = store.setdefault(_versus_key(unlock), {"battles": 0, "opponents": []})
+        progress["battles"] = int(progress.get("battles", 0)) + 1
+        own, opponent = match
+        opp = opponent.get("device_version")
+        if opp is not None and opp != own.get("device_version") and opp not in progress.setdefault("opponents", []):
+            progress["opponents"].append(opp)
+        count = len(progress["opponents"]) if distinct else progress["battles"]
+        runtime_globals.game_console.log(f"[Versus] {module_name} {name}: {count}/{amount}")
+        if count >= amount:
+            unlock_item(module_name, "versus", name)
+            granted.append(name)
+    return granted
 
 
 def is_unlocked(module: str, unlock_type: str, name: str) -> bool:

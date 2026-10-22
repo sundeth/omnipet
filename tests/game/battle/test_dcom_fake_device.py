@@ -25,8 +25,9 @@ result and the game returns to the main scene. Each run must:
   wire's HP), with no exception and no error logged;
 * end on the verdict the device reads from the same packets (the device's
   own PacketExchange result is the mirror of ours);
-* count the connection battle (pvp_battles, pvp_wins on a win) and charge
-  the pet's module battle cost once.
+* count the connection battle (pvp_battles, pvp_wins on a win) and, as any
+  battle (owner, 2026-10-21), the battle record (battles, win, totalBattles,
+  totalWin), and charge the pet's module battle cost once.
 
 Every format is fought by a native pet (OEM) and by a VB pet (a module with
 no protocol: compatibility). Known defects are expectedFailure
@@ -130,6 +131,7 @@ class DComFakeDevice(unittest.TestCase):
         try:
             game, pet, device = self.open_dcom(battle_format, player_module, device_module)
             before = (pet.pvp_battles, pet.pvp_wins, pet.dp, pet.hunger)
+            record = (pet.battles, pet.win, pet.totalBattles, pet.totalWin)
             phases = self.charge_and_connect(game, battle_format)
             minigame = protocol_constants.get_constants(battle_format).MINIGAME
             if minigame != "None":
@@ -174,6 +176,9 @@ class DComFakeDevice(unittest.TestCase):
             battles, wins, dp, hunger = before
             won = encounter.victory_status == "Victory"
             self.assertEqual((pet.pvp_battles, pet.pvp_wins), (battles + 1, wins + (1 if won else 0)))
+            self.assertEqual((pet.battles, pet.win, pet.totalBattles, pet.totalWin),
+                             (record[0] + 1, record[1] + won, record[2] + 1, record[3] + won),
+                             "a connection battle counts toward the battle record")
             module = get_module(pet.module)
             cost_type = getattr(module, "battle_cost_type", "DP")
             cost = getattr(module, "battle_cost_amount", 1.0)

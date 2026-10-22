@@ -152,17 +152,20 @@ class DMOG:
     #: their limit is too; a module declaring no protocol keeps the old
     #: HP-derived rule.
     DAMAGE_LIMIT = 2
-    #: Ver.1 to Ver.5. The module carries a sixth, but that was an
-    #: Australia-only release and is not known to battle at all, so there is
-    #: no wire version that is honestly its own.
-    VERSION_RANGE = (1, 5)
+    #: Ver.1 to Ver.5 on the wire's own numbers, **0 to 4**: packet 2's
+    #: version is 0-indexed, Ver.1 sends 0 (a player's report, N3evin,
+    #: 2026-10-21, on a WonderSwan Ver.; wificom's punchbags carry 0 too:
+    #: "DMOG you win" is V1-FC03-FD02; the DM20 carries the same payload,
+    #: already 0-based). `devices.json` carries the same numbers, as the
+    #: DMC's does, and the roster lookup takes the wire plus one. The module
+    #: carries a sixth, an Australia-only release not known to battle at
+    #: all, so no wire version is honestly its own.
+    VERSION_RANGE = (0, 4)
+    WIRE_VERSION_OFFSET = -1
     #: A version outside that range is clamped to the nearest end rather than
-    #: sent as 0. Every other wire spells "a version this device does not
-    #: have" as 0 -- but 0 is also what a device reads as *special*, and it
-    #: is the value most likely to open content the pet has not earned. A
-    #: Ver.6 pet announcing 5 at least says "the last release", which is
-    #: adjacent to the truth; announcing 1 would claim it is the first.
-    #: Only this line clamps; nothing else changes behaviour.
+    #: sent as nothing. A Ver.6 pet announcing 4 at least says "the last
+    #: release", which is adjacent to the truth; announcing 0 would claim it
+    #: is the first. Only this line clamps; nothing else changes behaviour.
     CLAMP_VERSION_TO_RANGE = True
     DCOM_WIRE = "DMOG"    # its own 2-packet layout
     #: Packet 2 is VersionMirror(4) OutcomeMirror(4) Version(4) Outcome(4),
@@ -197,10 +200,9 @@ class DMOG:
     #: What an outsider announces. An OEM pet -- one raised on the module
     #: that reproduces this device -- sends its own ``device_version``
     #: instead, so a Ver.3 Digital Monster tells the toy it is a Ver.3.
-    #: A compatibility pet has no version on this line's chart and sends 1,
-    #: the first release, rather than the 0 that means "special" and could
-    #: open content the pet has not earned.
-    COMPATIBILITY_VERSION = 1
+    #: A compatibility pet has no version on this line's chart and sends 0,
+    #: the first release (Ver.1 on the 0-indexed wire).
+    COMPATIBILITY_VERSION = 0
     #: We listen rather than open. Whoever sends their outcome packet first
     #: decides it, and opening means declaring a result we have not earned --
     #: which we did, always as a defeat, so every battle we started was a
@@ -584,7 +586,9 @@ class DMM:
     record decodes to a row of the Count Bar table (data/attack_patterns/
     DMM.json), so each side sends its own pattern, which is how a Mini and a
     device with a different table can fight. Hit is the sender's own, and the
-    reply's is its inverse, as on the DMX.
+    reply's is its inverse, as on the DMX. Packet 4's three unnamed bits are 0
+    on every Mini side on record; the owner's reading (2026-10-19) is that
+    they are likely Pendulum Progress data, which no capture has tested.
 
     Projectile is the attack sprite, and **every Mini side on record sends 1**
     -- the Mini's guide says it draws one projectile for its whole roster --
@@ -863,14 +867,25 @@ class IC:
         flags = ((packets[0][0] >> 6) & 0b11) if packets else 0
         target = (IC.CHECKSUM_REMAINDER + flags * 4) % 16
         return "@%X^1^F%X" % (target, IC.EOL)
-    #: **Wire 0 is module version 1.** The module numbers its three devices
-    #: 1, 2, 3 (10X, 20X, Burst) and the wire numbers them 0, 1, 2, so the
-    #: wire is the module minus one -- the offset `IC_RESEARCH_AND_TODO.md`
-    #: predicted a format here would need.
+    #: **Wire 0 is module version 1.** The wire numbers the three devices 0,
+    #: 1, 2 (10X, 20X, Burst) -- every iC packet on record: 10X Digimon send 0
+    #: (C087, C0A7, C0F7, C117, C147), 20X Digimon 1 (D087, D0A7, D127, D147)
+    #: -- and the module's gameplay versions are 1, 2, 3, so the roster
+    #: lookup takes the wire plus one.
     WIRE_VERSION_OFFSET = -1
-    VERSION_RANGE = (1, 3)
-    DEFAULT_VERSION = 1
+    #: **`devices.json` carries the wire's own numbers** (0/1/2), as the DMC's
+    #: does (owner, 2026-10-17: follow the device rules). It said 1/2/3 and
+    #: nothing shifted it on the way out, so an Omnipet 10X announced itself
+    #: as a 20X. A save made before is migrated on load (`GamePet`).
+    VERSION_RANGE = (0, 2)
+    DEFAULT_VERSION = 0
     COMPATIBILITY_VERSION = 0
+    #: **The DigiWindow announces version 1, as a 20X does**, and only its
+    #: index tells it apart: 0x57, which no iC roster has ("Battle DigiWindow"
+    #: and "Scan DigiWindow", IC2-1577-...). The module calls it device 4
+    #: (its DigiShop events and unlock), so the parser reports it as that.
+    DIGIWINDOW_INDEX = 0x57
+    DIGIWINDOW_DEVICE = 4
     #: **Sixteen, read off the device.** The Mini's 6 is not this bar: it is
     #: the compatibility mode's, printed as one of the rules that CHANGE for
     #: those battles, and `IC_RESEARCH_AND_TODO.md` recorded the module's
@@ -1026,7 +1041,7 @@ class IC:
     WEAPON_HIGH_BIT = 0x2
     #: Whose weapon each number is. 1-8 are the Attack +1 weapons and 12-19
     #: the Attack +2 ones, one per family; 9-11 (Digi Cannon, Metal Armor,
-    #: Silver Rope) are any Digimon's. The family is the module's `digisoul`.
+    #: Silver Robe) are any Digimon's. The family is the module's `digisoul`.
     ANY_FAMILY_WEAPONS = (9, 10, 11)
     WEAPON_FAMILIES = {1: "Dragon", 2: "Beast", 3: "Water", 4: "Bird",
                        5: "Machine", 6: "Insect", 7: "Holy", 8: "Dark",
@@ -1308,10 +1323,12 @@ class DM20:
     MAX_STRENGTH_DAMAGE_BONUS = 1
     #: Damage rises in pairs and the sprite alternates within each: 1 and 2
     #: are one sprite, 3 and 4 are two, and the odd value of each pair draws
-    #: `atk_alt` where the even one draws `atk_main`. **This line reverses
-    #: the usual pairing** -- its weak attacks are the alternate sprite --
-    #: and a pet with no `atk_alt` separates the four by count instead.
+    #: the weak sprite where the even one draws the strong. **The DM20
+    #: module reverses the usual pairing** -- its weak attacks are the
+    #: alternate sprite (WEAK_SHOT_FIELD) -- and a pet with no `atk_alt`
+    #: separates the four by count instead.
     ATTACK_ANIMATION = "paired"
+    WEAK_SHOT_FIELD = "atk_alt"
     CHECKSUM_REMAINDER = 0
     #: What an attribute advantage is worth, and where it is spent. From the
     #: DM20 module's battle_attribute_advantage (5) and
@@ -1408,6 +1425,11 @@ class PEN20:
     #: measured table. See DM20.DAMAGE_LIMIT.
     DAMAGE_LIMIT = 4
     ATTACK_ANIMATION = "paired"
+    #: Unlike DM20's module, PEN20's keeps the weak shot in `atk_main` and the
+    #: strong one in `atk_alt`, as the DMX does. The module's sprites were
+    #: re-read from Digimon Researcher's video of every Ver.20th Digimon
+    #: training (2026-10-15, utilities/PEN20/video), and put this way round.
+    WEAK_SHOT_FIELD = "atk_main"
     MAX_STRENGTH_DAMAGE_BONUS = 1
     CHECKSUM_REMAINDER = 12  # doc, and its worked example, both say 12
     #: The Pendulum 20th speaks its own signal, not DM20's -- the layout
@@ -2242,6 +2264,24 @@ def get_constants(protocol_name: str):
     }.get(canonical_format(protocol_name))
 
 
+def weak_shot_field(module_protocol: str = None, battle_format: str = None) -> str:
+    """Which sprite field holds a Digimon's weak shot: `atk_main` or `atk_alt`.
+
+    It is a property of the data, so the module the values came from decides
+    where its line declares it (WEAK_SHOT_FIELD: DM20's module keeps the weak
+    shot in `atk_alt`, PEN20's in `atk_main`), and a PEN20 Digimon draws the
+    same way on any wire. Otherwise the wire's declaration stands, and with
+    neither, `atk_alt` -- what every line read as weak here before the
+    field existed (shot1, the strong shot, from `atk_main`).
+    """
+    for name in (module_protocol, battle_format):
+        limits = get_constants(name) if name else None
+        field = getattr(limits, "WEAK_SHOT_FIELD", None)
+        if field:
+            return field
+    return "atk_alt"
+
+
 def native_modules(battle_format: str) -> tuple:
     """The modules a format names as its own, beyond what they declare.
 
@@ -2266,6 +2306,23 @@ def wire_modules(battle_format: str) -> tuple:
     mapping = getattr(limits, "MODULES_BY_WIRE_VERSION", None) if limits else None
     return tuple(dict.fromkeys(
         name for names in (mapping or {}).values() for name in names))
+
+
+def participant_wire_version(battle_format: str, module_name: str):
+    """The version a pet of *module_name* announces on this wire, when the
+    wire names its module under exactly one version in
+    `MODULES_BY_WIRE_VERSION`, else None (the pet's own device_version is
+    clamped as usual).
+
+    A device speaking a line it does not own announces the line's number for
+    it, not its own: both Digivice iCs, a 10X and a 20X, send version 1 in
+    their Mini/Accel mode (documented battles 36-37), whatever their own
+    device is on the iC's wire (0/1/2).
+    """
+    limits = get_constants(battle_format or "")
+    mapping = getattr(limits, "MODULES_BY_WIRE_VERSION", None) if limits else None
+    found = [version for version, names in (mapping or {}).items() if module_name in names]
+    return found[0] if len(found) == 1 else None
 
 
 def damage_limit(protocol_name: str):

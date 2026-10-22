@@ -24,8 +24,8 @@ from ui.components.label_value import LabelValue
 
 from ui import ui_constants
 from core import game_globals, runtime_globals
-from models.animation import PetFrame
-from utils import gcell_rules
+from models.animation import PetFrame, frame_or_fallback
+from utils import ailments, gcell_rules
 from utils.sprite_utils import get_right_sprite
 from utils import pengz_count_match
 from battle.game_battle import GameBattle
@@ -66,6 +66,23 @@ READY_PHASE_MINIGAMES = {
     )
     if getattr(minigame_class, "HAS_READY_PHASE", False)
 }
+
+
+def _weak_shot_field(encounter, entity):
+    """Which of *entity*'s sprite fields is its weak shot, `atk_main` or `atk_alt`.
+
+    The module the entity's values came from decides where its line says
+    (`protocol_constants.weak_shot_field`), else the battle's wire. A module
+    function rather than a method so a bare stand-in encounter can ask it.
+    """
+    modules = getattr(runtime_globals, "game_modules", None) or {}
+    name = (getattr(entity, "module", None)
+            or getattr(getattr(encounter, "module", None), "name", None))
+    module = modules.get(name) if name else None
+    wire = (getattr(encounter, "battle_format", None)
+            or getattr(encounter, "presentation_format", None)
+            or getattr(getattr(encounter, "module", None), "battle_protocol", None))
+    return protocol_constants.weak_shot_field(getattr(module, "battle_protocol", None), wire)
 
 #=====================================================================
 # BattleEncounter Class
@@ -728,6 +745,22 @@ class BattleEncounter:
             stage=int(record.get("stage", 0) or 0), hp=int(record.get("hp", 0) or 0),
             unlock=None, prize=None, special_encounter=True)
 
+    def _battle_vital_values(self, won):
+        """Vital Values for an Adventure battle, by the same stage table a
+        card battle pays (utils.card_battle); a card battle pays its own in
+        _finish_card_battle. Only modules with the meter are paid."""
+        if getattr(self, "card_battle", None):
+            return
+        from utils import card_battle
+        enemy = next((e for e in (self.battle_player.team2 or []) if e), None)
+        if enemy is None:
+            return
+        real = {id(form): pet for pet, form in (getattr(self, "xros_forms", None) or {}).items()}
+        for pet in self.battle_player.team1 or []:
+            pet = real.get(id(pet), pet)
+            if hasattr(pet, "tracks_vital_values"):
+                card_battle.battle_vital_values(pet, getattr(enemy, "stage", 0), won)
+
     def _finish_card_battle(self):
         """Vital Values and the item a card battle pays (utils.card_battle)."""
         from utils import card_battle
@@ -1034,8 +1067,10 @@ class BattleEncounter:
 
         Damage rises in pairs and the sprite alternates within each -- 1 and 2
         are one sprite, 3 and 4 are two, and the odd value of each pair draws
-        `atk_alt` where the even one draws `atk_main`. **This line reverses
-        the usual pairing**: its weak attacks are the alternate sprite.
+        the weak sprite where the even one draws the strong. Which field is
+        the weak one is the data's (`_weak_shot_field`): **the DM20 module
+        reverses the usual pairing**, its weak attacks the alternate sprite,
+        while PEN20's keeps them in `atk_main`.
 
         A pet with no `atk_alt` cannot make that distinction, so it separates
         the four by count instead -- one, two and three sprites, then a single
@@ -1047,7 +1082,9 @@ class BattleEncounter:
 
         if not alt:
             return main, (damage if damage < 4 else 1), damage == 4
-        return (str(alt) if damage % 2 else main), (1 if damage <= 2 else 2), False
+        weak, strong = ((main, str(alt)) if _weak_shot_field(self, entity) == "atk_main"
+                        else (str(alt), main))
+        return (weak if damage % 2 else strong), (1 if damage <= 2 else 2), False
 
     def _count_bar_shot(self, entity, anim_hits):
         """The Mini / iC shot for a damage value: ``(atk_id, count, double)``.
@@ -1296,7 +1333,7 @@ class BattleEncounter:
             self.update_clear()
         elif self.phase == "result":
             self.update_result()
-        elif self.phase == "feeding":
+        elif self.phase in ("feeding", "battle_items"):
             self.update_feeding()
         elif self.phase == "retire_check":
             self.update_retire_check()
@@ -1838,6 +1875,32 @@ class BattleEncounter:
             return side == "team1"
         return False
 
+    def _expire_battle_effects(self, defeat=False):
+        """Count down this module's battle effects (`status_boost` items):
+        after the area's boss, or after every battle without sequential
+        rounds; where battle items are used every round (`battle_item_use`
+        "round", the iC's weapons), after every round, a lost one too. A
+        defeat elsewhere leaves them for the next attempt."""
+        from utils import battle_items
+        round_items = battle_items.item_use_timing(self.module) == battle_items.BATTLE_ITEM_USE_ROUND
+        if defeat and not round_items:
+            return
+        if not (self.boss or not self.module.battle_sequential_rounds or round_items):
+            return
+        to_remove = []
+        for status, effect in game_globals.battle_effects.items():
+            # Only decrement boosts for this module
+            if "module" in effect and effect["module"] != self.module.name:
+                continue
+            if "boost_time" in effect:
+                effect["boost_time"] -= 1
+                if effect["boost_time"] <= 0:
+                    to_remove.append(status)
+        if to_remove:
+            runtime_globals.game_console.log(f"[BattleEncounter] Removing expired boosts: {', '.join(to_remove)}")
+        for status in to_remove:
+            del game_globals.battle_effects[status]
+
     def process_battle_results(self):
         """
         Processes the results of a global protocol battle using the new log structure.
@@ -1860,6 +1923,8 @@ class BattleEncounter:
             # Call finish_battle here to update DP, battle number, and win rate for a loss.
             for i, pet in enumerate(self.battle_player.team1):
                 pet.finish_battle(self.victory_status == "Victory", self.battle_player.team2[0], self.area, (self.boss or not self.module.battle_sequential_rounds), is_special_encounter=self.is_special_encounter, enemy_module=self.module.name)
+            self._battle_vital_values(False)
+            self._expire_battle_effects(defeat=True)
             return
 
         # If victory, calculate XP for winners and bonus
@@ -1886,6 +1951,7 @@ class BattleEncounter:
                 self.battle_player.level_up[i] = False
 
             pet.finish_battle(self.victory_status == "Victory", self.battle_player.team2[0], self.area, (self.boss or not self.module.battle_sequential_rounds), is_special_encounter=self.is_special_encounter, enemy_module=self.module.name)
+        self._battle_vital_values(True)
 
         # --- Prize logic for Victory ---
         # One prize is drawn at random from those the round's enemies carry
@@ -1911,7 +1977,7 @@ class BattleEncounter:
                     cards = open_pack(self.module.name, prize_name)
                     if cards:
                         self.prize_pack = find_pack(self.module.name, prize_name)
-                        announce_cards(cards)
+                        announce_cards(cards, self.module.name, prize_name, wait_for_main=True)
                 elif hasattr(self.module, "items") and self.module.items:
                     matching_items = [item for item in self.module.items if item.name == prize_name]
                     if matching_items:
@@ -1936,21 +2002,7 @@ class BattleEncounter:
                 runtime_globals.game_console.log(
                     f"[BattleEncounter] Paid {paid} {currency} for the win")
 
-        # --- Remove expired boosts if boss or not sequential rounds ---
-        if self.boss or not self.module.battle_sequential_rounds:
-            to_remove = []
-            for status, effect in game_globals.battle_effects.items():
-                # Only decrement boosts for this module
-                if "module" in effect and effect["module"] != self.module.name:
-                    continue
-                if "boost_time" in effect:
-                    effect["boost_time"] -= 1
-                    if effect["boost_time"] <= 0:
-                        to_remove.append(status)
-            if to_remove:
-                runtime_globals.game_console.log(f"[BattleEncounter] Removing expired boosts: {', '.join(to_remove)}")
-            for status in to_remove:
-                del game_globals.battle_effects[status]
+        self._expire_battle_effects()
 
     #: How long the battle screen holds after the killing blow. The result
     #: used to replace it in the same frame the last projectile landed, so
@@ -2409,7 +2461,11 @@ class BattleEncounter:
         # another pet after its own opponent fell -- the slot is what ends
         # the attacker's turn, and a target's slot can hold another enemy's
         # shot in the same round.
-        own_lane = len(self.battle_player.team2) > 1
+        # A replayed PvP battle (arena, WiFi) has no bosses: a lone opponent
+        # fired one shot a round from its own lane, like any other (an arena
+        # team of one against three).
+        own_lane = len(self.battle_player.team2) > 1 or (
+            self.pvp_mode and not self.boss and not getattr(self, "is_dcom_mode", False))
         if own_lane:
             self.battle_player.team2_projectiles[enemy_index] = []
 
@@ -2698,8 +2754,6 @@ class BattleEncounter:
             connection_results = []
             for i, pet in enumerate(self.battle_player.team1):
                 try:
-                    pet.pvp_battles += 1
-                    pet._deduct_battle_cost()
                     # Determine if this pet won its pairing
                     if hasattr(self.battle_player, 'winners') and i < len(self.battle_player.winners):
                         winner = self.battle_player.winners[i]
@@ -2709,10 +2763,12 @@ class BattleEncounter:
                         # are not available
                         local_won = (self.victory_status == 'Victory')
 
-                    if local_won:
-                        pet.pvp_wins += 1
-                        # A connection win is a battle win (the iC's +1 Reliability).
-                        pet._apply_reliability_event('reliability_battle_win')
+                    # A battle like any other: the battle and win counts, the
+                    # cost, Reliability, defeat tags, G-Cells and injury
+                    # (GamePet.finish_versus), plus the connection's PvP counts.
+                    team2 = getattr(self.battle_player, 'team2', None) or []
+                    pet.finish_versus(local_won, opponent=team2[i] if i < len(team2) else None,
+                                      connection=True)
                     connection_results.append((pet, local_won))
 
                     # Persist these counters to global save state via runtime globals
@@ -2724,8 +2780,9 @@ class BattleEncounter:
             # Connect Points and the modules' "connection" events.
             try:
                 from utils.event_utils import after_connection
-                after_connection(connection_results, (getattr(runtime_globals, "pvp_battle_data", None)
-                                                      or {}).get("opponent_device_version"))
+                pvp_data = getattr(runtime_globals, "pvp_battle_data", None) or {}
+                after_connection(connection_results, pvp_data.get("opponent_device_version"),
+                                 battle_format=pvp_data.get("battle_format"))
             except Exception as exc:
                 runtime_globals.game_console.log(f"[Events] connection trigger failed: {exc}")
 
@@ -2800,6 +2857,7 @@ class BattleEncounter:
             runtime_globals.game_console.log(f"[Events] adventure trigger failed: {exc}")
 
         area_advanced = False
+        cleared_area = self.area
         pets = get_battle_continue_targets()
         if self.victory_status == "Victory":
             if not self.boss:
@@ -2811,10 +2869,13 @@ class BattleEncounter:
                 next_versions = self.module.get_enemy_versions(self.area, self.round, special_encounter=self.is_special_encounter)
                 if not next_versions:
                     # Area cleared — advance to next area
+                    cleared_area = self.area
                     self.area += 1
                     self.round = 1
                     area_advanced = True
-                    if self.module.area_exists(self.area):
+                    target = self._next_open_area(self.area)
+                    if target is not None:
+                        self.area = target
                         game_globals.battle_round[self.module.name] = self.round
                         game_globals.battle_area[self.module.name] = max(self.area, game_globals.battle_area.get(self.module.name, 0))
                     # Fall through to total victories, unlocks, and return_to_main_scene
@@ -2839,15 +2900,27 @@ class BattleEncounter:
                 # --- Unlock adventure items of the area just won ---
                 unlocks = getattr(self.module, "unlocks", None)
                 if isinstance(unlocks, list):
+                    # An unlock with a version is that version's (VBE's
+                    # area_<n>_ver_<v>, DMX's area_36_ver_4): the versions of
+                    # the pets that won, as the encounter is built with
+                    # version 1 whatever the area. No version is every
+                    # version, and so is 0 on a module with no version-0
+                    # Digimon (D-3's backgrounds). BAT-F9: any version's
+                    # clear granted every version's unlocks.
+                    pet_versions = {getattr(p, "version", None) for p in (self.battle_player.team1 or []) if p is not None}
+                    has_version_0 = any(m.get("version") == 0 for m in (self.module.get_all_monsters() or []))
                     for unlock in unlocks:
                         unlocked = False
-                        
+                        version = unlock.get("version")
+                        if version is not None and (version != 0 or has_version_0) and version not in pet_versions:
+                            continue
+
                         # Check for area-based unlocks
                         if unlock.get("type") == "adventure" and unlock.get("area") == self.area:
                             unlocked = True
-                        
+
                         # Check for boss-specific unlock keys
-                        elif unlock.get("type") == "adventure" and "name" in unlock:
+                        if not unlocked and unlock.get("type") == "adventure" and "name" in unlock:
                             unlock_name = unlock["name"]
                             # Check if any defeated enemy has this unlock key
                             for enemy in self.battle_player.team2:
@@ -2860,15 +2933,16 @@ class BattleEncounter:
                             unlock_item(self.module.name, "adventure", unlock["name"])
                             runtime_globals.game_console.log(f"[Adventure] Unlocked: {unlock['name']}")
 
+                cleared_area = self.area
                 self.area += 1
                 self.round = 1
                 area_advanced = True
 
-                # An area the module keeps locked is not progress the player
-                # can act on yet, so don't move them into it.
-                if (self.module.area_exists(self.area)
-                        and self.module.is_area_unlocked(
-                            self.area, getattr(self, "version", None))):
+                # A locked area is skipped, or not moved into when it is the
+                # last (_next_open_area).
+                target = self._next_open_area(self.area)
+                if target is not None:
+                    self.area = target
                     game_globals.battle_round[self.module.name] = self.round
                     game_globals.battle_area[self.module.name] = max(self.area, game_globals.battle_area[self.module.name])
             
@@ -2904,9 +2978,8 @@ class BattleEncounter:
             # battle to a pet that cleared the area (utils.event_utils).
             try:
                 from utils.event_utils import after_battle
-                # Both clears above moved self.area on by one: the area won.
                 after_battle("area_clear", self.module.name, self.battle_player.team1, True,
-                             area=self.area - 1)
+                             area=cleared_area)
             except Exception as exc:
                 runtime_globals.game_console.log(f"[Events] area_clear trigger failed: {exc}")
             # Adventure coin rewards (Progress Mode only; no-op otherwise).
@@ -2918,7 +2991,7 @@ class BattleEncounter:
                                                 reward_adventure_complete)
                 # 1 coin the first time an area is cleared by beating its boss.
                 if self.boss:
-                    reward_area_clear(self.module.name, self.area - 1)
+                    reward_area_clear(self.module.name, cleared_area)
                 # 10 coins the first time the module's whole adventure is
                 # finished — i.e. the area just cleared was the last one.
                 if not self.module.area_exists(self.area):
@@ -2929,6 +3002,21 @@ class BattleEncounter:
     #========================
     # Region: Feeding Phase
     #========================
+
+    def _next_open_area(self, area):
+        """The area progress moves into after clearing the one before `area`.
+
+        A locked area with a later one after it is skipped: it is a side
+        area that opens when its unlock is earned (World's Factorial Town
+        and Beetle Land, reached by Whamon's ferry and Seadramon's lake),
+        and then shows among the areas already passed. A locked area with
+        none after it (PENGZ's Stage F and Omega) is not moved into.
+        Returns None when there is no area to move into.
+        """
+        version = getattr(self, "version", None)
+        while self.module.area_exists(area) and not self.module.is_area_unlocked(area, version):
+            area += 1
+        return area if self.module.area_exists(area) else None
 
     def _should_trigger_feeding(self):
         """Check if the feeding phase should trigger before the next round."""
@@ -2982,7 +3070,7 @@ class BattleEncounter:
         for i, pet in enumerate(self.battle_player.team1):
             anim_toggle = (self.frame_counter + i * 5) // int(15 * constants.FRAME_RATE / 30) % 2
             frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.HAPPY.value
-            sprite = self._sized_pet_sprite(pet.get_sprite(frame_id))
+            sprite = self._sized_pet_sprite(self._pet_frame(pet, frame_id))
             x = offset_x + i * spacing
             blit_with_cache(surface, sprite, (x, y))
 
@@ -3040,7 +3128,25 @@ class BattleEncounter:
                 + "; ".join(f"{p.name}: {p.battle_block_reason(entering=False)}" for p in retiring))
             self._start_retire_check_phase()
         else:
-            self.set_initial_state(round=self.round, area=self.area)
+            self._next_round()
+
+    def _next_round(self):
+        """Set up the next round; where the module uses battle items every
+        round (`battle_item_use` "round": the iC's coliseum), the list of
+        them comes first (the view shows it, `end_battle_items_and_proceed`
+        goes on)."""
+        from utils import battle_items
+        if (not self.pvp_mode
+                and battle_items.offers_items_now(self.module, False, get_battle_continue_targets())):
+            self.phase = "battle_items"
+            self.frame_counter = 0
+            runtime_globals.game_console.log("[BattleEncounter] Battle items offered before the round")
+            return
+        self.set_initial_state(round=self.round, area=self.area)
+
+    def end_battle_items_and_proceed(self):
+        """The player is done with the battle items: fight the round."""
+        self.set_initial_state(round=self.round, area=self.area)
 
     def _start_retire_check_phase(self):
         """Transition to the retire_check phase — menu is managed by the view."""
@@ -3056,7 +3162,7 @@ class BattleEncounter:
     def do_continue_battle(self):
         """Player chose to continue — proceed with remaining capable pets (called by view)."""
         runtime_globals.game_console.log("[BattleEncounter] Player chose to continue")
-        self.set_initial_state(round=self.round, area=self.area)
+        self._next_round()
 
     def _start_retire_animation(self):
         """Play the retire animation before returning to main scene."""
@@ -3094,7 +3200,7 @@ class BattleEncounter:
             else:
                 frame_id = PetFrame.LOSE.value
 
-            sprite = self._sized_pet_sprite(pet.get_sprite(frame_id))
+            sprite = self._sized_pet_sprite(self._pet_frame(pet, frame_id))
 
             if not can_fight:
                 sprite = sprite.copy()
@@ -3131,7 +3237,7 @@ class BattleEncounter:
         Main draw loop for the battle encounter, calls phase-specific draws.
         """
         # Hide HPBar during charge phase for cleaner minigame presentation
-        if self.phase not in ["charge", "result", "feeding", "retire_check",
+        if self.phase not in ["charge", "result", "feeding", "battle_items", "retire_check",
                               "retire_animation", "xros_select", "xros_anim"]:
             self.draw_health_bars(surface)
         #surface.blit(self.backgroundIm, (0, 0))
@@ -3157,7 +3263,7 @@ class BattleEncounter:
             self.draw_clear(surface)
         elif self.phase == "result":
             self.draw_result(surface)
-        elif self.phase == "feeding":
+        elif self.phase in ("feeding", "battle_items"):
             self.draw_feeding(surface)
         elif self.phase == "retire_check":
             self.draw_retire_check(surface)
@@ -3556,7 +3662,7 @@ class BattleEncounter:
                 for pet in pets:
                     self.result_pet_sprites_cache[pet] = {}
                     for frame_id in [PetFrame.IDLE1.value, PetFrame.HAPPY.value, PetFrame.LOSE.value]:
-                        original_sprite = pet.get_sprite(frame_id)
+                        original_sprite = self._pet_frame(pet, frame_id)
                         scaled_sprite = pygame.transform.scale(original_sprite, (sprite_width, sprite_height))
                         self.result_pet_sprites_cache[pet][frame_id] = scaled_sprite
 
@@ -3679,7 +3785,7 @@ class BattleEncounter:
                     sprite = self.result_pet_sprites_cache[pet][frame_id]
                 else:
                     # Fallback if cache miss (shouldn't happen)
-                    sprite = pet.get_sprite(frame_id)
+                    sprite = self._pet_frame(pet, frame_id)
                     sprite = pygame.transform.scale(sprite, (self.result_sprite_width, self.result_sprite_height))
 
                 blit_with_cache(surface, sprite, (pet_x, self.result_pets_y))
@@ -3771,6 +3877,12 @@ class BattleEncounter:
 
         return frame.value, dx, dy, slide_x
 
+    @staticmethod
+    def _pet_frame(pet, frame_id):
+        """The pet's frame, or a related one when its set lacks it: a Mode
+        Change or DigiXros form has only the frames its device draws."""
+        return frame_or_fallback(pet.get_sprite, frame_id)
+
     def _sized_pet_sprite(self, sprite):
         """Return the sprite at PET size.
 
@@ -3795,7 +3907,7 @@ class BattleEncounter:
         if cached is not None:
             return cached
         # The set's own right-facing frame when it has one (<n>R.png).
-        flipped = get_right_sprite(enemy, frame_id)
+        flipped = frame_or_fallback(lambda index: get_right_sprite(enemy, index), frame_id)
         if flipped is None:
             return None
         self._enemy_flip_cache[key] = flipped
@@ -3922,7 +4034,7 @@ class BattleEncounter:
                     frame_id = PetFrame.LOSE.value
                 else:
                     frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.HAPPY.value
-                sprite = self._sized_pet_sprite(pet.get_sprite(frame_id))
+                sprite = self._sized_pet_sprite(self._pet_frame(pet, frame_id))
                 x = offset_x + i * spacing
                 blit_with_cache(surface, sprite, (x, y))
         else:
@@ -3971,7 +4083,7 @@ class BattleEncounter:
                 else:
                     frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.IDLE2.value
 
-                sprite = self._sized_pet_sprite(pet.get_sprite(frame_id))
+                sprite = self._sized_pet_sprite(self._pet_frame(pet, frame_id))
                 blit_with_cache(surface, sprite, (x, y))
 
     def draw_projectiles(self, surface):
@@ -4183,7 +4295,7 @@ class BattleEncounter:
                 self.phase = "result"
                 self.frame_counter = 0
         elif event_type == "B":
-            if self.phase in ("feeding", "retire_check", "retire_animation"):
+            if self.phase in ("feeding", "battle_items", "retire_check", "retire_animation"):
                 # Handled by the view / blocked during the retire animation
                 return
             # Quitting mid-battle (charge, result): the temporary evolution
@@ -4191,7 +4303,7 @@ class BattleEncounter:
             self._clear_xros_forms()
             runtime_globals.game_sound.play("cancel")
             change_scene("game")
-        elif self.phase in ("feeding", "retire_check"):
+        elif self.phase in ("feeding", "battle_items", "retire_check"):
             # Events for these phases are handled by the view
             return
         elif self.phase == "retire_animation":
@@ -4360,7 +4472,7 @@ class BattleEncounter:
                 mini_game=self.get_minigame_strength(),
                 level=pet.level,
                 stage=pet.stage,
-                sick=1 if pet.sick > 0 else 0,
+                sick=1 if ailments.ailing(pet) else 0,
                 shot1=pet.atk_main,
                 shot2=pet.atk_alt,
                 tag_meter=0
@@ -4406,7 +4518,7 @@ class BattleEncounter:
                 mini_game=1,
                 level=getattr(enemy, 'level', enemy_level),
                 stage=enemy.stage,
-                sick=1 if getattr(enemy, 'sick', 0) > 0 else 0,
+                sick=1 if ailments.ailing(enemy) else 0,
                 shot1=enemy.atk_main,
                 shot2=enemy.atk_alt,
                 tag_meter=0

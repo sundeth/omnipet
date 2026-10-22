@@ -1,5 +1,6 @@
 """Arena Season: the headless engine, replay orientation and the freezer lock."""
 
+import json
 import os
 import pickle
 import sys
@@ -35,7 +36,7 @@ def _entry(name="Testmon", power=40, hp=12, attribute="Va", stage=4, level=3):
 class PowerRuleParityTests(unittest.TestCase):
     """GamePet now delegates to core.pet_stats; the numbers must not move."""
 
-    RULES = ("None", "Star", "Strength Hearts", "Strength and Level", "Effort",
+    RULES = ("None", "Star", "Strength Hearts", "Strength Hearts +16", "Strength and Level", "Effort",
              "Stage Table", "Stage Table + Shaken", "Stage Table Xros")
 
     def _pet(self, **stats):
@@ -55,7 +56,7 @@ class PowerRuleParityTests(unittest.TestCase):
             return power
         if rule == "Star":
             return int(power + (pet.star or 0) * 16)
-        if rule == "Strength Hearts":
+        if rule in ("Strength Hearts", "Strength Hearts +16"):    # the old name is the +16 rule
             if pet.stomach and not (pet.weight >= 99 or pet.hunger <= 0):
                 power += min(16, (16 * pet.strength) // pet.stomach)
             return power
@@ -272,8 +273,16 @@ class TeamUploadTests(unittest.TestCase):
                               shook=False, vital_values=0, sick=0, state="idle",
                               edited=False, power=20, atk_main=3, stage=3, attribute="Va")
         upload = _pet_to_upload(pet)
+        # Battle stats are never sent as such: the species values ride only
+        # in ``base`` (checked against the server's module), beside the
+        # Digimon's identity and its full save copy.
         self.assertEqual(set(upload), {"name", "module_name", "module_version",
-                                       "pet_version", "status"})
+                                       "pet_version", "status", "uid", "base", "pet_json"})
+        self.assertEqual(upload["base"], {"stage": 3, "attribute": "Va", "power": 20,
+                                          "hp": upload["base"]["hp"], "atk_main": 3, "atk_alt": 3})
+        self.assertEqual(upload["uid"], pet.uid)
+        self.assertEqual(_pet_to_upload(pet)["uid"], pet.uid)
+        json.dumps(upload["pet_json"])
         self.assertEqual(_pet_passes(pet, {}, {"DMX"})[1], "Module not in this arena season")
         self.assertTrue(_pet_passes(pet, {"allowed_attributes": ["Vaccine"]}, {"DMC"})[0])
         self.assertFalse(_pet_passes(pet, {"allowed_attributes": ["Data"]}, {"DMC"})[0])

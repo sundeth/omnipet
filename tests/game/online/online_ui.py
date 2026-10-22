@@ -106,7 +106,8 @@ def view(game):
                 "shop_gameplay": "ShopGameplayView", "shop_specials": "ShopSpecialsView",
                 "arena": "ArenaView", "arena_rules": "ArenaRulesView",
                 "arena_history": "ArenaHistoryView", "arena_team_creation": "ArenaTeamCreationView",
-                "arena_reclaim": "ArenaReclaimView"}.get(name)
+                "arena_reclaim": "ArenaReclaimView",
+                "arena_standings": "ArenaStandingsView"}.get(name)
     if expected and type(current).__name__ != expected:
         return None
     return name

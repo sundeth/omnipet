@@ -10,14 +10,17 @@ import random
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from core import constants
+from core import constants, pet_stats
 from models.event_clock import EventClock
 from services.android_pet_rules import AndroidPetRules
+from utils import ailments
 
 
 class OfflinePet(AndroidPetRules):
     def __init__(self, data, world):
         self.__dict__.update(copy.deepcopy(data))
+        # A checkpoint from before the sickness/injury split (GamePet.patch).
+        ailments.migrate(self.__dict__)
         self.world = world
         self.removed = False
 
@@ -29,6 +32,8 @@ class OfflinePet(AndroidPetRules):
         self.state = state
         if state == 'nap':
             self.sleep_start_time = self.world.now
+            # Asleep: the bedtime call is over, as GamePet.set_state has it
+            self.care_sleep_mistake_timer = 0
         elif state == 'idle':
             self.sleep_start_time = None
 
@@ -46,8 +51,15 @@ class OfflinePet(AndroidPetRules):
         if int(getattr(self, 'stage', 0) or 0) != 0:
             self.dna = []
         self.evolution_history = getattr(self, 'evolution_history', []) + [self.name]
+        old_stage = int(getattr(self, 'stage', 0) or 0)
+        old_vital = getattr(self, 'vital_values', 0)
         self.set_data(dict(data, module=self.module))
         self.reset_variables()
+        # GamePet.evolve_to: Vital Values carry from Stage I through III.
+        if self.tracks_vital_values():
+            carried = pet_stats.carried_vital_values(old_stage, self.stage, old_vital)
+            if carried is not None:
+                self.vital_values = carried
         self.state = 'idle'
         self.next_minute = self.world.cursor + 60
         self.world.discover(self, reward)
@@ -108,6 +120,10 @@ class OfflinePet(AndroidPetRules):
             return
         # Crossing the boundary works even when minute phases are not :00.
         now = self.world.now
+        # The clock was set back past the nap's start: the nap starts now, so
+        # the next wake time on the clock ends it, as in GamePet.check_wake_up.
+        if self.sleep_start_time > now:
+            self.sleep_start_time = now
         boundary = datetime.combine(now.date(), wake)
         if boundary <= self.sleep_start_time:
             boundary += timedelta(days=1)
@@ -118,16 +134,20 @@ class OfflinePet(AndroidPetRules):
             self.state = 'idle'
             self.sleep_start_time = None
 
+    def die(self, late=0.0):
+        # A death route may take the pet instead (GamePet._die).
+        if self.death_evolution():
+            return
+        self.dying = False
+        self.death_cause = ''
+        self.death_save_elapsed = 0.0
+        self.state = 'dead'
+        self.burpmon_active = False
+        self._rt_dead_start = self.world.cursor - late
+
     def update_death_check(self, now=None):
         if self.check_death_conditions() and self.death_save_immunity == 0:
-            # A death route may take the pet instead (GamePet).
-            if self.death_evolution():
-                return
-            self.dying = False
-            self.death_cause = ''
-            self.state = 'dead'
-            self.burpmon_active = False
-            self._rt_dead_start = self.world.cursor
+            self.die()
         if self.state == 'dead' and self._rt_dead_start and self.world.cursor - self._rt_dead_start > 300:
             self.removed = True
             self.set_traited_egg()
@@ -139,6 +159,9 @@ class OfflinePet(AndroidPetRules):
         batch the foreground had not applied when the checkpoint was taken.
         """
         self.check_wake_up()
+        # GamePet.update: a death save runs on the clock, ahead of the minute.
+        if getattr(self, 'dying', False):
+            self.update_death_save(minutes * 60)
         today = self.world.now.date()
         if today > self._last_age_date:
             self.age += (today - self._last_age_date).days
@@ -147,8 +170,12 @@ class OfflinePet(AndroidPetRules):
         minute_number = self._rt_last_minute  # evolution can reset the stored counter
         if self.state != 'dead':
             self.update_reliability(minutes)
-            # Time in this form runs asleep and awake alike.
+            # Time in this form, and the pet's life, run asleep and awake alike.
             self.form_minutes = (getattr(self, 'form_minutes', 0) or 0) + minutes
+            self.life_minutes = (getattr(self, 'life_minutes', 0) or 0) + minutes
+        # GamePet.update: the hour's Vital Values before the evolution check.
+        if minute_number // 60 > (minute_number - minutes) // 60 and self.state not in ('nap', 'dead'):
+            self.update_vital_values_gain()
         if self.state not in ('nap', 'dead'):
             self._evol_minutes += minutes
             self.update_evolution()
@@ -161,7 +188,6 @@ class OfflinePet(AndroidPetRules):
             self._evol_minutes += minutes
             self.update_evolution()
         if self.state != 'nap':
-            self.update_death_save_counters()
             self.update_death_check()
             if self.death_save_immunity > 0:
                 self.death_save_immunity -= 1
@@ -169,8 +195,6 @@ class OfflinePet(AndroidPetRules):
             self.back_to_sleep -= 1
             if not self.back_to_sleep and self.state != 'nap' and self.should_sleep():
                 self.set_state('nap')
-        if minute_number // 60 > (minute_number - minutes) // 60 and self.state not in ('nap', 'dead'):
-            self.update_vital_values_gain()
         # Complete the visual action after all pets' minute rules, as normal
         # play creates the poop on subsequent animation frames.
 
@@ -194,9 +218,10 @@ class OfflineWorld:
         self.rng.setstate(snapshot['rng'])
         self.generation = snapshot['generation']
         self.pet_list = [OfflinePet(p, self) for p in snapshot['pets']]
-        for key in ('poop_list', 'unlocks', 'traited', 'gcell_fragments', 'quests',
+        for key in ('poop_list', 'unlocks', 'traited', 'generations', 'gcell_fragments', 'quests',
                     'friends', 'digidex', 'friend_event_pending'):
-            setattr(self, key, copy.deepcopy(snapshot.get(key, [] if key not in ('unlocks', 'friends') else {})))
+            setattr(self, key, copy.deepcopy(snapshot.get(
+                key, [] if key not in ('unlocks', 'friends', 'generations') else {})))
         self.sleep_time = snapshot.get('sleep_time')
         self.wake_time = snapshot.get('wake_time')
         self.xai = snapshot['xai']
@@ -210,7 +235,7 @@ class OfflineWorld:
         self.notices = []
         self.sequence = snapshot.get('sequence', 0)
         self.calls = {p.android_id: bool(p.call_sign()) for p in self.pet_list}
-        self.sickness = {p.android_id: p.sick > 0 for p in self.pet_list}
+        self.sickness = {p.android_id: ailments.ailing(p) for p in self.pet_list}
         self.deaths = {p.android_id: p.dying for p in self.pet_list}
         self.active_notices = {}
 
@@ -291,7 +316,7 @@ class OfflineWorld:
             return None
         self.friend_event_pending = None
         pet = next((p for p in self.pet_list if p.name == pending.get('pet') and p.module == pending.get('module')), None)
-        if pet is None or pet.state in ('dead', 'nap') or pet.sick > 0 or not pet.can_battle():
+        if pet is None or pet.state in ('dead', 'nap') or ailments.ailing(pet) or not pet.can_battle():
             return None
         names = []
         for evo in getattr(pet, 'temp_evolve', []):
@@ -350,7 +375,7 @@ class OfflineWorld:
                     p.poop()
                 for kind, active, flags, title, body in (
                     ('call', p.call_sign(), self.calls, 'Pet needs attention', f'{p.name} needs care.'),
-                    ('sick', p.sick > 0, self.sickness, 'Pet is sick', f'{p.name} needs medicine.'),
+                    ('sick', ailments.ailing(p), self.sickness, 'Pet is sick', f'{p.name} needs medicine.'),
                     ('dying', p.dying, self.deaths, 'Pet needs urgent care', f'{p.name} is dying.'),
                 ):
                     if active and not flags.get(p.android_id, False):

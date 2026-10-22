@@ -1,4 +1,8 @@
-"""Reliability meter styled after the Digivice iC's 0..31 gauge."""
+"""Reliability meter styled after the Digivice iC's 0..31 gauge.
+
+The iC draws its Connect Points (0..15) on the same gauge, so the meter takes
+a label and a range: ``ReliabilityMeter(..., label="CP", maximum=15)``.
+"""
 
 import pygame
 
@@ -8,27 +12,44 @@ from utils.pygame_utils import blit_with_cache
 
 
 class ReliabilityMeter(UIComponent):
-    """Compact tick gauge with a movable marker for the iC Reliability stat."""
+    """Compact tick gauge with a movable marker for the iC Reliability stat
+    (and, with another label and range, its Connect Points)."""
 
-    def __init__(self, x, y, width, height, value=constants.RELIABILITY_MIN):
+    #: The gauge starts after this text whatever the label, so meters stacked
+    #: in one column ("REL" over "CP") line their gauges up.
+    LABEL_COLUMN = "REL"
+
+    def __init__(self, x, y, width, height, value=constants.RELIABILITY_MIN,
+                 label="REL", minimum=constants.RELIABILITY_MIN,
+                 maximum=constants.RELIABILITY_MAX):
         super().__init__(x, y, width, height)
+        self.label = label
+        self.minimum = int(minimum)
+        self.maximum = max(self.minimum + 1, int(maximum))
         self.value = self._clamp(value)
         self.font = None
         self.focusable = False
 
-    @staticmethod
-    def _clamp(value):
+    def _clamp(self, value):
         try:
             value = int(value)
         except (TypeError, ValueError):
-            value = constants.RELIABILITY_MIN
-        return max(constants.RELIABILITY_MIN,
-                   min(constants.RELIABILITY_MAX, value))
+            value = self.minimum
+        return max(self.minimum, min(self.maximum, value))
 
     def set_value(self, value):
         value = self._clamp(value)
         if self.value != value:
             self.value = value
+            self.needs_redraw = True
+
+    def set_maximum(self, maximum):
+        """A new top of the scale (a module's Connect Points cap); the value
+        is clamped to it."""
+        maximum = max(self.minimum + 1, int(maximum))
+        if self.maximum != maximum:
+            self.maximum = maximum
+            self.value = self._clamp(self.value)
             self.needs_redraw = True
 
     def render(self):
@@ -45,13 +66,17 @@ class ReliabilityMeter(UIComponent):
         if self.font is None:
             self.font = self.get_font("text", custom_size=max(8, int(10 * scale)))
 
-        label = self.font.render("REL", True, label_color)
+        label = self.font.render(self.label, True, label_color)
         label_y = (self.rect.height - label.get_height()) // 2
         blit_with_cache(surface, label, (0, label_y))
 
         padding = max(1, int(scale))
+        label_column = label.get_width()
+        if self.label != self.LABEL_COLUMN:
+            label_column = max(label_column, self.font.render(
+                self.LABEL_COLUMN, True, label_color).get_width())
         gauge_left = min(self.rect.width - 8 * padding,
-                         label.get_width() + 2 * padding)
+                         label_column + 2 * padding)
         gauge = pygame.Rect(
             gauge_left,
             2 * padding,
@@ -91,8 +116,7 @@ class ReliabilityMeter(UIComponent):
                              tick_width)
 
         marker_x = inner_left + round(
-            (self.value - constants.RELIABILITY_MIN) * span /
-            (constants.RELIABILITY_MAX - constants.RELIABILITY_MIN)
+            (self.value - self.minimum) * span / (self.maximum - self.minimum)
         )
         pygame.draw.line(
             surface,

@@ -174,8 +174,21 @@ def open_pack(module_name, pack_id, rng=random):
     return drawn
 
 
-def announce_cards(drawn):
-    """A message for each card a pack gave."""
+def announce_cards(drawn, module_name=None, pack_id=None, wait_for_main=False):
+    """Show the cards a pack gave: the pack reveal (`ui.card_reveal`) when
+    the module is known, else a message for each card. *wait_for_main*
+    holds the reveal until the main game screen (a battle's prize, an
+    unlock), so it never covers a result screen."""
+    if not drawn:
+        return
+    for card, shiny in drawn:
+        runtime_globals.game_console.log(
+            f"[Cards] {card.get('name', 'Card')}{' shiny' if shiny else ''} card obtained")
+    if module_name:
+        from ui.card_reveal import REVEAL, MAIN_SCENE
+        REVEAL.add(module_name, drawn, find_pack(module_name, pack_id) if pack_id else None,
+                   wait_for=MAIN_SCENE if wait_for_main else None)
+        return
     for card, shiny in drawn:
         runtime_globals.game_message.add_slide(
             f"{card.get('name', 'Card')}{' shiny' if shiny else ''} card obtained!",
@@ -455,21 +468,33 @@ def random_effect_group():
     return random.choice(pool)
 
 
-def _effect_targets(module_name, effect):
-    """Selected, living pets that the effect's optional version applies to."""
+def party_pets_of(module_name):
+    """The party's pets of *module_name*: who a card of that module can be
+    read for (the Collection asks the player to choose one of them, and
+    takes the only one there is)."""
+    return [pet for pet in (getattr(game_globals, "pet_list", None) or [])
+            if pet is not None and getattr(pet, "module", None) == module_name]
+
+
+def _effect_targets(module_name, effect, pet=None):
+    """The pets the effect's optional version applies to: the chosen *pet*
+    when there is one, else the selected pets of the module."""
     from utils.pet_utils import get_selected_pets
 
     try:
         version = int(effect.get("version", -1))
     except (TypeError, ValueError):
         version = -1
-    return [pet for pet in get_selected_pets()
-            if getattr(pet, "module", None) == module_name
-            and (version < 0 or getattr(pet, "version", None) == version)]
+    candidates = [pet] if pet is not None else get_selected_pets()
+    return [p for p in candidates
+            if getattr(p, "module", None) == module_name
+            and (version < 0 or getattr(p, "version", None) == version)]
 
 
-def apply_card_effects(module_name, effects):
-    """Apply a list of card effects.
+def apply_card_effects(module_name, effects, pet=None):
+    """Apply a list of card effects, for the chosen *pet* when there is one:
+    its version decides which version's results it gets, and DigiSoul goes
+    to it alone.
 
     Returns an outcome dict for the caller (the Collection scene) to act on:
         rewards:   list of reward dicts for RewardPopupUI
@@ -483,7 +508,7 @@ def apply_card_effects(module_name, effects):
 
     for effect in effects or []:
         etype = effect.get("type") or "Item"
-        targets = _effect_targets(module_name, effect)
+        targets = _effect_targets(module_name, effect, pet)
         try:
             version = int(effect.get("version", -1))
         except (TypeError, ValueError):

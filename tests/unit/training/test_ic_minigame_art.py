@@ -69,7 +69,8 @@ class ArtTests(unittest.TestCase):
                  "building_explosion_2.png", "digi_whack_hole.png", "digi_whack_peek.png",
                  "digi_whack_out.png", "digi_whack_hit.png", "digi_whack_cursor.png",
                  "digi_mash_digits.png", "digi_mash_puwamon.png", "digi_mash_falcomon.png",
-                 "digi_mash_peckmon.png", "digi_mash_loaderleomon.png"]
+                 "digi_mash_peckmon.png", "digi_mash_loaderleomon.png",
+                 "gotcha_chuumon.png", "gotcha_trap.png", "gotcha_arrow.png"]
         names += [os.path.join("ui", f"Combat_{n}_1.png") for n in
                   ("ShuffleTitle1", "ShuffleTitle2", "ShuffleSelect1", "ShuffleSelect2",
                    "IC20Ready", "IC20Start", "IC20Clear")]

@@ -151,6 +151,13 @@ class ICCase(unittest.TestCase):
             pet._rt_last_sleep_check = time.monotonic()
             pet.update()
 
+    @staticmethod
+    def seconds(pet, seconds):
+        """*seconds* of GamePet.update's real-time part (the death save's
+        clock) in one frame, with no minute passing."""
+        pet._rt_last_sleep_check = time.monotonic() - seconds
+        pet.update()
+
 
 def offline_world(pets, modules, at=None):
     """An Android OfflineWorld (services.android_offline) holding *pets* as

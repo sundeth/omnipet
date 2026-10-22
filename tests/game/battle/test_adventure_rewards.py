@@ -21,14 +21,14 @@ boss   beating area 1's last round opens area 2 and grants the module's
 loss   nothing is paid and the player is sent back to round 1;
 cost   ``battle_cost_type`` (DP or Hunger) is charged once, won or lost;
 sick   ``battle_base_sick_chance_win/_lose`` and the species'
-       ``injury_probability`` are honoured: a roll under the chance makes
-       the pet sick, a roll over it does not.
+       ``injury_probability`` are honoured: a roll under the chance injures
+       the pet, a roll over it does not; no battle makes it sick (Dots).
 
 Known bugs are written as the correct expectation and marked
 expectedFailure (tests/findings/battle.md): BAT-F1 (a fresh DMM pet has no
-battle record), BAT-F3 (``injury_probability`` is never loaded), BAT-F4
-(a win that spends the last of the battle cost records no progress) and
-BAT-F9 (adventure unlocks ignore their version).
+battle record), BAT-F3 (``injury_probability`` is never loaded) and BAT-F4
+(a win that spends the last of the battle cost records no progress).
+BAT-F9 (adventure unlocks ignored their version) was fixed 2026-10-15.
 """
 import json
 import os
@@ -90,7 +90,7 @@ class AdventureRewards(unittest.TestCase):
         unlocked = {u.get("name") for u in getattr(module, "unlocks", None) or []
                     if u.get("type") == "adventure" and is_unlocked(module_name, "adventure", u.get("name"))}
         return {"battles": getattr(pet, "battles", None), "win": getattr(pet, "win", None),
-                "dp": pet.dp, "hunger": pet.hunger, "sick": pet.sick,
+                "dp": pet.dp, "hunger": pet.hunger, "sick": pet.sick, "injury": pet.injury,
                 "area": gg.battle_area.get(module_name, 1), "round": gg.battle_round.get(module_name, 1),
                 "victories": gg.total_victories.get(module_name, 0),
                 "inventory": dict(gg.inventory), "currencies": currencies, "unlocked": unlocked}
@@ -157,8 +157,13 @@ class AdventureRewards(unittest.TestCase):
         rounds = module.get_area_round_counts()[area]
         if round_num < rounds:
             return area, round_num + 1
-        if module.area_exists(area + 1) and module.is_area_unlocked(area + 1, version):
-            return area + 1, 1
+        # A locked area is skipped while a later one exists (DW1's Factorial
+        # Town and Beetle Land); a locked last area is not moved into.
+        nxt = area + 1
+        while module.area_exists(nxt) and not module.is_area_unlocked(nxt, version):
+            nxt += 1
+        if module.area_exists(nxt):
+            return nxt, 1
         return area, round_num
 
     # ------------------------------------------------------------ the rules
@@ -172,7 +177,7 @@ class AdventureRewards(unittest.TestCase):
         self.assert_cost_charged_once(module_name, before, after)
         self.assert_prize(snapshot, NEVER, before, after)
         self.assert_currency(snapshot, before, after, won=True)
-        self.assertEqual(after["sick"], 0, "sick from a roll above every chance")
+        self.assertEqual((after["sick"], after["injury"]), (0, 0), "hurt by a roll above every chance")
 
         area, round_num = self.expected_next(module_name, 1, 1, pet.version)
         self.assertEqual((after["area"], after["round"]), (area, round_num), "progress after the win")
@@ -226,7 +231,7 @@ class AdventureRewards(unittest.TestCase):
         self.assertEqual(after["victories"], before["victories"])
         self.assertEqual(after["unlocked"], before["unlocked"])
         self.assert_cost_charged_once(module_name, before, after)
-        self.assertEqual(after["sick"], 0, "sick from a roll above every chance")
+        self.assertEqual((after["sick"], after["injury"]), (0, 0), "hurt by a roll above every chance")
 
     def sickness_chances(self, module_name):
         """the module's sick chances and the species' injury chance are honoured"""
@@ -237,7 +242,8 @@ class AdventureRewards(unittest.TestCase):
                 _, pet, _, after = self.fight(module_name, 1, 1, win, ALWAYS)
                 injury = int(self.species(module_name, pet.name).get("injury_probability", 0) or 0)
                 expected = chance > 0 or (not win and injury > 0)
-                self.assertEqual(after["sick"] > 0, expected,
+                self.assertEqual(after["sick"], 0, "a battle never makes a pet sick")
+                self.assertEqual(after["injury"] > 0, expected,
                                  f"{'win' if win else 'loss'}: sick chance {chance}%, "
                                  f"injury {injury}%, every roll 0")
 
@@ -296,7 +302,7 @@ class AdventureRewards(unittest.TestCase):
                 _, pet, before, after = self.fight(
                     module_name, 1, 1, False, roll,
                     make_pet=lambda: bf.battle_pet(module_name, stage=record["stage"], name=record["name"]))
-                self.assertGreater(after["sick"], 0, f"a roll of {roll:.3f} under {injury}% did not injure")
+                self.assertGreater(after["injury"], 0, f"a roll of {roll:.3f} under {injury}% did not injure")
                 checked += 1
         if not checked:
             self.skipTest("no installed module gives a species injury chance")
@@ -340,9 +346,7 @@ class AdventureRewards(unittest.TestCase):
 
 
 #: Known bugs: (module, rule) -> finding id (tests/findings/battle.md).
-KNOWN = {
-    ("VBE", "boss_win_opens_the_next_area"): "BAT-F9",
-}
+KNOWN = {}
 
 
 def _make(rule, module_name):

@@ -144,8 +144,18 @@ class MinigameOutcomeTests(unittest.TestCase):
                 self.assertEqual(after["gcell_points"], exp["gcell_points"], "G-Cells")
                 self.assertEqual(after["disturbance_penalty"], exp["disturbance_penalty"],
                                  "disturbance penalty")
-                self.assertEqual(after["trophies"], before["trophies"] + trophies, "trophies")
-                self.assertEqual(after["hunger"], before["hunger"], "a training costs no hunger")
+                # Only a pet whose module shows Trophies earns them (owner, 2026-10-17).
+                from core import pet_stats
+                from utils.module_utils import get_module
+                earns = pet_stats.tracks_trophies(getattr(get_module(pet.module), "visible_stats", []))
+                self.assertEqual(after["trophies"], before["trophies"] + (trophies if earns else 0), "trophies")
+                # A training costs nothing, or what a battle does where the
+                # module says so (the iC: one hunger heart; owner, 2026-10-17).
+                module = get_module(pet.module)
+                cost = (int(module.battle_cost_amount)
+                        if getattr(module, "training_uses_battle_cost", False)
+                        and module.battle_cost_type == "Hunger" else 0)
+                self.assertEqual(after["hunger"], max(0, before["hunger"] - cost), "the training's hunger cost")
                 self.assertEqual(after["state"], exp["state"], "mood after the result")
                 self.assertEqual(after["vital_activities"], exp["vital_activities"])
         # The TRAINING quest counts a won training, once.
@@ -157,7 +167,10 @@ class MinigameOutcomeTests(unittest.TestCase):
             level = grade if won else 0
             gain = md.fight_money_gain("IC", level)["Fight Money"]
             self.assertEqual(md.balance("IC", "Fight Money") - self.fm_before, gain, "Fight Money")
-            self.assertEqual(run.result.paid, [("IC", "Fight Money", gain)] if gain else [])
+            # Other modules with a currency are paid too (the Vital
+            # Bracelets' Bits, 2026-10-17): only the iC's line is checked.
+            ic_paid = [row for row in run.result.paid if row[0] == "IC"]
+            self.assertEqual(ic_paid, [("IC", "Fight Money", gain)] if gain else [])
         self.assertEqual(self.env.error_logs(), [], "errors logged during the play")
 
     # ================================================================ Dummy
@@ -180,14 +193,15 @@ class MinigameOutcomeTests(unittest.TestCase):
 
     def test_a_pp_multiplier_triples_the_trophy(self):
         """A running PP x3 item (the VBE's, utils.card_battle) triples the
-        trophy -- the PP -- the top grade pays its pet, and only its pet."""
+        trophy -- the PP -- the top grade pays its pet, and only its pet. The
+        DM20 pet earns none: its module does not show Trophies."""
         import time
         boost = {"item": "PP x3", "targets": ["pp"], "amount": 3, "until": time.time() + 3600}
         party = ["DM20", ("VB", {"active_boost": boost})]
         run = self.play("dummy", party=party, charge=lambda r: r.send("A", 14))
         self.assertEqual(run.result.grade, 3)
         trophies = {p.module: run.after[p]["trophies"] - run.before[p]["trophies"] for p in run.pets}
-        self.assertEqual(trophies, {"DM20": 1, "VB": 3})
+        self.assertEqual(trophies, {"DM20": 0, "VB": 3})
 
     def test_dummy_by_touch(self):
         """Tapping the screen charges the bar as A does."""
@@ -409,12 +423,14 @@ class MinigameOutcomeTests(unittest.TestCase):
         self.check(run, grade=0, won=False)
 
     # ================================================== Count Match Classic
+    # Graded on the battle charge's 0-40 bands since 2026-10-17 (owner: one
+    # meter, one grading; training used 0-14 and called 20 shakes EXCELLENT).
     def test_count_match_classic_a_full_meter_is_excellent_with_a_trophy(self):
-        run = self.play("count_classic", charge=lambda r: (r.frames(1), r.send("Y", 14)))
+        run = self.play("count_classic", charge=lambda r: (r.frames(1), r.send("Y", 40)))
         self.check(run, grade=3, won=True, trophies=1)
 
     def test_count_match_classic_each_band_pays_its_own_grade(self):
-        for shakes, grade in ((11, 1), (13, 2)):
+        for shakes, grade in ((30, 1), (37, 2)):
             with self.subTest(shakes=shakes):
                 run = self.play("count_classic", charge=lambda r: (r.frames(1), r.send("Y", shakes)))
                 self.check(run, grade=grade, won=True)
@@ -424,14 +440,12 @@ class MinigameOutcomeTests(unittest.TestCase):
         run = self.play("count_classic")
         self.check(run, grade=0, won=False)
 
-    # BUG (tests/findings/training.md, "Count Match Classic: shaking past 14
-    # loses the trophy"): the meter now runs to 40, the result screen grades
-    # anything from 14 EXCELLENT and draws "+1 trophy", but
-    # check_and_award_trophies only pays at exactly 14.
-    # Fixed 2026-10-13; kept as a regression test.
-    def test_count_match_classic_shaking_past_fourteen_keeps_the_trophy(self):
+    def test_count_match_classic_grades_as_a_battle_charge_does(self):
+        """Twenty shakes are BAD in a battle (minigame_result), so in training too."""
+        from ui.minigames.minigame_session import minigame_result
         run = self.play("count_classic", charge=lambda r: (r.frames(1), r.send("Y", 20)))
-        self.check(run, grade=3, won=True, trophies=1)
+        self.assertEqual(minigame_result("Count Match Classic", strength=20), 0)
+        self.check(run, grade=0, won=False)
 
     # ======================================================== Count Match Z
     def test_count_match_z_the_arrows_asked_for_are_excellent(self):
@@ -536,23 +550,21 @@ class MinigameOutcomeTests(unittest.TestCase):
         self.check(run, grade=0, won=False, phase2=False)
 
     def test_mogera_a_weak_charge_after_the_counters_is_a_phase_two_failure(self):
-        """DMGZ pays its phase-2 failure G-Cells; every table pays its failure row."""
+        """M.O.G.E.R.A. survives: a loss (DMGZ's phase-2 G-Cells) that still
+        pays Strength, "whether or not you succeed" (DMGZ manual): the Good row."""
         run = self.mogera(5, 0)
-        self.check(run, grade=0, won=False, phase2=True, grades=False)
+        self.check(run, grade=1, won=False, phase2=True)
 
-    # BUG (tests/findings/training.md, "Mogera's verdict and grade disagree"):
-    # check_victory reads only the charge (strength >= 7) and get_attack_count
-    # needs all five counters, so four counters and a full charge is a "won"
-    # training at grade 0 (failure rows, but the success sound, quest,
-    # Reliability and DMGZ success G-Cells, with Mogera drawn destroyed), and
-    # five counters with a weak charge is grade 1 but lost.
-    @unittest.expectedFailure
-    def test_mogera_verdict_and_grade_agree(self):
-        for counters, presses in ((4, 12), (5, 0)):
-            run = self.mogera(counters, presses)
-            self.assertEqual(run.result.won, run.result.grade > 0,
-                             f"{counters} counters, {presses} presses: won={run.result.won} "
-                             f"grade={run.result.grade}")
+    # Mogera's verdict and grade disagreed (tests/findings/training.md 4):
+    # the verdict read the charge and the grade wanted all five counters.
+    # Owner, 2026-10-17: like the device. Fixed; kept as a regression test.
+    def test_mogera_follows_the_dmgz_manual(self):
+        """Phase 1 cleared (3+ counters) and the meter built destroys
+        M.O.G.E.R.A.: a win; fewer than 3 counters pays nothing."""
+        run = self.mogera(4, 12)
+        self.check(run, grade=3, won=True, phase2=True)
+        run = self.mogera(2, 12)
+        self.check(run, grade=0, won=False, phase2=False)
 
     # ======================================================== every minigame
     def test_every_minigame_has_an_outcome_test(self):

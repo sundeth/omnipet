@@ -21,6 +21,7 @@ from core import game_globals, runtime_globals
 from training.building_smash import BuildingSmash
 from training.digi_mash import DigiMash
 from training.digi_whack import DigiWhack
+from training.gotcha import Gotcha
 from training.poop_dodge import PoopDodge
 from training.shuffle import Shuffle
 from training.count_bar_training import CountBarTraining
@@ -146,7 +147,7 @@ BONUS_MODES = {
         "decorators": ["DigiMash"], "min_targets": 1, "cut_corners": {},
     },
     "gotcha": {
-        "name": "Gotcha!", "label": "GOTCHA!", "cls": None,
+        "name": "Gotcha!", "label": "GOTCHA!", "cls": Gotcha,
         "decorators": ["Gotcha"], "min_targets": 1, "cut_corners": {},
     },
 }
@@ -715,6 +716,8 @@ class SceneTraining:
         self.hide_menu_buttons()
         self.phase = spec.get("phase", key)
         self.mode = spec["cls"](self.ui_manager)
+        # The play's cost, where the module charges training as a battle
+        self.mode.pay_training_costs()
         self.create_training_exit_button()  # Create exit button for training phase
         runtime_globals.game_console.log(f"Starting {spec['name']} Training.")
         for pet in targets:

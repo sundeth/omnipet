@@ -225,7 +225,7 @@ def ready_party(game):
     for pet in game.gg.pet_list:
         pet.hunger = pet.strength = 4
         pet.dp = max(getattr(pet, "dp", 0) or 0, 4)
-        pet.sick = 0
+        pet.sick = pet.injury = 0
         pet.sleeps = pet.wakes = None
         if pet.state in ("nap", "sick"):
             pet.state = "idle"

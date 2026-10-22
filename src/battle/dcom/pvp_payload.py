@@ -13,6 +13,7 @@ the sides twice and puts every hit on the wrong pet.
 
 from battle.sim import protocol_constants
 from core import runtime_globals
+from utils import ailments
 
 
 def opponent_attack_sprites(opponent, battle_format=None):
@@ -117,7 +118,7 @@ def build(my_pet, opponent, battle_result, battle_format, simulator,
         "atk_main": getattr(my_pet, "atk_main", None),
         "atk_alt": getattr(my_pet, "atk_alt", None),
         "module": getattr(my_pet, "module", "base"),
-        "sick": getattr(my_pet, "sick", 0) > 0,
+        "sick": ailments.ailing(my_pet),
         "traited": getattr(my_pet, "traited", False),
         "shook": getattr(my_pet, "shook", False),
         "mini_game": minigame_result,

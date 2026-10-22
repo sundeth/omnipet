@@ -39,15 +39,15 @@ function Write-Success {
     Write-Host "[SUCCESS] $Message" -ForegroundColor Green
 }
 
-# Extract version from main.py if not provided
+# The release version is src/core/version.py's unless -Version is given
 if (-not $Version) {
-    $mainPyContent = Get-Content "..\main.py" -Raw
-    if ($mainPyContent -match 'VERSION\s*=\s*["'']([^"'']+)["'']') {
+    $versionFile = Get-Content (Join-Path $PSScriptRoot "..\src\core\version.py") -Raw
+    if ($versionFile -match 'VERSION\s*=\s*"([^"]+)"') {
         $Version = $matches[1]
         Write-Status "Extracted version: $Version"
     } else {
-        $Version = "0.9.8"
-        Write-Status "Using default version: $Version"
+        Write-Host "[ERROR] No VERSION in src/core/version.py" -ForegroundColor Red
+        exit 1
     }
 }
 

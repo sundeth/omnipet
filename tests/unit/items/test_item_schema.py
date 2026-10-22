@@ -183,7 +183,10 @@ class ProtocolValueTests(unittest.TestCase):
         if not os.path.exists(path):          # modules/ is gitignored
             return
         items = json.load(open(path, encoding="utf-8"))["item"]
-        weapons = [i for i in items if "Attack +" in i.get("description", "")]
+        # Weapon MAX names the weapons it gives ("One Attack +1 weapon of each
+        # family") and is a bundle, not one of them.
+        weapons = [i for i in items if "Attack +" in i.get("description", "")
+                   and i.get("effect") != "bundle"]
         self.assertEqual(len(weapons), 19)
         for item in weapons:
             self.assertEqual((item["effect"], item["status"], item["boost_time"]),
@@ -193,7 +196,7 @@ class ProtocolValueTests(unittest.TestCase):
         sent = {i["name"]: i["protocol_value"] for i in items if i.get("protocol_value")}
         drawn = {i["name"]: i["attack_sprite"] for i in items if i.get("attack_sprite")}
         self.assertEqual(drawn, {
-            "Digi Cannon": 4, "Metal Armor": 4, "Silver Rope": 4,
+            "Digi Cannon": 4, "Metal Armor": 4, "Silver Robe": 4,
             "Dragon Sword": 3, "Dragon Break": 3, "Beast Claw": 8,
             "Beast Blow": 8, "Fowl Tornado": 10, "Fowl Buraiga": 10,
             "Jungle Needle": 5, "Jungle Enemis": 5, "Holy Saint": 11, "Holy Saber": 11,

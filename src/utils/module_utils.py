@@ -287,13 +287,59 @@ def _apply_purchase_entries(purchases, entries) -> dict:
             purchases.add_gameplay(item_id)
             added['gameplay'] += 1
         elif ptype == 'item':
-            if purchases.items.get(item_id, 0) == 0:
-                purchases.items[item_id] = 1
-            added['item'] += 1
+            # Items are bought again and again, one row each, and used up in
+            # the game: each row counts once. It used to set every used item
+            # back to 1 at each login (online finding 7).
+            purchase_id = entry.get('id')
+            if not getattr(purchases, 'item_purchases_tracked', True):
+                # A save from before the rows were counted holds what it has.
+                if purchase_id:
+                    purchases.item_purchase_ids.add(str(purchase_id))
+                continue
+            if purchases.apply_item_purchase(item_id, purchase_id):
+                added['item'] += 1
         elif ptype == 'special':
             purchases.add_special(item_id)
             added['special'] += 1
+    purchases.item_purchases_tracked = True
     return added
+
+
+#: The effect fields of a shop item, as `GET /shop/download/item/{id}` gives
+#: them in `json_data` (Omninet storage/items/items.json).
+SHOP_ITEM_EFFECT_FIELDS = ('effect', 'status', 'amount', 'boost_time', 'protocol_value',
+                           'attack_sprite', 'digisoul')
+
+
+def ensure_shop_item_data(item_id) -> bool:
+    """Fill a bought shop item's effect from the server when the game lacks it.
+
+    The listing (`GET /shop/items`) carries no effect data, and without it the
+    inventory refuses the item ("has no implemented effect"): online finding
+    5. Network: call off the main thread. True when the effect is known."""
+    from services.omninet_service import omninet_service
+    meta = game_globals.shop_items_data.setdefault(item_id, {'id': item_id, 'cross_module': True})
+    if shop_item_effect_known(meta):
+        return True
+    ok, data = omninet_service.download_item(item_id)
+    if not ok or not isinstance(data, dict):
+        runtime_globals.game_console.log(f"[Shop] item {item_id}: no effect data ({data})")
+        return False
+    json_data = data.get('json_data') or {}
+    meta.setdefault('name', data.get('name') or json_data.get('name', 'Item'))
+    meta.setdefault('description', json_data.get('description', ''))
+    meta.setdefault('sprite_name', json_data.get('sprite_name', ''))
+    for key in SHOP_ITEM_EFFECT_FIELDS:
+        if key in json_data:
+            meta[key] = json_data[key]
+    meta['cross_module'] = True
+    return shop_item_effect_known(meta)
+
+
+def shop_item_effect_known(meta) -> bool:
+    """An item's effect is known when it has one: an `effect`, or a `status`
+    (an empty effect with a status is a plain status change, item_effects)."""
+    return bool(meta and (meta.get('effect') or meta.get('status')))
 
 
 def sync_account_data(download_missing: bool = False) -> None:
@@ -336,6 +382,17 @@ def sync_account_data(download_missing: bool = False) -> None:
     except Exception as exc:
         runtime_globals.game_console.log(
             f"[AccountSync] module sync failed: {exc}")
+
+    # Held shop items whose effect the game does not know yet (bought on
+    # another device, or before the effect was fetched): the slow pass only.
+    if download_missing and purchases is not None:
+        for item_id, quantity in list(purchases.items.items()):
+            if quantity > 0 and not shop_item_effect_known(game_globals.shop_items_data.get(item_id)):
+                try:
+                    ensure_shop_item_data(item_id)
+                except Exception as exc:
+                    runtime_globals.game_console.log(
+                        f"[AccountSync] item {item_id} data failed: {exc}")
 
     try:
         game_globals.save()

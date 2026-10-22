@@ -14,7 +14,10 @@ the view:
      season (if any).
 
 The team's pets never left the save: they stayed in the freezer, locked
-until the season ended, and are free to leave it now.
+until the season ended, and are free to leave it now. The record of their
+server copies (battles and wins, shared by the whole team) was added to
+them when the arena hub learnt the season had ended
+(``utils.arena_pets.apply_season_results``); this view says so.
 """
 import threading
 
@@ -62,6 +65,10 @@ class ArenaReclaimView:
 
         rank = self._team.get('final_rank') or self._team.get('rank')
         rank_text = f"Rank: {rank}" if rank else "Rank: -"
+        if rank == 1:
+            rank_text += "  CHAMPION!"
+        elif rank in (2, 3):
+            rank_text += "  PODIUM!"
         self._add(Label(
             w // 2, 70, rank_text,
             color_override=(255, 215, 80), center=True))
@@ -81,9 +88,19 @@ class ArenaReclaimView:
             w // 2, 115, coin_text,
             color_override=coin_color, center=True))
 
+        # What the pets got from the season
+        pets = self._team.get('pets') or []
+        if pets and any('battles' in p for p in pets):
+            battles = max(int(p.get('battles') or 0) for p in pets)
+            wins = max(int(p.get('wins') or 0) for p in pets)
+            self._add(Label(
+                w // 2, 134, f"Each pet: +{battles} battles, {wins} won",
+                color_override=(180, 200, 255), center=True,
+                word_wrap=True, max_width=w - 20))
+
         # Freezer notice + dismissal hint
         self._add(Label(
-            w // 2, 150, "Your team's pets can leave the freezer now.",
+            w // 2, 156, "Your team's pets can leave the freezer now.",
             color_override=(220, 220, 220), center=True,
             word_wrap=True, max_width=w - 20))
         self._add(Label(
@@ -109,6 +126,10 @@ class ArenaReclaimView:
                     new_balance = data.get('new_balance')
                     if new_balance is not None:
                         game_globals.coins = int(new_balance)
+                    claimed = int(data.get('coins_claimed') or 0)
+                    if claimed:
+                        runtime_globals.arena_notice = {
+                            "kind": "win", "text": f"+{claimed} coins claimed!"}
                 else:
                     runtime_globals.game_console.log(
                         f"[ArenaReclaim] claim failed: {data!r}")

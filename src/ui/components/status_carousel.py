@@ -11,10 +11,17 @@ import core.constants as constants
 from utils.asset_utils import image_load
 
 
+#: Silhouettes already made, by (module, form, sprite preferences), None for
+#: a form without art: the Status scene asks on every pet it shows, and a
+#: form's sprites come out of its zip, which is slow on the Pi Zero 2W.
+_SILHOUETTES = {}
+
+
 def evolution_silhouette(pet):
     """The form *pet* would evolve into now (`GamePet.preview_evolution`,
     a route's % chance counted as certain), as its IDLE1 frame blacked out,
-    at the art's own size. None when no route matches or it has no sprite."""
+    at the art's own size. None when no route matches or it has no sprite.
+    Each form's silhouette is made once (`_SILHOUETTES`)."""
     try:
         target = pet.preview_evolution()
     except Exception as exc:
@@ -22,6 +29,13 @@ def evolution_silhouette(pet):
         return None
     if not target:
         return None
+    from core import game_globals
+    cfg = getattr(game_globals, "configuration", None)
+    key = (pet.module, target.get("name"),
+           getattr(cfg, "sprite_resolution_preference", 0),
+           getattr(cfg, "enable_old_sprites", False))
+    if key in _SILHOUETTES:
+        return _SILHOUETTES[key]
     from utils.module_utils import get_module
     from utils.sprite_utils import load_pet_sprites
     from models.animation import PetFrame
@@ -31,11 +45,12 @@ def evolution_silhouette(pet):
         primary_sprite_format=getattr(module, "primary_sprite_format", "Color"),
         secondary_sprite_format=getattr(module, "secondary_sprite_format", "HD"))
     frame = frames.get(PetFrame.IDLE1.value)
-    if frame is None:
-        return None
-    shadow = frame.copy()
-    # Every pixel black, its transparency kept.
-    shadow.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MIN)
+    shadow = None
+    if frame is not None:
+        shadow = frame.copy()
+        # Every pixel black, its transparency kept.
+        shadow.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MIN)
+    _SILHOUETTES[key] = shadow
     return shadow
 
 
@@ -155,6 +170,7 @@ class StatusCarousel(UIComponent):
             ("sleep_disturbances", "Sleep Disturbances", "sleep_disturbances", "Sleep Disturbances"),
             ("overfeed", "Overfeed", "overfeed", "Overfeed"),
             ("injuries", "Injuries", "injuries", "Injuries"),
+            ("sicknesses", "Sicknesses", "sicknesses", "Sicknesses"),
             ("virus", "Virus", "virus", "Virus"),
             ("evolution_timer", "Evolution Timer", "evolution_timer", "Evolution Timer"),
             ("next_evolution", "Next Evolution", "next_evolution", "Next Evolution"),
@@ -324,6 +340,7 @@ class StatusCarousel(UIComponent):
             "Sleep Disturbances": "Sleep Disturbance",  # Note: singular in filename
             "Overfeed": "Overfeed",
             "Injuries": "Injuries",
+            "Sicknesses": "Sicknesses",
             "Virus": "Virus",
             "Evolution Timer": "Evolution Timer",
             "Sleeps": "Sleeps",
@@ -531,7 +548,9 @@ class StatusCarousel(UIComponent):
             blit_with_cache(box_surface, scaled, ((self.box_width - scaled.get_width()) // 2,
                                                   (self.box_height - scaled.get_height()) // 2))
             return
-        font = self.get_font("title")
+        # A big "?": the title font at 1.5x, about a silhouette's height.
+        title_size = self.manager.get_title_font_size() if self.manager else 24
+        font = self.get_font("title", custom_size=title_size * 3 // 2)
         text = font.render("?", True, PURPLE_LIGHT if is_focused else PURPLE)
         blit_with_cache(box_surface, text, ((self.box_width - text.get_width()) // 2,
                                             (self.box_height - text.get_height()) // 2))

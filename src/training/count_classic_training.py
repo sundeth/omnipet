@@ -14,12 +14,16 @@ import core.constants as constants
 from models.game_module import sprite_load
 from utils.pygame_utils import blit_with_cache
 from ui.minigames.count_match_classic import CountMatchClassic
+from ui.minigames.minigame_session import minigame_result
 
 
 class CountMatchClassicTraining(Training):
     """
     Count Match Classic training mode where players build up strength by shaking.
-    Uses the CountMatchClassic minigame (shake to charge 0-14).
+    Uses the CountMatchClassic minigame (shake to charge 0-40), graded on
+    the battle charge's bands (`minigame_result`): one meter, one grading
+    (owner, 2026-10-17; training used the old 0-14 bands, so 20 shakes
+    were EXCELLENT here and BAD in a battle).
     """
 
     def __init__(self, ui_manager: UIManager) -> None:
@@ -107,18 +111,19 @@ class CountMatchClassicTraining(Training):
 
             self.attack_positions = new_positions
 
+    def grade(self):
+        """The charge's 0-3 grade, as a battle charge grades the same meter."""
+        if self.minigame:
+            self.strength = self.minigame.strength
+        return minigame_result("Count Match Classic", strength=self.strength)
+
     def check_victory(self):
         """Apply training results and return to game."""
-        if self.minigame:
-            self.strength = self.minigame.strength
-        return self.strength > 10
+        return self.grade() > 0
 
     def check_and_award_trophies(self):
-        """Award trophy if strength reaches maximum (14)"""
-        if self.minigame:
-            self.strength = self.minigame.strength
-
-        if self.strength >= 14:          # the meter runs past 14; the result screen promises it from 14 up
+        """Award a trophy for an Excellent charge (a full meter)."""
+        if self.grade() == 3:
             for pet in self.pets:
                 pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Count Match Classic training perfect score achieved! Trophy awarded.")
@@ -165,13 +170,12 @@ class CountMatchClassicTraining(Training):
             blit_with_cache(surface, sprite, (int(x), int(y)))
 
     def draw_result(self, surface):
-        if self.minigame:
-            self.strength = self.minigame.strength
+        grade = self.grade()
 
         result_img = None
-        if 10 <= self.strength < 14:
+        if grade in (1, 2):
             result_img = self.bag2
-        elif self.strength < 10:
+        elif grade == 0:
             result_img = self.bag1
 
         if self.frame_counter < 30:
@@ -185,9 +189,9 @@ class CountMatchClassicTraining(Training):
                 duration = combat_constants.RESULT_SCREEN_FRAMES / constants.FRAME_RATE
                 
                 # Choose which result animation to play
-                if self.strength < 10:
+                if grade == 0:
                     self.animated_sprite.play_bad(duration)
-                elif self.strength < 14:
+                elif grade < 3:
                     self.animated_sprite.play_great(duration)
                 else:
                     self.animated_sprite.play_excellent(duration)
@@ -196,7 +200,7 @@ class CountMatchClassicTraining(Training):
             self.animated_sprite.draw(surface)
 
             # Trophy notification on max (draw on top of animated sprite)
-            if self.strength >= 14:
+            if grade == 3:
                 self.draw_trophy_notification(surface)
 
     def prepare_attacks(self):
@@ -232,14 +236,5 @@ class CountMatchClassicTraining(Training):
                 self.attack_positions.append((scaled_sprite, (x, center_y - scaled_sprite.get_height() // 2)))
 
     def get_attack_count(self):
-        """Returns the number of attacks based on strength."""
-        if self.minigame:
-            self.strength = self.minigame.strength
-        if self.strength <= 10:
-            return 0
-        elif self.strength < 13:
-            return 1
-        elif self.strength < 14:
-            return 2
-        else:
-            return 3
+        """The number of attacks: the charge's grade."""
+        return self.grade()

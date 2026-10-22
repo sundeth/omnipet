@@ -77,7 +77,7 @@ def make_pet(module, stage=3, version=None, name=None, attribute=None, **stats):
     pet.trophies = 0
     pet.disturbance_penalty = 3
     pet.vital_activities = []
-    pet.sick = 0
+    pet.sick = pet.injury = 0
     pet.state = "idle"
     style = module_json(module).get("gcell_style")
     pet.gcell_points = {"DMGZ": 40, "PENGZ": 10}.get(style, 0)
@@ -128,12 +128,13 @@ def fight_money_gain(module, level):
 
 def expected_training(module, before, grade, won, phase2=False, anguirus=False):
     """The stats GamePet.finish_training must leave, from module.json:
-    the three tables indexed by the outcome (0 whenever the pet failed),
+    the three tables indexed by the outcome (a lost training pays its grade's
+    row: Bad for all but Mogera's lost Phase 2, a Good),
     Reliability on a success, the G-Cells in the module's style, the
     disturbance penalty a success forgives."""
     from core import constants
     data = module_json(module)
-    level = max(0, min(3, int(grade))) if won else 0
+    level = max(0, min(3, int(grade)))
     exp = dict(before)
     exp["effort"] = before["effort"] + data["training_effort_gain"][level]
     gain = data["training_strength_gain"][level]

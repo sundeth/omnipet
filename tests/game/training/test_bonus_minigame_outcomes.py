@@ -4,7 +4,7 @@ Checklist TRN-02 (every minigame can be played to its end and won) and
 TRN-03 (every minigame applies its rewards by outcome); tracker ICX-09 (the
 iC training minigames: can be won, rewards). The Digivice iC's own games in
 scenes.scene_training.BONUS_MODES -- Building Smash, Poop Dodge, Shuffle
-(10X) and Digi Whack, Digi Mash (20X) -- are started from the training
+(10X) and Digi Whack, Digi Mash, Gotcha! (20X) -- are started from the training
 scene's Bonus list (and once from the Battle scene's Specials hub, the way
 the module's Minigames tile opens them) with two iC pets and one from
 another module, and played headless the way the player plays them.
@@ -43,6 +43,7 @@ FIGHT_MONEY = "Fight Money"
 BUILDING_SMASH_PRIZES = (0, 10, 20, 50)
 POOP_DODGE_PRIZES = (0, 10, 20, 50)
 DIGI_WHACK_PRIZES = (0, 10, 30, 50)
+GOTCHA_PRIZES = (0, 10, 30, 50)
 
 
 def shuffle_prize(finds):
@@ -321,6 +322,57 @@ class BonusMinigameOutcomeTests(unittest.TestCase):
         self.assertEqual(md.balance("IC", FIGHT_MONEY), 9999)
         self.check(run, 3, 50, True)
 
+    # ============================================================== Gotcha!
+    @staticmethod
+    def lands_under(m, fall_ms):
+        """Whether Chuumon, walking on as he is, stands under the trap when a
+        drop made now, falling a row every *fall_ms*, reaches the row that
+        decides it; None when he would turn first (a turn takes a speed at
+        random)."""
+        from training import gotcha as gt
+        decide = m.now() + (gt.DECIDE_ROW - gt.HANG_ROW) * fall_ms
+        col, facing, due = m.col, m.facing, m.next_step
+        while due <= decide - 1:
+            if col == (0 if facing < 0 else gt.LAST_COL):
+                return None
+            col += facing
+            due += m.step_ms
+        return abs(col - gt.CENTRE_COL) <= gt.CATCH_RANGE
+
+    def catch(self, stages, press=None):
+        """Drop the trap when Chuumon will be under it at either of its rates
+        until *stages* are cleared, then when he will be under it at
+        neither. *press* drops it (A by default)."""
+        from training import gotcha as gt
+
+        def step(run):
+            m = run.mode
+            if m.phase != "charge" or m.step != "play":
+                return
+            under = [self.lands_under(m, ms) for ms in gt.FALL_ROW_MS]
+            if (all(under) if m.cleared < stages else under == [False, False]):
+                (press or (lambda: run.send("A")))()
+        return step
+
+    def test_gotcha_three_stages_are_excellent(self):
+        self.check(self.play("gotcha", self.catch(3)), 3, 50, True)
+
+    def test_gotcha_pays_the_stages_cleared(self):
+        for stages in (1, 2):
+            with self.subTest(stages=stages):
+                run = self.play("gotcha", self.catch(stages))
+                self.check(run, stages, GOTCHA_PRIZES[stages], False)
+
+    def test_gotcha_a_first_miss_is_bad(self):
+        self.check(self.play("gotcha", self.catch(0)), 0, 0, False)
+
+    def test_gotcha_by_touch(self):
+        self.input_mode = self.env.rg.TOUCH_MODE
+        run = self.start("gotcha")
+        tap = lambda: self.env.tap(run.game, run.mode.lcd_rect().center)  # noqa: E731
+        run.finish(step=lambda: self.catch(1, press=tap)(run))
+        self.check(run, 1, GOTCHA_PRIZES[1], False)
+
     # ====================================================== the Specials hub
     def test_the_specials_minigames_tile_opens_them_and_they_pay(self):
         """Battle > Specials > iC > Minigames opens the Bonus list; Digi Mash
@@ -355,7 +407,7 @@ class BonusMinigameOutcomeTests(unittest.TestCase):
         from scenes.scene_training import BONUS_MODES
         playable = sorted(k for k, spec in BONUS_MODES.items() if spec["cls"] is not None)
         self.assertEqual(playable, ["building_smash", "digi_mash", "digi_whack",
-                                    "poop_dodge", "shuffle"])
+                                    "gotcha", "poop_dodge", "shuffle"])
 
 
 if __name__ == "__main__":

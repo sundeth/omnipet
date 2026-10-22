@@ -220,8 +220,8 @@ class MogeraTraining(Training):
             self.attack_positions = new_positions
 
     def check_victory(self):
-        """Check if training was successful"""
-        return self.strength >= 7
+        """M.O.G.E.R.A. destroyed: Phase 1 cleared and the meter built."""
+        return self.phase2_reached and self.strength >= 7
 
     def check_and_award_trophies(self):
         """Award trophy if strength reaches maximum (14) and perfect counter"""
@@ -294,12 +294,12 @@ class MogeraTraining(Training):
         elif self.phase == "charge":
             if self.charge_game.handle_event(event):
                 return
-            
-            # Allow skip to result with B or START
+
+            # "Canceling out of training before M.O.G.E.R.A. has been attacked
+            # will not reward anything" (DMGZ manual): leave, as in Phase 1
             if event_type in ("START", "B"):
                 runtime_globals.game_sound.play("cancel")
-                self.phase = "result"
-                self.frame_counter = 0
+                change_scene("game")
         
         elif self.phase in ("wait_attack", "attack_move", "impact"):
             # Only allow B or START to skip to result, not A
@@ -415,10 +415,14 @@ class MogeraTraining(Training):
                 self.attack_positions.append((scaled_sprite, (x, center_y - scaled_sprite.get_height() // 2)))
 
     def get_attack_count(self):
-        """Returns the number of attacks based on strength."""
-        # Two phases: failing the Anti-G stage pays nothing, clearing it but
-        # not M.O.G.E.R.A. is a Good, clearing both is an Excellent.
-        if getattr(self, "countered_count", 0) < 5:
+        """The outcome, as the DMGZ manual gives it (owner, 2026-10-17: like
+        the device). Failing the Anti-G phase pays nothing (Bad); clearing it
+        earns Strength "whether or not you succeed" at M.O.G.E.R.A., so a
+        surviving M.O.G.E.R.A. is a Good that is still a loss (DMGZ's phase-2
+        G-Cells), and destroying it an Excellent. Phase 1 is cleared from 3
+        counters of 5 (INFERENCE: the manual gives no number; the Color
+        line's training wants 3 hits of 5)."""
+        if not self.phase2_reached:
             return 0
         if self.strength < 7:
             return 1

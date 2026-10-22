@@ -10,6 +10,9 @@ class QuestType(Enum):
     EVOLUTION = 4
     ARMOR_EVOLUTION = 5
     JOGRESS = 6
+    # Nothing to do: offered every day, ready to claim (World's Meat Farm,
+    # "Here's your Meat for today"). quest_event_utils.generate_daily_quests.
+    DAILY_GIFT = 7
 
 
 class QuestStatus(Enum):

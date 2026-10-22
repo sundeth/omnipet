@@ -2,6 +2,7 @@
 Scene Connect - Network connectivity and battles (View-based architecture)
 Uses view architecture similar to scene_battle.py for clean separation of concerns.
 """
+import os
 import pygame
 import traceback
 
@@ -14,7 +15,6 @@ from scenes.connect_views import (
     MainMenuView,
     PetSelectionView,
     WifiHostingView,
-    WifiDiscoveryView,
     DComView,
     WiFiComWarningView,
     WiFiComView,
@@ -34,6 +34,7 @@ from scenes.connect_views import (
     ArenaHistoryView,
     ArenaTeamCreationView,
     ArenaReclaimView,
+    ArenaStandingsView,
 )
 
 
@@ -49,21 +50,30 @@ class DiscordModule:
         import os
         import core.constants as constants
         
-        self.bot_url = getattr(constants, 'DISCORD_BOT_URL', 'http://localhost:5000').rstrip('/')
+        # The relay is part of Omninet (its /api/v1/discord routes exist where
+        # the server has a bot token); it was http://localhost:5000
+        from services.omninet_service import omninet_service
+        self.bot_url = (omninet_service._get_base_url().rstrip('/')
+                        + getattr(constants, 'DISCORD_API_PATH', '/api/v1/discord'))
         self.client = self
         self.is_connected = False
         self.linked_account = None
         self.account_name = None
         self.user_id = None
         self.current_room_id = None
+        self.last_error = None
         
         # Load saved data
         self._load_data()
         runtime_globals.game_console.log(f"[DiscordModule] Initialized with bot URL: {self.bot_url}")
     
+    #: Where the linked account is kept: beside the save, as Omninet's
+    #: device credentials are (cwd-relative). The test harness points it at
+    #: each run's temporary save folder.
+    SAVE_PATH = os.path.join("save", "discord_data.json")
+
     def _get_save_path(self):
-        import os
-        return os.path.join("save", "discord_data.json")
+        return DiscordModule.SAVE_PATH
     
     def _save_data(self):
         """Save linked account data."""
@@ -117,8 +127,11 @@ class DiscordModule:
         return self.account_name
     
     def login(self, pairing_code: str) -> bool:
-        """Link account with Discord."""
+        """Link account with Discord. On failure ``last_error`` says why:
+        "offline" (the server has no Discord relay, or cannot be reached) or
+        "invalid" (the relay does not know the code)."""
         import requests
+        self.last_error = None
         try:
             runtime_globals.game_console.log(f"[DiscordModule] Linking with code: {pairing_code}")
             response = requests.post(
@@ -126,6 +139,16 @@ class DiscordModule:
                 json={"code": pairing_code},
                 timeout=5
             )
+            if response.status_code != 200:
+                # The relay answers an unknown code with its own {"error"};
+                # a server without the relay (no bot token) has no such
+                # route at all, and FastAPI's {"detail": "Not Found"} comes
+                # back instead.
+                try:
+                    relay_answer = "error" in response.json()
+                except ValueError:
+                    relay_answer = False
+                self.last_error = "invalid" if relay_answer else "offline"
             if response.status_code == 200:
                 data = response.json()
                 self.linked_account = pairing_code.upper()
@@ -139,8 +162,77 @@ class DiscordModule:
                 return False
         except Exception as e:
             runtime_globals.game_console.log(f"[DiscordModule] Link exception: {e}")
+            self.last_error = "offline"
             return False
     
+    # -- Battle rooms (the relay's game rooms) ------------------------------
+    def _request(self, method, path, payload=None):
+        """(status, JSON or None); (0, None) when the relay cannot be reached."""
+        import requests
+        try:
+            response = requests.request(method, f"{self.bot_url}{path}", json=payload, timeout=5)
+            try:
+                return response.status_code, response.json()
+            except ValueError:
+                return response.status_code, None
+        except Exception as e:
+            runtime_globals.game_console.log(f"[DiscordModule] {method} {path} failed: {e}")
+            return 0, None
+
+    def get_available_rooms(self):
+        """The rooms open on the relay: [{id, room_id, name, host, status, ...}]."""
+        status, data = self._request("GET", "/rooms")
+        return data if status == 200 and isinstance(data, list) else []
+
+    def create_room(self, room_name):
+        """A new room hosted by this account: {room_id, room_code} or None."""
+        status, data = self._request("POST", "/room", {
+            "host": self.account_name or "Tamer", "name": room_name, "user_id": self.user_id})
+        if status == 200 and isinstance(data, dict) and data.get("success"):
+            self.current_room_id = data.get("room_id")
+            return data
+        return None
+
+    def join_room(self, room_id):
+        status, data = self._request("POST", f"/room/{room_id}/join", {
+            "player": self.account_name or "Tamer", "user_id": self.user_id})
+        if status == 200 and isinstance(data, dict) and data.get("success"):
+            self.current_room_id = room_id
+            return True
+        return False
+
+    def poll_room(self):
+        """The current room's status ({status, host, guests, opponent,
+        data_queue}), or None."""
+        if not self.current_room_id:
+            return None
+        status, data = self._request("GET", f"/room/{self.current_room_id}/status")
+        return data if status == 200 and isinstance(data, dict) else None
+
+    def send_room_data(self, data):
+        if not self.current_room_id:
+            return False
+        status, _ = self._request("POST", f"/room/{self.current_room_id}/data", data)
+        return status == 200
+
+    def room_link(self, room_id, is_host):
+        """A battle link through room *room_id* (battle.relay_link)."""
+        from battle.relay_link import RelayLink
+
+        def post(data):
+            status, _ = self._request("POST", f"/room/{room_id}/data", data)
+            return status == 200
+
+        def fetch():
+            status, data = self._request("GET", f"/room/{room_id}/status")
+            if status == 200 and isinstance(data, dict):
+                return data.get("data_queue") or []
+            # A room the relay no longer has is gone; anything else (the
+            # network) is tried again.
+            return None if status == 404 else []
+
+        return RelayLink(post, fetch, "host" if is_host else "guest", peer=room_id)
+
     def logout(self):
         """Unlink account."""
         import os
@@ -251,7 +343,6 @@ class SceneConnect:
             "main_menu": MainMenuView,
             "pet_selection": PetSelectionView,
             "wifi_hosting": WifiHostingView,
-            "wifi_discovery": WifiDiscoveryView,
             "dcom": DComView,
             "wificom_warning": WiFiComWarningView,
             "wificom": WiFiComView,
@@ -271,6 +362,7 @@ class SceneConnect:
             "arena_history": ArenaHistoryView,
             "arena_team_creation": ArenaTeamCreationView,
             "arena_reclaim": ArenaReclaimView,
+            "arena_standings": ArenaStandingsView,
         }
         
         view_class = view_map.get(view_name)
@@ -287,8 +379,7 @@ class SceneConnect:
             }
             
             # Add selected_pets only to views that consume it (not pet_selection which generates it)
-            if view_name in ['dcom', 'wificom', 'xros', 'wifi_hosting',
-                             'wifi_discovery', 'battle_confirm']:
+            if view_name in ['dcom', 'wificom', 'xros', 'wifi_hosting', 'discord', 'battle_confirm']:
                 view_kwargs['selected_pets'] = self.selected_pets
 
             # Main menu's EXIT button must use the same exit routing as a B-press

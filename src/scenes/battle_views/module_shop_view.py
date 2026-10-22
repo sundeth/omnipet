@@ -1,8 +1,9 @@
 """
 ModuleShopView - one module shop (shop.json), opened from the Specials hub.
 
-Lists what the shop sells with its price -- items, and card packs that are
-opened when bought -- shows the balance of the shop's currency and buys with
+Lists what the shop sells with its price -- items, card packs that are
+opened when bought, and card offers (one card of a pack, another each day)
+-- shows the balance of the shop's currency and buys with
 it (``shop_key=(module_name, shop_name)``). Back
 returns to the hub on the same module. Balances, unlocks and buying are
 utils.currency_utils'.
@@ -60,14 +61,20 @@ def _item_icon(module, sprite_name):
 class ModuleShopView:
     """One shop's stock with a description, the balance, and Buy and Back."""
 
-    def __init__(self, ui_manager: UIManager, change_view_callback, shop_key=None):
+    def __init__(self, ui_manager: UIManager, change_view_callback, shop_key=None, visit=False):
         self.ui_manager = ui_manager
         self.change_view = change_view_callback
         self.module = None
         self.shop = None
         module_name, shop_name = tuple(shop_key) if shop_key else (None, None)
         module = (runtime_globals.game_modules or {}).get(module_name)
-        for shop in currency_utils.available_shops(module):
+        # A one-visit shop (event_utils.ONE_VISIT: an iC DigiShop after a
+        # connection) is entered from the main game's alert, holds no access
+        # of its own, and Back leaves it -- and it -- behind.
+        self.visit = bool(visit)
+        shops = ((getattr(module, "shops", None) or []) if self.visit
+                 else currency_utils.available_shops(module))
+        for shop in shops:
             if shop.get("name") == shop_name:
                 self.module, self.shop = module, shop
                 break
@@ -90,9 +97,13 @@ class ModuleShopView:
     def _icon(self, offer):
         if offer.kind == "item":
             return _item_icon(self.module, offer.item.sprite_name)
-        # A pack's art is a card shape: centre it in a square so the list's
-        # square icon slot does not squash it.
-        art = load_icon(os.path.join(self.module.folder_path, offer.pack.get("sprite") or ""))
+        # A pack's art (or a card offer's card) is a card shape: centre it in
+        # a square so the list's square icon slot does not squash it.
+        if offer.kind == "card":
+            from utils.card_utils import load_card_sprite
+            art = load_card_sprite(self.module.name, offer.card, "front", 48, 48)
+        else:
+            art = load_icon(os.path.join(self.module.folder_path, offer.pack.get("sprite") or ""))
         if art is None:
             return None
         side = max(art.get_size())
@@ -196,7 +207,11 @@ class ModuleShopView:
         runtime_globals.game_sound.play("happy2")
         if offer.kind == "card_pack":
             from utils.card_utils import announce_cards
-            announce_cards(cards)
+            announce_cards(cards, self.module.name, offer.pack.get("id"))
+        elif offer.kind == "card":
+            runtime_globals.game_message.add_slide(
+                f"{offer.name} card obtained!", (255, 255, 0),
+                56 * runtime_globals.UI_SCALE, runtime_globals.FONT_SIZE_SMALL)
         else:
             runtime_globals.game_message.add_slide(
                 f"{offer.name} obtained!", (255, 255, 0),
@@ -209,6 +224,10 @@ class ModuleShopView:
 
     def _on_back(self):
         runtime_globals.game_sound.play("cancel")
+        if self.visit:
+            from utils.scene_utils import change_scene
+            change_scene("game")
+            return
         self.change_view("specials", module_name=self.module_name)
 
     # ------------------------------------------------------------- view hooks

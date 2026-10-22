@@ -1142,8 +1142,8 @@ _DMM_ATTRIBUTES = {"Va": "Va", "Vaccine": "Va", "Da": "Da", "Data": "Da",
 def dmm_column(stage=None, attribute=None):
     """The DMM.json column a Digimon of this stage and attribute reads.
 
-    Stage 1-3 and Stage 6-7 are one column whatever the attribute; Stages 4
-    and 5 split by it. A Free pet, or any attribute a stage has no column for,
+    Stage 1-3, Stage 6 and Stage 7 are one column each whatever the
+    attribute; Stages 4 and 5 split by it. A Free pet, or any attribute a stage has no column for,
     takes that stage's first column (Vaccine). A stage outside the table --
     a pet from another module on this wire -- takes the nearest one.
     """

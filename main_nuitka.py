@@ -12,8 +12,8 @@ import platform
 import logging
 from datetime import datetime
 
-# Game Version
-VERSION = "0.9.8"
+# Game Version: core.version's, imported once src/ is on the path (the __main__ block)
+VERSION = None
 
 # Global scaling variables
 render_surface = None
@@ -360,6 +360,8 @@ if __name__ == "__main__":
         else:
             print(f"[Error] Could not find src directory with core/ in any expected location")
     
+    from core.version import VERSION
+
     # Debug output for troubleshooting
     print(f"[Debug] Working directory: {os.getcwd()}")
     print(f"[Debug] Python path entries: {[p for p in sys.path if 'src' in p or p == base_dir]}")

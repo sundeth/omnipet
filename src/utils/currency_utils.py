@@ -128,13 +128,14 @@ def available_shops(module) -> list:
 
 @dataclass
 class Offer:
-    """One thing a shop sells: an item or a card pack, at a price."""
-    kind: str                   # "item" or "card_pack"
+    """One thing a shop sells: an item, a card pack or one card, at a price."""
+    kind: str                   # "item", "card_pack" or "card"
     name: str
     description: str
     price: int
     item: object = None         # the GameItem
-    pack: dict = None           # the cards.json pack
+    pack: dict = None           # the cards.json pack (a card offer's: the pack it is drawn from)
+    card: dict = None           # the cards.json card a card offer sells today
 
 
 def party_versions(module_name) -> set:
@@ -150,17 +151,78 @@ def _for_party(entry, versions) -> bool:
     return not wanted or not versions or any(v in versions for v in wanted)
 
 
+def offer_day() -> str:
+    """The day card offers change on: the local date."""
+    from datetime import date
+    return date.today().isoformat()
+
+
+def card_offers(module, shop, day=None) -> dict:
+    """Today's card for each ``card_offer`` line of *shop*:
+    ``{line index: (pack, card)}``.
+
+    A card offer sells one card of a cards.json pack, a different one each
+    day (owner, 2026-10-20: World's Card Shop, six single cards a day, is six
+    such lines). The lines of one pack in a shop show different cards, drawn
+    by the pack's odds from a random seeded with the day, the module, the
+    shop and the pack: every visit that day shows the same cards, with
+    nothing saved. More lines than the pack has cards leave the rest empty.
+    """
+    import random
+    from utils.card_utils import find_pack, get_module_cards
+    day = day or offer_day()
+    lines = {}
+    for index, entry in enumerate(shop.get("items") or []):
+        if entry.get("card_offer"):
+            lines.setdefault(entry["card_offer"], []).append(index)
+    cards = {c.get("id"): c for c in (get_module_cards(module.name) or {}).get("cards") or []}
+    out = {}
+    for pack_id, indexes in lines.items():
+        pack = find_pack(module.name, pack_id)
+        pool = [(cards[e.get("id")], max(0, int(e.get("odds", 1) or 0)))
+                for e in (pack or {}).get("cards") or [] if e.get("id") in cards]
+        pool = [(card, weight) for card, weight in pool if weight > 0]
+        rng = random.Random(f"{module.name}|{shop.get('name', '')}|{pack_id}|{day}")
+        for index in indexes:
+            if not pool:
+                break
+            pick = rng.choices(range(len(pool)), weights=[w for _c, w in pool])[0]
+            out[index] = (pack, pool.pop(pick)[0])
+    return out
+
+
+def card_offer_price(entry, card) -> int:
+    """A card offer's price: ``rarity_prices`` for the card's rarity
+    ({"Common": 500, "Rare": 1500, "Legendary": 5000}), else ``price``."""
+    prices = entry.get("rarity_prices") or {}
+    price = prices.get(card.get("rarity") or "Common", entry.get("price", 0))
+    return max(0, int(price or 0))
+
+
 def shop_stock(module, shop) -> list:
     """The `Offer`s *shop* has on sale now, in its order. An entry naming an
     item or a pack the module does not have is skipped; one naming both
-    sells the pack."""
+    sells the pack. A ``card_offer`` entry sells today's card of its pack
+    (`card_offers`)."""
     by_name = {item.name: item for item in getattr(module, "items", None) or []}
     versions = party_versions(module.name)
     stock = []
-    for entry in shop.get("items") or []:
+    offers = None
+    for index, entry in enumerate(shop.get("items") or []):
         if not _is_open(module.name, entry.get("unlock", "")) or not _for_party(entry, versions):
             continue
         price = max(0, int(entry.get("price", 0) or 0))
+        if entry.get("card_offer"):
+            if offers is None:
+                offers = card_offers(module, shop)
+            if index not in offers:
+                continue
+            pack, card = offers[index]
+            rarity = card.get("rarity") or "Common"
+            stock.append(Offer("card", card.get("name", "Card"),
+                               f"{rarity} card. Today's offer.",
+                               card_offer_price(entry, card), pack=pack, card=card))
+            continue
         if entry.get("card_pack"):
             from utils.card_utils import find_pack
             pack = find_pack(module.name, entry["card_pack"])
@@ -251,10 +313,10 @@ def battle_reward(enemies):
 
 def buy(module, shop, offer):
     """Pay *offer*'s price in *shop*'s currency: an item goes to the
-    inventory, a card pack is opened into the collection. Returns None when
-    the balance is short or the player holds all of the item they can
-    (nothing is paid), else the cards a pack gave (``[(card, shiny), ...]``,
-    empty for an item)."""
+    inventory, a card pack is opened into the collection, a card offer's
+    card joins it. Returns None when the balance is short or the player
+    holds all of the item they can (nothing is paid), else the cards gained
+    (``[(card, shiny), ...]``, empty for an item)."""
     from utils.inventory_utils import is_full
     if offer.kind == "item" and is_full(offer.item.id):
         return None
@@ -263,6 +325,10 @@ def buy(module, shop, offer):
     if offer.kind == "card_pack":
         from utils.card_utils import open_pack
         return open_pack(module.name, offer.pack.get("id"))
+    if offer.kind == "card":
+        from utils.card_utils import add_card_copy
+        add_card_copy(module.name, offer.card.get("id"))
+        return [(offer.card, False)]
     from utils.inventory_utils import add_to_inventory
     add_to_inventory(offer.item.id, 1)
     return []

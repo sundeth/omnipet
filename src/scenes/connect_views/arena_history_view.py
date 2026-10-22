@@ -1,10 +1,11 @@
 """
 ArenaHistoryView - Battle history for a team.
 
-Shows a scrollable list of the team's battles -- attacks it made and
-defences it fought -- with outcome (win, loss or draw) and score change.
-WATCH fetches the selected battle and replays it in the battle scene, which
-returns here afterwards.
+Shows a scrollable list of the team's battles -- attacks it made (A) and
+defences it fought while the player was away (D) -- with outcome (W, L or
+D for a draw) and score change; the selected battle's opponent team is
+shown under the list. WATCH fetches the selected battle and replays it in
+the battle scene from the player's side, which returns here afterwards.
 """
 import threading
 from datetime import datetime
@@ -85,6 +86,12 @@ class ArenaHistoryView:
         # Selection arrow / pointer label (we just prefix the selected row
         # with ">" rather than adding a separate cursor).
 
+        # The selected battle's opponent team, under the list.
+        self.detail_label = self._add(Label(
+            w // 2, list_top + self.MAX_VISIBLE_ROWS * self.ROW_HEIGHT + 4, "",
+            color_override=(160, 200, 255), center=True,
+            word_wrap=True, max_width=w - 20))
+
         # Footer buttons
         btn_w, btn_h = 80, 24
         gap = 12
@@ -95,7 +102,7 @@ class ArenaHistoryView:
             x0, y0, btn_w, btn_h, "WATCH", self._on_watch))
         self.back_button = self._add(Button(
             x0 + btn_w + gap, y0, btn_w, btn_h, "BACK", self._on_back))
-        self.watch_button.enabled = False
+        self.watch_button.set_enabled(False)
 
     # ------------------------------------------------------------------
     # Data fetch
@@ -134,7 +141,8 @@ class ArenaHistoryView:
             for lbl in self._row_labels:
                 lbl.visible = False
                 lbl.set_text("")
-            self.watch_button.enabled = False
+            self.detail_label.set_text("")
+            self.watch_button.set_enabled(False)
             return
 
         self.status_label.set_text("")
@@ -159,7 +167,15 @@ class ArenaHistoryView:
                 (255, 255, 120) if idx == self._selected_index else (220, 220, 220)
             )
             lbl.visible = True
-        self.watch_button.enabled = True
+        self.detail_label.set_text(self._detail_line(self._battles[self._selected_index]))
+        self.watch_button.set_enabled(True)
+
+    @staticmethod
+    def _detail_line(battle: dict) -> str:
+        pets = battle.get('opponent_pets') or []
+        role = "You attacked" if battle.get('role', 'attack') == 'attack' else "Attacked by"
+        team = ", ".join(pets) if pets else battle.get('opponent_nickname', '?')
+        return f"{role}: {team}"
 
     def _format_battle_line(self, battle: dict) -> str:
         opponent = battle.get('opponent_nickname', '?')

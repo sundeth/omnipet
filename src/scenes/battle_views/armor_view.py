@@ -166,7 +166,7 @@ class ArmorView:
         # Re-check if current armor item selection is valid for this pet
         can_evolve = False
         if self.selected_armor_pet is not None and self.selected_armor_item is not None:
-            pet = game_globals.pet_list[self.selected_armor_pet]
+            pet = self.pet_selector.pets[self.selected_armor_pet]
             can_evolve = self._check_armor_evolution_possible(pet, self.selected_armor_item)
         
         # Update confirm button state
@@ -205,7 +205,7 @@ class ArmorView:
         can_evolve = False
         if self.selected_armor_pet is not None:
             from core import game_globals
-            pet = game_globals.pet_list[self.selected_armor_pet]
+            pet = self.pet_selector.pets[self.selected_armor_pet]
             can_evolve = self._check_armor_evolution_possible(pet, armor_game_item)
             
             if can_evolve:
@@ -228,29 +228,35 @@ class ArmorView:
             runtime_globals.game_sound.play("cancel")
             return
         
-        from core import game_globals
         from utils.inventory_utils import remove_from_inventory
-        
-        pet = game_globals.pet_list[self.selected_armor_pet]
+        from utils import evolution_items
+
+        # The selector lists the selected pets, so its index is into them.
+        pet = self.pet_selector.pets[self.selected_armor_pet]
         armor_item = self.selected_armor_item
-        
-        runtime_globals.game_sound.play("evolution")
-        runtime_globals.game_console.log(f"[ArmorView] Performing Armor evolution: {pet.name} + {armor_item.name}")
-        
-        # Armor evolution using the item's name
-        pet.armor_evolve(armor_item.name)
-        # Remove the armor item from inventory (pass item ID, not the object)
+
+        runtime_globals.game_console.log(f"[ArmorView] Using {armor_item.name} on {pet.name}")
+        consumed, evolved = evolution_items.use(pet, armor_item)
+        if not consumed:
+            runtime_globals.game_sound.play("cancel")
+            return
+        # An item route may want several uses (the Twin's five Bombs): a
+        # counted use without the evolution yet still spends the item.
+        runtime_globals.game_sound.play("evolution" if evolved else "menu")
         remove_from_inventory(armor_item.id)
-        runtime_globals.game_console.log(f"[ArmorView] Armor evolution completed: {pet.name} evolved using {armor_item.name}")
+        runtime_globals.game_console.log(
+            f"[ArmorView] {armor_item.name}: {pet.name} {'evolved' if evolved else 'counted a use'}")
         
         # Return to game scene
         runtime_globals.game_console.log("[ArmorView] Returning to game")
         change_scene("game")
     
-    @staticmethod
-    def _pet_has_armor_evolution(pet):
-        """Whether this pet has any item-gated (armor) evolution at all."""
-        return any("item" in evo for evo in getattr(pet, "evolve", []) or [])
+    def _pet_has_armor_evolution(self, pet):
+        """Whether any evolution item the player holds does something for
+        this pet (utils.evolution_items.can_use)."""
+        from utils.evolution_items import can_use
+        held = [getattr(entry, "game_item", None) for entry in getattr(self.armor_item_list, "items", None) or []]
+        return any(can_use(pet, item) for item in held if item is not None)
 
     def _update_pet_compatibility(self):
         """Grey out the pets this armor item is no use to.
@@ -295,27 +301,10 @@ class ArmorView:
         Returns:
             bool: True if evolution is possible, False otherwise
         """
-        if not pet or not armor_item:
-            return False
-            
-        # Check if pet has evolutions
-        if not hasattr(pet, 'evolve') or not pet.evolve:
-            return False
-            
-        # Get the item name to compare
-        item_name = armor_item.name if hasattr(armor_item, 'name') else None
-        if not item_name:
-            runtime_globals.game_console.log(f"[ArmorView] Armor item has no name")
-            return False
-            
-        # Check each evolution for item requirement matching the item's name
-        for evo in pet.evolve:
-            if "item" in evo and evo["item"] == item_name:
-                runtime_globals.game_console.log(f"[ArmorView] Found matching evolution: {evo.get('to', 'Unknown')} requires {item_name}")
-                return True
-                
-        runtime_globals.game_console.log(f"[ArmorView] No evolution found requiring {item_name}")
-        return False
+        # A route naming the item, or an evolving item's own target for
+        # this pet (utils.evolution_items).
+        from utils.evolution_items import can_use
+        return can_use(pet, armor_item)
     
     def _on_back(self):
         """Handle back button."""

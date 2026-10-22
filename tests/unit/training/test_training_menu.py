@@ -365,10 +365,13 @@ class BonusTests(unittest.TestCase):
             self.assertEqual(scene_training.bonus_targets(), [mine])
 
     def test_an_unwritten_minigame_does_not_start(self):
+        # Every Bonus minigame is written now (Gotcha!, 2026-10-20): one is
+        # taken back to unwritten (cls None) for the test.
         self.party.append(ic_pet())
         scene = SceneTraining()
         scene.show_view("bonus")
-        with mock.patch.object(scene_training, "get_training_targets", return_value=[ic_pet()]):
+        with mock.patch.object(scene_training, "get_training_targets", return_value=[ic_pet()]), \
+                mock.patch.dict(BONUS_MODES["gotcha"], {"cls": None}):
             scene.select_training("gotcha")
             self.assertIsNone(scene.mode)
             self.assertEqual(scene.phase, "menu")
@@ -387,7 +390,9 @@ class BonusTests(unittest.TestCase):
         scene = SceneTraining()
         scene.show_view("bonus")
         targets = [ic_pet(hunger=4)]
-        ic_module = SimpleNamespace(currencies=[], folder_path=os.path.join(REPO_ROOT, "modules", "IC"))
+        ic_module = SimpleNamespace(currencies=[], folder_path=os.path.join(REPO_ROOT, "modules", "IC"),
+                                    training_uses_battle_cost=True, battle_cost_type="Hunger",
+                                    battle_cost_amount=1)
         with mock.patch.object(runtime_globals, "game_modules", {"IC": ic_module}), \
                 mock.patch.object(scene_training, "get_training_targets", return_value=targets), \
                 mock.patch("training.training.get_training_targets", return_value=targets), \

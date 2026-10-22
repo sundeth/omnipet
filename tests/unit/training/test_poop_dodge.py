@@ -60,6 +60,8 @@ class PoopDodgeTests(unittest.TestCase):
             mock.patch.object(runtime_globals, "INPUT_MODE", runtime_globals.KEYBOARD_MODE),
             mock.patch.object(runtime_globals, "game_modules", {
                 "IC": SimpleNamespace(currencies=[FIGHT_MONEY],
+                                      training_uses_battle_cost=True, battle_cost_type="Hunger",
+                                      battle_cost_amount=1,  # the iC's heart a play
                                       folder_path=os.path.join(REPO_ROOT, "modules", "IC"))}),
             mock.patch.object(game_globals, "currency", {}),
         ]

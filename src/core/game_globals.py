@@ -474,6 +474,9 @@ background_high_res = False
 pet_list = []
 poop_list = []
 traited = []
+#: "module@version" -> the generation its waiting Traited Egg hatches as
+#: (traited_egg_rule "Generation": the Digivice iC's inherited Digitama).
+generations = {}
 gcell_fragments = []
 
 #: Modules that have been renamed. A save keys almost everything by module
@@ -500,6 +503,9 @@ quests = []
 event = None
 event_time = None
 total_victories = {}  # Track total battle victories per module: {module_name: count}
+# Counted connection unlocks (`versus` + amount): {module: {record key:
+# {"battles": n, "opponents": [device versions met]}}}. utils_unlocks.
+versus_progress = {}
 purchases = GamePurchases()  # Shop purchases
 configuration = GameConfiguration()  # Centralized configuration
 coins = 0  # Player's coin balance
@@ -705,6 +711,7 @@ def save() -> None:
         "pet_list": pet_list,
         "poop_list": poop_list,
         "traited": traited,
+        "generations": generations,
         "gcell_fragments": gcell_fragments,
         "game_background": game_background,
         "battle_area": battle_area,
@@ -723,6 +730,7 @@ def save() -> None:
         "event": event,
         "event_time": event_time,
         "total_victories": total_victories,
+        "versus_progress": versus_progress,
         "purchases": purchases.to_dict(),
         "coins": coins,
         "currency": currency,
@@ -774,13 +782,13 @@ def _rename_saved_modules() -> None:
     An entry already under the new name wins -- the player has played since
     the rename, and that is the current state.
     """
-    global pet_list, unlocks, battle_area, battle_round, total_victories
+    global pet_list, unlocks, battle_area, battle_round, total_victories, versus_progress
     global friends, card_collection, card_cooldowns, currency, shop_access
     global last_adventure_module, background_module_name
 
     renamed = []
     for old_name, new_name in LEGACY_MODULE_NAMES.items():
-        for container in (unlocks, battle_area, battle_round, total_victories,
+        for container in (unlocks, battle_area, battle_round, total_victories, versus_progress,
                           friends, card_collection, card_cooldowns, currency, shop_access):
             if isinstance(container, dict) and old_name in container:
                 value = container.pop(old_name)
@@ -809,9 +817,9 @@ def load() -> None:
     or if in Progress Mode without a player_id.
     """
     from core import runtime_globals
-    global pet_list, poop_list, traited, gcell_fragments, unlocks, battle_area, battle_round, last_adventure_module, xai, xai_date, background_high_res
+    global pet_list, poop_list, traited, generations, gcell_fragments, unlocks, battle_area, battle_round, last_adventure_module, xai, xai_date, background_high_res
     global game_background, background_module_name, showClock, inventory, battle_effects, redeemed_codes
-    global quests, event, event_time, total_victories, purchases, coins, configuration, setup_input, setup_graphics, show_tutorial, game_mode
+    global quests, event, event_time, total_victories, versus_progress, purchases, coins, configuration, setup_input, setup_graphics, show_tutorial, game_mode
     global friends, friend_event_pending, card_collection, card_cooldowns, currency, shop_access
     global shop_items_data, shop_backgrounds
     global android_offline
@@ -908,6 +916,7 @@ def load() -> None:
                     poop.patch()  # Ensure all poops have necessary attributes
 
                 traited = data.get("traited", [])
+                generations = data.get("generations") or {}
                 gcell_fragments = data.get("gcell_fragments", [])
                 game_background = data.get("game_background", None)
                 battle_area = data.get("battle_area", {})
@@ -926,6 +935,7 @@ def load() -> None:
                 event = data.get("event", None)
                 event_time = data.get("event_time", None)
                 total_victories = data.get("total_victories", {})
+                versus_progress = data.get("versus_progress", {}) or {}
                 purchases = GamePurchases.from_dict(data.get("purchases", None))
                 coins = data.get("coins", 0)
                 currency = data.get("currency", {}) or {}
@@ -1002,6 +1012,7 @@ def load() -> None:
     pet_list = []
     poop_list = []
     traited = []
+    generations = {}
     gcell_fragments = []
     game_background = None
     battle_area = {}
@@ -1017,6 +1028,7 @@ def load() -> None:
     redeemed_codes = {}
     background_high_res = False
     total_victories = {}
+    versus_progress = {}
     purchases = GamePurchases()
     coins = 0
     currency = {}

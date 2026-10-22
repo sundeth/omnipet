@@ -27,7 +27,7 @@ def _pet(hunger, dp=0):
     pet.state = "idle"
     pet.hunger = hunger
     pet.dp = dp
-    pet.sick = 0
+    pet.sick = pet.injury = 0
     pet.stage = 3
     pet.power = 20
     pet.atk_main = 1

@@ -20,7 +20,7 @@ by all of it, and that the Android offline copy (services.android_pet_rules)
 applies the same rules. Checklist: ICX-01 (release-1.0.md).
 
 Code under test: models.game_pet (add_reliability, _apply_reliability_event,
-set_eating, answer_call, update_care_mistakes, poop, set_sick, finish_training,
+set_eating, answer_call, update_care_mistakes, poop, add_ailment, finish_training,
 finish_battle, finish_versus, update_reliability), training.ic_minigame,
 battle.battle_encounter_dcom, scenes.scene_maingame.update_cleaning.
 """
@@ -84,7 +84,7 @@ class BaseAndBoundsTests(ICCase):
         pet.reliability = 0
         pet.update_reliability(60)
         self.assertEqual(pet.reliability, 0)
-        pet.set_sick("dots")
+        pet.add_ailment("sick")
         self.assertEqual(pet.reliability, 0)
 
     def test_an_old_save_is_clamped_and_a_missing_value_starts_at_the_base(self):
@@ -156,19 +156,33 @@ class CallTests(ICCase):
         self.assertEqual(pet.reliability, 15)
 
     def test_an_ignored_bedtime_call_costs_one_each_night(self):
-        """The care mistake repeats every three minutes with the lights on;
-        Reliability is lost once a bedtime."""
+        """A bedtime call left with the lights on costs one care mistake and
+        one Reliability, once: it does not repeat (owner, 2026-10-17; it
+        repeated every three minutes). The next night is a new call."""
         pet = self.pet(_test_bedtime=True)
         self.tick(pet, 3)
         self.assertEqual((pet.reliability, pet.mistakes), (14, 1))
-        self.tick(pet, 3)
-        self.assertEqual((pet.reliability, pet.mistakes), (14, 2))
+        self.tick(pet, 30)
+        self.assertEqual((pet.reliability, pet.mistakes), (14, 1), "the call does not repeat")
         self.assertFalse(pet.answer_call("sleep"), "too late to answer")
         pet._test_bedtime = False                # morning
         self.tick(pet)
         pet._test_bedtime = True                 # the next night
         self.tick(pet, 3)
-        self.assertEqual((pet.reliability, pet.mistakes), (13, 3))
+        self.assertEqual((pet.reliability, pet.mistakes), (13, 2))
+
+    def test_going_to_sleep_ends_the_call_and_a_new_one_counts_again(self):
+        """Lights off ends the call; woken and left with the lights on, the
+        pet calls again and that call counts once more (as hunger's does after
+        a meal)."""
+        pet = self.pet(_test_bedtime=True)
+        self.tick(pet, 3)
+        self.assertEqual(pet.mistakes, 1)
+        pet.set_state("nap")
+        self.assertEqual(pet.care_sleep_mistake_timer, 0)
+        pet.set_state("idle")                   # woken in the night
+        self.tick(pet, 3)
+        self.assertEqual(pet.mistakes, 2)
 
 
 class MinigameTests(ICCase):
@@ -218,18 +232,19 @@ class PoopTests(ICCase):
 class SicknessTests(ICCase):
     def test_falling_sick_costs_one_at_the_onset(self):
         pet = self.pet()
-        self.assertTrue(pet.set_sick("dots"))
+        self.assertTrue(pet.add_ailment("sick"))
         self.assertEqual(pet.reliability, 14)
-        self.assertFalse(pet.set_sick("dots"), "already sick")
+        self.assertFalse(pet.add_ailment("sick"), "already sick")
+        self.assertFalse(pet.add_ailment("injury"), "one ailment at a time")
         self.tick(pet, 5)
         self.assertEqual(pet.reliability, 14, "staying sick costs nothing more")
 
     def test_an_injury_from_a_lost_battle_costs_one(self):
         pet = self.pet()
         enemy = SimpleNamespace(stage=3, name="Agumon", version=1)
-        with patch("models.game_pet.random.random", return_value=0.0):   # the 10% roll hits
+        with patch("models.game_pet.random.random", return_value=0.0):   # the form's 10% roll hits
             pet.finish_battle(False, enemy, 1)
-        self.assertGreater(pet.sick, 0)
+        self.assertGreater(pet.injury, 0)
         self.assertEqual(pet.reliability, 14)
 
 
@@ -244,12 +259,13 @@ class BattleTests(ICCase):
             pet.finish_battle(False, self.ENEMY, 1)
             self.assertEqual(pet.reliability, 16)
 
-    def test_a_win_that_injures_nets_nothing(self):
-        """The iC rolls 10% sickness on a win too: +1 for the win, -1 for it."""
+    def test_a_win_never_injures(self):
+        """Only a loss rolls the form's injury chance (owner, 2026-10-21: the
+        flat 10% the module rolled on a win too had no source): +1, no -1."""
         pet = self.pet()
         with patch("models.game_pet.random.random", return_value=0.0):
             pet.finish_battle(True, self.ENEMY, 1)
-        self.assertEqual((pet.win, pet.injuries, pet.reliability), (1, 1, 15))
+        self.assertEqual((pet.win, pet.injury_total, pet.reliability), (1, 0, 16))
 
     def test_a_versus_win_gives_one(self):
         winner, loser = self.pet(), self.pet(name="Gaomon")
@@ -268,15 +284,20 @@ class ConnectionBattleTests(ICCase):
             result_timer=10 ** 6, _has_result_rewards=lambda: True,
             victory_status="Victory" if won else "Defeat",
             battle_player=SimpleNamespace(team1=[pet], winners=["team1" if won else "team2"]),
-            dcom_simulator=SimpleNamespace(opponent_device_version=1),
+            dcom_simulator=SimpleNamespace(opponent_device_version=0, battle_format="IC"),  # a 10X: wire 0
             module=self.ic, is_oem_mode=False, return_to_main_scene=Mock())
         BattleEncounterDCom.update_result(encounter)
         encounter.return_to_main_scene.assert_called_once()
 
     def test_the_result_path_counts_the_win(self):
         pet = self.pet(hunger=4)
+        before = (pet.battles, pet.win, pet.totalBattles, pet.totalWin)
         self.result(pet)
         self.assertEqual((pet.pvp_wins, pet.pvp_battles, pet.connect_points, pet.hunger), (1, 1, 1, 3))
+        # And a battle won like any other (owner, 2026-10-21): the 10X's
+        # 20/50-win gates can be met by cable.
+        self.assertEqual((pet.battles, pet.win, pet.totalBattles, pet.totalWin),
+                         tuple(n + 1 for n in before))
         self.assertIn("DigiShop 1", self.gg.shop_access.get("IC", {}))
 
     # Bug: a DCom/online win never applies reliability_battle_win
@@ -336,7 +357,7 @@ class NonICTests(ICCase):
         with patch("models.game_pet.random.random", return_value=0.99):
             pet.finish_battle(True, SimpleNamespace(stage=3, name="Agumon", version=1), 1)
         pet.finish_versus(True)
-        pet.set_sick()
+        pet.add_ailment("injury")
         pet.update_reliability(600)
         self.assertGreater(pet.mistakes, 0, "the care rules did run")
         self.assertEqual(pet.reliability, 0)
@@ -364,7 +385,7 @@ class AndroidParityTests(ICCase):
         world.advance(start + 10 * 60)
         self.tick(live, 10)
         offline = world.pet_list[0]
-        self.assertEqual((live.reliability, live.mistakes), (14, 3))
+        self.assertEqual((live.reliability, live.mistakes), (14, 1))
         for field in ("reliability", "mistakes", "care_sleep_mistake_timer"):
             self.assertEqual(getattr(offline, field), getattr(live, field), field)
 
@@ -375,7 +396,7 @@ class AndroidParityTests(ICCase):
         offline.poop()
         offline.poop()
         self.assertEqual(offline.reliability, 14, "two poops")
-        offline.set_sick("dots")
+        offline.add_ailment("sick")
         self.assertEqual(offline.reliability, 13, "sickness")
         self.assertEqual(offline.add_reliability(99), 18)
         self.assertEqual(offline.reliability, 31, "the same bounds")

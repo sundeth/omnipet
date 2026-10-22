@@ -196,7 +196,7 @@ class VersusFormats(unittest.TestCase):
                                  BattleEncounterVersus.FIXED_CHARGE)
                 self.assertEqual(calls, [(battle_format, charge)] * 2)
 
-    @unittest.expectedFailure  # BAT-F6: battle_encounter_versus.py:36 builds on module "DMC"
+    # BAT-F6 (built on module "DMC"). Fixed 2026-10-17; kept as a regression test.
     def test_versus_does_not_need_the_dmc_module(self):
         """A DM20 versus between two DM20 pets starts with no DMC module
         installed (physical protocols must work without other modules)."""

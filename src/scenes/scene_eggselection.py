@@ -31,6 +31,7 @@ from models.game_digidex import known_pet_keys
 from utils.utils_unlocks import get_unlocked_backgrounds, is_unlocked
 from utils.sprite_utils import load_pet_sprites
 from utils.asset_utils import image_load
+from utils.data_compat import availability as read_availability
 from scenes.scene_error import SceneError
 
 #=====================================================================
@@ -801,6 +802,10 @@ class SceneEggSelection:
         """Return stage-0 eggs the player may currently hatch from ``module``."""
         available_eggs = []
         for egg in module.get_monsters_by_stage(0):
+            # An Unobtainable egg is held back: DMM Ver.3 and the Burst for
+            # 1.0, their data incomplete (owner, 2026-10-15).
+            if read_availability(egg) == "Unobtainable":
+                continue
             if egg.get("special", False):
                 special_key = egg.get("special_key", "")
                 module_name = egg.get("module", module.name)
@@ -838,19 +843,31 @@ class SceneEggSelection:
                     break
         return matched
 
+    def _device_has_art(self, module, device):
+        """A device is finished once it has a screen background, or a sprite
+        meant to stand alone: VB, VBE and VH show the DIM card itself."""
+        if str(device.get("background", "") or "").strip():
+            return True
+        sprite_name = str(device.get("sprite", "") or "").strip()
+        if not sprite_name:
+            return False
+        if not sprite_name.lower().endswith(".png"):
+            sprite_name += ".png"
+        return os.path.exists(os.path.join(module.folder_path, "devices", sprite_name))
+
     def _get_selectable_devices(self, module):
         """Return devices that are complete and currently usable for hatching.
 
-        A device without a configured screen background is unfinished artwork,
-        so it remains editor-only.  Egg matching is performed against the
-        already filtered egg list, which also hides a device whose only eggs
-        are special eggs that have not been unlocked yet.
+        A device with neither a screen background nor a sprite of its own is
+        unfinished artwork, so it remains editor-only.  Egg matching is
+        performed against the already filtered egg list, which also hides a
+        device whose only eggs are special eggs that have not been unlocked yet.
         """
         available_eggs = self._get_available_eggs(module)
         return [
             device for device in getattr(module, "devices", [])
             if isinstance(device, dict)
-            and str(device.get("background", "") or "").strip()
+            and self._device_has_art(module, device)
             and self._get_device_eggs(module, device, available_eggs)
         ]
 
@@ -1441,6 +1458,10 @@ class SceneEggSelection:
         if egg_key in game_globals.traited:
             pet.traited = True
             game_globals.traited.remove(egg_key)
+            # An inherited Digitama (the iC) hatches its generation.
+            generation = (getattr(game_globals, "generations", None) or {}).pop(egg_key, None)
+            if generation:
+                pet.set_generation(generation)
             
         # Handle G-Cell fragment eggs if applicable
         if selected_egg.get("special", False) and selected_egg.get("special_key") == "gcell_fragment":

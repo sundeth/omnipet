@@ -148,7 +148,9 @@ def gain(module, pet, event, *, won=False, grade=0, phase2=False, special=False,
         table = (get("gcell_training_gain_anguirus", DEFAULT_TRAINING_GAIN_ANGUIRUS)
                  or DEFAULT_TRAINING_GAIN_ANGUIRUS) if anguirus else (
                  get("gcell_training_gain", DEFAULT_TRAINING_GAIN) or DEFAULT_TRAINING_GAIN)
-        level = max(0, min(3, int(grade))) if won else 0
+        # The grade's row, won or lost, as GamePet.finish_training pays the
+        # care tables (only Mogera's lost Phase 2 has a grade above Bad)
+        level = max(0, min(3, int(grade)))
         return int(table[min(level, len(table) - 1)])
     if event == "battle":
         if special:

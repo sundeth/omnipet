@@ -10,11 +10,11 @@ android_offline.py. This is not a background service.
 from datetime import datetime
 from core import constants, pet_stats
 from utils.data_compat import availability as read_availability, get_data
-from utils import evolution_rules, gcell_rules
+from utils import ailments, evolution_rules, gcell_rules, lifespan_rules
 
 
 class AndroidPetRules:
-    VITAL_VALUE_CAPS = {3: 2500, 4: 5000, 5: 7500, 6: 9999, 7: 9999, 8: 9999}
+    VITAL_VALUE_CAPS = pet_stats.VITAL_VALUE_CAPS
 
     def set_data(self, data):
         self.module = data["module"]
@@ -45,7 +45,10 @@ class AndroidPetRules:
         if self.atk_alt == 0:
             self.atk_alt = self.atk_main
         self.atk_alt_2 = data.get("atk_alt_2", 0)
-        self.time = data.get("time", 0)
+        # GamePet.set_data: a later generation evolves earlier from Child on.
+        world = getattr(self, "world", None)
+        self.time = evolution_rules.generation_time(
+            world.get_module(self.module) if world else None, self, self.stage, data.get("time", 0))
         self.poop_timer = data.get("poop_timer", 60)
         self.min_weight = data.get("min_weight")
         self.evol_weight = data.get("evol_weight", 0)
@@ -53,6 +56,11 @@ class AndroidPetRules:
         self.hunger_loss = data.get("hunger_loss")
         self.strength_loss = data.get("strength_loss")
         self.power = data.get("power")
+        # GamePet.set_data: an offline evolution takes the new form's RPM and
+        # injury chance too (it kept the old form's before).
+        self.rpm = data.get("rpm", 0)
+        self.injury_probability = data.get("injury_probability", 0) or 0
+        self.injury_chance_offset = 0
         self.attribute = data.get("attribute")
         self.digisoul = data.get("digisoul", "")
         self.energy = data.get("energy")
@@ -82,7 +90,8 @@ class AndroidPetRules:
             self.weight = self.min_weight
         self.dp = self.energy
         self.effort = 0
-        self.sick = 0
+        # No ailment, counts or untreated timers in a new form (GamePet).
+        ailments.reset(self)
         self.level = 1
         self.experience = 0
         # The Digimon Twin carries its battle record across an evolution while
@@ -91,7 +100,7 @@ class AndroidPetRules:
         if not getattr(self.world.get_module(self.module), 'battle_keep_counts_on_evolution', False):
             self.win = self.battles = 0
         self.animation_counter = self.frame_counter = self.frame_index = 0
-        self.care_food_mistake_timer = self.care_strength_mistake_timer = self.care_sleep_mistake_timer = self.care_sick_mistake_timer = 0
+        self.care_food_mistake_timer = self.care_strength_mistake_timer = self.care_sleep_mistake_timer = 0
 
         # Reset real-time gameplay timers (NOT _last_age_date — age persists across evolutions)
         _now = self.world.cursor
@@ -116,8 +125,11 @@ class AndroidPetRules:
         self.special_encounter = False
 
         self.enemy_kills = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        self.injuries = 0
         self.starvation_counter = 0
+        # Strength's starvation counter (the Xros Wars Color's Debilitation)
+        self.debilitation_counter = 0
+        # Minutes the hunger / strength meter has been empty (death_*_timer)
+        self.hunger_empty_minutes = self.strength_empty_minutes = 0
         self.disturbance_penalty = 0
         self.overfeed_timer = 0
         self.protein_feedings = 0
@@ -129,8 +141,9 @@ class AndroidPetRules:
         # Death save system variables
         self.death_save_b_counter = 0
         self.death_save_shake_counter = 0
+        self.death_save_elapsed = 0.0
         self.death_save_immunity = 0
-        self.death_cause = ""  # tracks what triggered death: injuries, sickness, hunger, strength, care_mistakes, starvation, old_age, stage_mistakes
+        self.death_cause = ""  # tracks what triggered death: injuries, sicknesses, sickness, injury, hunger, strength, care_mistakes, starvation, old_age, lifespan, stage_mistakes
 
         self.quests_completed = 0
 
@@ -163,7 +176,6 @@ class AndroidPetRules:
         self.gcell_points = 0
 
         self._99g_triggered = False
-        self.sick_type = ""
         self.burpmon_active = False
 
     def check_death_conditions(self):
@@ -175,21 +187,20 @@ class AndroidPetRules:
 
         module = self.world.get_module(self.module)
 
-        # 1. 15 ou mais ferimentos em uma forma
-        if module.death_max_injuries > 0 and self.injuries >= module.death_max_injuries:
+        # 1. Too many injuries or sicknesses in one form, or one left
+        # untreated too long (GamePet; utils.ailments).
+        ailment_cause = ailments.death_cause(self, module)
+        if ailment_cause:
             result = True
-            death_cause = "injuries"
+            death_cause = ailment_cause
 
-        # 2. Ficou ferido por 6h contínuas (sem curar)
-        if module.death_sick_timer > 0 and self.care_sick_mistake_timer > module.death_sick_timer:
-            result = True
-            death_cause = "sickness"
-
-        # 3. Fome OU força vazia por 12h contínuas
-        if module.death_hunger_timer > 0 and self.care_food_mistake_timer > module.death_hunger_timer:
+        # 3. Hunger or Strength empty for N consecutive minutes (DMC, DM20: 12 h;
+        # the original DM: 6 h). Counted apart from the call timers, which
+        # stop at the care mistake: reading those, this death never came.
+        if module.death_hunger_timer > 0 and getattr(self, 'hunger_empty_minutes', 0) >= module.death_hunger_timer:
             result = True
             death_cause = "hunger"
-        if module.death_strength_timer > 0 and self.care_strength_mistake_timer > module.death_strength_timer:
+        if module.death_strength_timer > 0 and getattr(self, 'strength_empty_minutes', 0) >= module.death_strength_timer:
             result = True
             death_cause = "strength"
 
@@ -205,78 +216,117 @@ class AndroidPetRules:
                 result = True
                 death_cause = "stage_mistakes"
 
-        if module.death_starvation_count > 0 and self.starvation_counter > module.death_starvation_count:
+        # The meter emptied N times without being filled (Pendulum Color 20,
+        # Xros Wars Color 18): "if the counter reaches 18, it will die".
+        if module.death_starvation_count > 0 and self.starvation_counter >= module.death_starvation_count:
             result = True
             death_cause = "starvation"
+        if (getattr(module, 'death_debilitation_count', 0) > 0
+                and getattr(self, 'debilitation_counter', 0) >= module.death_debilitation_count):
+            result = True
+            death_cause = "debilitation"
 
         if module.death_care_mistake > 0 and self.mistakes >= module.death_care_mistake:
             result = True
             death_cause = "care_mistakes"
 
-        # Old age overrides all other causes and cannot be saved
-        if module.death_old_age > 0 and self.age >= module.death_old_age:
+        # The module's lifespan rule (GamePet). Old age overrides all other
+        # causes and cannot be saved.
+        lifespan_cause = lifespan_rules.death_cause(self, module, self.can_evolve)
+        if lifespan_cause == "old_age":
             return True
+        if lifespan_cause:
+            result = True
+            death_cause = lifespan_cause
 
         # Old age death cannot be saved
         if result and death_cause == "old_age":
             return True
 
-        # Death save system - activate if death conditions met and not immune
+        # The death save (module death_save_*): the pet is dying, and the
+        # player has the module's seconds to press or shake it back.
         if result and self.death_save_immunity == 0 and not self.dying:
-            has_save_method = module.death_save_by_b_press > 0 or module.death_save_by_shake > 0
-            if has_save_method:
+            if module.death_save_by != "Nothing":
                 self.death_cause = death_cause
                 self.dying = True
+                self.death_save_elapsed = 0.0
                 self.set_state("dying")
                 self.world.sound("death")
-                if module.death_save_by_b_press > 0 and self.death_save_b_counter == 0:
-                    self.death_save_b_counter = module.death_save_by_b_press
-                    self.world.log(f"[Death Save] {self.name} needs {module.death_save_by_b_press} B presses in 60 seconds! Cause: {death_cause}")
-                elif module.death_save_by_shake > 0 and self.death_save_shake_counter == 0:
-                    self.death_save_shake_counter = module.death_save_by_shake
-                    self.world.log(f"[Death Save] {self.name} needs {module.death_save_by_shake} shakes in 60 seconds! Cause: {death_cause}")
+                if module.death_save_by == "B Press":
+                    self.death_save_b_counter, what = module.death_save_amount, "B presses"
+                else:
+                    self.death_save_shake_counter, what = module.death_save_amount, "shakes"
+                self.world.log(
+                    f"[Death Save] {self.name} needs {module.death_save_amount} {what} in "
+                    f"{module.death_save_seconds} seconds! Cause: {death_cause}")
                 return False
+        # A dying pet lives or dies by its save (update_death_save).
+        if self.dying:
+            return False
 
         return result
 
-    def update_death_save_counters(self):
-        """Update death save counters and handle success/failure."""
-        if self.dying:
-            if self.death_save_b_counter <= 0 and self.death_save_shake_counter <= 0:
-                # Successfully saved! Negate death trigger based on cause
-                module = self.world.get_module(self.module)
-                cause = getattr(self, 'death_cause', '')
-                if cause == "injuries":
-                    self.injuries = max(0, self.injuries - 1)
-                elif cause == "sickness":
-                    self.sick = 0
-                    self.care_sick_mistake_timer = 0
-                elif cause == "hunger":
-                    self.care_food_mistake_timer = 0
-                elif cause == "strength":
-                    self.care_strength_mistake_timer = 0
-                elif cause == "starvation":
-                    self.starvation_counter = max(0, self.starvation_counter - 1)
-                elif cause in ("care_mistakes", "stage_mistakes"):
-                    self.mistakes = max(0, self.mistakes - 1)
-                self.death_save_immunity = 60  # 60 minutes
-                self.death_save_b_counter = 0
-                self.death_save_shake_counter = 0
-                self.dying = False
-                self.death_cause = ""
-                self.set_state("happy2")
-                self.world.sound("happy")
-                self.world.log(f"[Death Save] {self.name} was saved (cause: {cause})! 60-minute immunity granted.")
+    def update_death_save(self, seconds):
+        """GamePet.update_death_save: the presses or shakes made within the
+        module's seconds, its chance decides; out of time, the pet dies.
+        Nobody presses while the app is closed, so here the time runs out."""
+        if not self.dying:
+            return
+        module = self.world.get_module(self.module)
+        if module.death_save_by == "Nothing":
+            self.die()
+        elif self.death_save_b_counter <= 0 and self.death_save_shake_counter <= 0:
+            if self.world.rng.random() * 100 < module.death_save_chance:
+                self._death_saved()
+            else:
+                self.world.log(
+                    f"[Death Save] {self.name} made it, but lost its {module.death_save_chance}% chance")
+                self.die()
+        else:
+            self.death_save_elapsed = (getattr(self, "death_save_elapsed", 0.0) or 0.0) + seconds
+            if self.death_save_elapsed >= module.death_save_seconds:
+                self.world.log(f"[Death Save] {self.name} ran out of time")
+                self.die(late=self.death_save_elapsed - module.death_save_seconds)
 
-    def set_sick(self, sick_type=""):
-        # Already sick pets cannot fall sick again - the ailment has to be
-        # healed first. Without this an untreated pet keeps re-rolling its
-        # heal doses and racking up injuries toward death.
-        if self.sick > 0:
+    def die(self, late=0.0):
+        """The pet dies, *late* seconds ago (OfflinePet: a death route may
+        take it instead)."""
+        raise NotImplementedError
+
+    def _death_saved(self):
+        """GamePet._death_saved: what was killing the pet is undone, and it
+        is immune for an hour."""
+        cause = getattr(self, 'death_cause', '')
+        if ailments.undo(self, cause):
+            pass
+        elif cause == "hunger":
+            self.care_food_mistake_timer = 0
+            self.hunger_empty_minutes = 0
+        elif cause == "strength":
+            self.care_strength_mistake_timer = 0
+            self.strength_empty_minutes = 0
+        elif cause == "starvation":
+            self.starvation_counter = max(0, self.starvation_counter - 1)
+        elif cause == "debilitation":
+            self.debilitation_counter = max(0, self.debilitation_counter - 1)
+        elif cause in ("care_mistakes", "stage_mistakes"):
+            self.mistakes = max(0, self.mistakes - 1)
+        # "lifespan" has nothing to undo (GamePet).
+        self.death_save_immunity = 60  # 60 minutes
+        self.death_save_b_counter = 0
+        self.death_save_shake_counter = 0
+        self.death_save_elapsed = 0.0
+        self.dying = False
+        self.death_cause = ""
+        self.set_state("happy2")
+        self.world.sound("happy")
+        self.world.log(f"[Death Save] {self.name} was saved (cause: {cause})! 60-minute immunity granted.")
+
+    def add_ailment(self, kind):
+        """GamePet.add_ailment: a sickness or an injury, one at a time, none
+        for a form with heal_doses 0."""
+        if not ailments.onset(self, kind):
             return False
-        self.sick_type = sick_type
-        self.sick = self.heal_doses
-        self.injuries += 1
         self._apply_reliability_event('reliability_sickness_or_injury')
         self.set_state("sick")
         return True
@@ -308,15 +358,12 @@ class AndroidPetRules:
         # Dots or Skull: allow re-trigger only after weight drops below 90
         if self.weight < 90:
             self._99g_triggered = False
-            if self.sick == 0:
-                self.sick_type = ""
 
         if self.weight >= 99 and not getattr(self, '_99g_triggered', False):
             self._99g_triggered = True
-            if effect == "Dots":
-                self.set_sick("dots")
-            else:  # Skull
-                self.set_sick()
+            kind = ailments.kind_for_effect(effect)
+            if kind:
+                self.add_ailment(kind)
 
     def _has_dna_evolution_criterion(self, evolution):
         """Whether a route asks for DigiSoul DNA: a non-empty
@@ -358,8 +405,7 @@ class AndroidPetRules:
 
     def update_evolution(self):
         """GamePet.update_evolution: defeat-count routes at once, the rest on
-        the timer, and a failed evolution is final where the module says so."""
-        module = self.world.get_module(self.module)
+        the timer, and a failed evolution is final."""
         if any(evolution_rules.is_immediate_route(e) for e in (self.evolve or [])):
             evo = self.find_evolution(kind="immediate")
             if evo is not None:
@@ -373,7 +419,10 @@ class AndroidPetRules:
 
         evo = self.find_evolution()
         if evo is None:
-            if evolution_rules.should_fail(module, self.evolve or []):
+            # GamePet.update_evolution: a pet with a win-rate route gets one
+            # try, and so does a form an Evolution Window rule covers.
+            if (evolution_rules.should_fail(self.evolve or [])
+                    or lifespan_rules.closes_evolution(self, self.world.get_module(self.module))):
                 self.evolution_failed = True
                 self.world.log(f"{self.name} failed to evolve.")
             return
@@ -392,8 +441,14 @@ class AndroidPetRules:
         self._apply_evolution(evo)
         return True
 
-    def find_evolution(self, kind="normal"):
-        """GamePet.find_evolution, chances rolled: the route taken, or None."""
+    def can_evolve(self):
+        """GamePet.can_evolve: no failed evolution, and a normal route met
+        now, its chances counted as met (no number drawn)."""
+        return not getattr(self, "evolution_failed", False) and self.find_evolution(roll_chance=False) is not None
+
+    def find_evolution(self, kind="normal", roll_chance=True):
+        """GamePet.find_evolution: the route taken, or None. Chances are
+        rolled when *roll_chance*; otherwise they count as met."""
         module_obj = self.world.get_module(self.module)
         poops_on_screen = len(self.world.poop_list)
         table_roll = evolution_rules.once(lambda: self.world.rng.random() * 100)
@@ -422,7 +477,10 @@ class AndroidPetRules:
                 ("condition_hearts" in evo and not in_range(self.condition_hearts, evo["condition_hearts"])) or
                 ("training" in evo and not in_range(self.effort, evo["training"])) or
                 ("overfeed" in evo and not in_range(self.overfeed, evo["overfeed"])) or
-                ("special_encounter" in evo and not self.special_encounter) or
+                # true: beat a special encounter in this form; false: did not
+                # (mirrors GamePet.find_evolution).
+                (evo.get("special_encounter") is not None and
+                 bool(evo["special_encounter"]) != bool(self.special_encounter)) or
                 ("level" in evo and not in_range(self.level, evo["level"])) or
                 ("quests_completed" in evo and not in_range(self.quests_completed, evo["quests_completed"])) or
                 # Digimon Twin: Event Communications run against the win ratio
@@ -430,12 +488,6 @@ class AndroidPetRules:
                 ("event_communication" in evo and
                  not in_range(getattr(self, "event_communications", 0),
                               evo["event_communication"])) or
-                # "item_use" counts how many times an item has been used, as
-                # against "item", which names an armor/digimental to evolve
-                # with. The Twin wants five Bombs for Digitamamon.
-                ("item_use" in evo and
-                 getattr(self, "item_uses", {}).get(evo["item_use"], 0)
-                 < evo.get("item_use_amount", 1)) or
                 ("weight" in evo and not in_range(self.weight, evo["weight"])) or
                 ("trophies" in evo and not in_range(self.trophies, evo["trophies"])) or
                 ("vital_values" in evo and not in_range(self.vital_values, evo["vital_values"])) or
@@ -454,7 +506,7 @@ class AndroidPetRules:
                 ("stage-7" in evo and not in_range(self.enemy_kills[7], evo["stage-7"])) or
                 ("stage-8" in evo and not in_range(self.enemy_kills[8], evo["stage-8"])) or
                 ("stage-9" in evo and not in_range(self.enemy_kills[9], evo["stage-9"])) or
-                ("pvp" in evo and not in_range(self.pvp_wins, evo["pvp"])) or
+                ("pvp" in evo and not in_range(getattr(self, "pvp_battles", 0) or 0, evo["pvp"])) or
                 ("sleep_disturbances" in evo and not in_range(self.sleep_disturbances, evo["sleep_disturbances"])) or
                 ("battles" in evo and not in_range(self.battles, evo["battles"])) or
                 ("win_count" in evo and not in_range(self.win, evo["win_count"])) or
@@ -472,13 +524,13 @@ class AndroidPetRules:
                 # device presents a coin flip between two outcomes: give the
                 # first one a chance and leave the second without one.
                 # -1 (or absent) means the criterion is unused.
-                ("chance" in evo and evo["chance"] >= 0 and
+                (roll_chance and "chance" in evo and evo["chance"] >= 0 and
                  self.world.rng.random() * 100 >= evo["chance"])
             ):
                 continue
             # Then the module's win-ratio table and a death route's chance.
-            if evolution_rules.rolls_fail(module_obj, self, evo,
-                                          lambda: self.world.rng.random() * 100, kind, table_roll):
+            if roll_chance and evolution_rules.rolls_fail(
+                    module_obj, self, evo, lambda: self.world.rng.random() * 100, kind, table_roll):
                 continue
 
             # The target has to exist on this version before anything else is
@@ -566,13 +618,16 @@ class AndroidPetRules:
                                 'care_needs_decay_while_sleeping', False):
             sleeping = False
         # GamePet.update_needs: twice as fast after a failed evolution or at
-        # Stage VI+ after 48 hours, where the module fails evolutions.
-        drain = minutes_passed * evolution_rules.needs_factor(self, self.world.get_module(self.module))
+        # Stage VI+ after 48 hours, where the module fails evolutions; Hunger
+        # alone also from Age 5.
+        module = self.world.get_module(self.module)
+        drain = minutes_passed * evolution_rules.needs_factor(self, module)
+        hunger_drain = max(drain, minutes_passed * lifespan_rules.needs_factor(self, module))
 
         # Hunger countdown
         if self._cd_hunger > 0 and not sleeping:
             if self.overfeed_timer == 0:
-                self._cd_hunger -= drain
+                self._cd_hunger -= hunger_drain
                 while self._cd_hunger <= 0:
                     if self.hunger > 0:
                         self.hunger -= 1
@@ -583,13 +638,16 @@ class AndroidPetRules:
         if self._cd_strength > 0 and not sleeping and self.tracks_strength():
             self._cd_strength -= drain
             while self._cd_strength <= 0:
-                if self.strength > 4:
-                    self.strength = 4
-                elif self.strength > 0:
-                    self.strength -= 1
+                if self.strength > 0:
+                    # Above 4 falls to 4 at once, unless the module caps the
+                    # meter itself (pet_stats.drained_strength, as GamePet).
+                    self.strength = pet_stats.drained_strength(
+                        self.strength, getattr(self.world.get_module(self.module), 'strength_max', 0))
                     if self.strength == 0:
                         # The empty-strength call costs PENGZ G-Cells (GamePet).
                         self._gcell_event("empty_strength")
+                else:
+                    self.debilitation_counter = getattr(self, 'debilitation_counter', 0) + 1
                 self._cd_strength += self.strength_loss
         if self.overfeed_timer > 0:
             self.overfeed_timer -= 1
@@ -610,17 +668,17 @@ class AndroidPetRules:
             if self.poop_count_flag == 0:
                 self.poop_count_flag = 1
                 poop_effect = getattr(module, 'care_poop_sickness_effect', 'Skull')
-                if poop_effect == "Nothing":
-                    pass
-                elif poop_effect == "Dots":
-                    self.set_sick("dots")
-                else:  # Skull
-                    self.set_sick()
-                self.world.log(f"[!] Care sick of poop ({len(self.world.poop_list)})! Effect: {poop_effect}, Injuries: {self.injuries}")
+                kind = ailments.kind_for_effect(poop_effect)
+                if kind:
+                    self.add_ailment(kind)
+                self.world.log(
+                    f"[!] Care sick of poop ({len(self.world.poop_list)})! Effect: {poop_effect}, "
+                    f"sicknesses {self.sick_total}, injuries {self.injury_total}")
         else:
             self.poop_count_flag = 0
 
-        depletion = minutes_passed * evolution_rules.poop_factor(self, module)
+        depletion = minutes_passed * max(evolution_rules.poop_factor(self, module),
+                                         lifespan_rules.needs_factor(self, module))
         self._cd_poop -= depletion
         if self._cd_poop <= 0:
             self.set_state("pooping")
@@ -649,28 +707,36 @@ class AndroidPetRules:
                     self.add_care_mistake("strength")
                     sound_alert = True
         
-        #sick call — pause timer while sleeping
-        if self.sick > 0 and not sleeping:
-            self.care_sick_mistake_timer += 1
-        elif self.sick == 0:
-            self.care_sick_mistake_timer = 0
+        # The meters' empty minutes, for the death timers: counted while
+        # awake as the calls are, paused asleep, cleared once refilled.
+        if self.hunger > 0:
+            self.hunger_empty_minutes = 0
+        elif not sleeping:
+            self.hunger_empty_minutes = getattr(self, 'hunger_empty_minutes', 0) + 1
+        if not self.strength_empty():
+            self.strength_empty_minutes = 0
+        elif not sleeping:
+            self.strength_empty_minutes = getattr(self, 'strength_empty_minutes', 0) + 1
 
-        #sleep call
+        # Sickness and injury left untreated (GamePet).
+        ailments.tick_timers(self, sleeping)
+
+        #sleep call — one care mistake a call, as hunger's (owner, 2026-10-17;
+        # it repeated every care_sleep_care_mistake_timer minutes): the timer
+        # stops at the threshold and starts again only when the call ends, the
+        # pet going to sleep (set_state "nap") or its sleep window closing.
         if sleeping:
-            self.care_sleep_mistake_timer += 1
-            if self.care_sleep_mistake_timer >= module.sleep_care_mistake_timer:
-                if not self._reliability_sleep_call_resolved:
-                    self._apply_reliability_event('reliability_ignoring_call')
-                    self._reliability_sleep_call_resolved = True
-                self.add_care_mistake("sleep")
-                sound_alert = True
-                self.care_sleep_mistake_timer = 0
+            if self.care_sleep_mistake_timer < module.sleep_care_mistake_timer:
+                self.care_sleep_mistake_timer += 1
+                if self.care_sleep_mistake_timer == module.sleep_care_mistake_timer:
+                    if not self._reliability_sleep_call_resolved:
+                        self._apply_reliability_event('reliability_ignoring_call')
+                        self._reliability_sleep_call_resolved = True
+                    self.add_care_mistake("sleep")
+                    sound_alert = True
         else:
-            # A new bedtime starts a new call episode. Resetting the timer
-            # also prevents a partly answered call carrying into tomorrow.
-            if (getattr(module, 'reliability_answering_call', 0) or
-                    getattr(module, 'reliability_ignoring_call', 0)):
-                self.care_sleep_mistake_timer = 0
+            # The window closed: the next bedtime is a new call.
+            self.care_sleep_mistake_timer = 0
             self._reliability_sleep_call_resolved = False
                 
         
@@ -679,7 +745,7 @@ class AndroidPetRules:
 
     def update_vital_values_gain(self):
         """Update vital values every hour - gain if pet is healthy and well-fed"""
-        if self.stage <= 0 or self.state in ("dead", "nap") or self.sick > 0 or self.hunger == 0 or self.strength_empty():
+        if self.stage <= 0 or self.state in ("dead", "nap") or ailments.ailing(self) or self.hunger == 0 or self.strength_empty():
             return
 
         # only devices that show the meter earn anything, the same rule
@@ -694,7 +760,7 @@ class AndroidPetRules:
         activity_multiplier = 1 + len(self.vital_activities)
         vital_gain = base_gain * activity_multiplier
 
-        # The cap is per stage - a Child tops out at 2500 where an Ultimate
+        # The cap is per stage - a Child tops out at 4000 where an Ultimate
         # reaches 9999 - so evolving is what raises the ceiling.
         ceiling = self.vital_value_cap() or 9999
         self.vital_values = min(ceiling, self.vital_values + vital_gain)
@@ -706,7 +772,7 @@ class AndroidPetRules:
 
     def update_vital_values_loss(self):
         """Update vital values every minute - lose if pet is in poor condition"""
-        if self.stage <= 0 or self.state in ("dead", "nap") or self.sick <= 0 and self.hunger > 0 and not self.strength_empty():
+        if self.stage <= 0 or self.state in ("dead", "nap") or not ailments.ailing(self) and self.hunger > 0 and not self.strength_empty():
             return
             
         module = self.world.get_module(self.module)
@@ -735,7 +801,7 @@ class AndroidPetRules:
         self._gcell_event("care_mistake")
 
     def need_care(self):
-        return self.stage != 0 and self.state not in ("dead","nap") and (self.hunger == 0 or self.strength_empty() or self.sick > 0 or self.should_sleep()) 
+        return self.stage != 0 and self.state not in ("dead","nap") and (self.hunger == 0 or self.strength_empty() or ailments.ailing(self) or self.should_sleep()) 
 
     def call_sign(self):
         if self.stage == 0 or self.state in ("dead","nap"):
@@ -753,6 +819,10 @@ class AndroidPetRules:
         if key not in self.world.traited:
             self.world.traited.append(key)
             self.world.log(f"Traited Egg granted for {self.name}!")
+        # GamePet._grant_traited_egg: an inherited Digitama, a generation on.
+        if getattr(self.world.get_module(self.module), "traited_egg_rule", "") == "Generation":
+            generations = self.world.generations
+            generations[key] = max(generations.get(key, 0), (getattr(self, "generation", 1) or 1) + 1)
 
     def _grant_gcell_fragment(self):
         """Make the module's G-Cell Fragment egg available once.
@@ -783,6 +853,8 @@ class AndroidPetRules:
           Evolution Timer            48 hours since the last evolution
           Evolution Timer (Area 45)  the same, gated on the X's Area 45
           Outlive Lifespan           still alive past its listed lifespan
+          Generation                 stage V or higher, always; the egg hatches a
+                                     generation on (the iC's inherited Digitama)
         """
         module = self.world.get_module(self.module)
         rule = getattr(module, "traited_egg_rule", "Stage V Chance")
@@ -790,9 +862,10 @@ class AndroidPetRules:
         if rule == "None":
             return
 
-        if rule == "Stage V":
+        if rule in ("Stage V", "Generation"):
             # The Digimon Mini lays a Digitama whenever the pet reaches
-            # LEVEL 5, with no roll at all.
+            # LEVEL 5, with no roll at all; so does the Digivice iC, whose
+            # inherited Digitama is a generation on ("Generation").
             if self.stage >= 5:
                 self._grant_traited_egg()
             return
@@ -823,13 +896,15 @@ class AndroidPetRules:
         if rule.startswith("Win Ratio"):
             min_stage = 4 if "Stage 4" in rule else 5
             win_ratio = (self.win * 100) // self.battles if self.battles else 0
-            if evolution_rules.fails_on_first_try(module):
-                # GamePet.set_traited_egg: the PENGZ's lifetime ratio, from a
-                # failed evolution or a Stage VI+ 48 hours in its form.
+            if rule.startswith("Win Ratio (Failed or Aged"):
+                # GamePet.set_traited_egg: from a failed evolution or a Stage
+                # VI+ 48 hours in its form; "..., Lifetime" (the PENGZ) reads
+                # the lifetime ratio.
                 if not (getattr(self, "evolution_failed", False)
                         or (self.stage >= 6 and evolution_rules.form_aged(self))):
                     return
-                win_ratio = evolution_rules.total_win_ratio(self)
+                if "Lifetime" in rule:
+                    win_ratio = evolution_rules.total_win_ratio(self)
             if self.stage >= min_stage and win_ratio >= 60:
                 self._grant_traited_egg()
             return
@@ -890,8 +965,9 @@ class AndroidPetRules:
             return None
 
         # Conditions that only decide whether a run may be started.
-        if not getattr(module, 'care_can_battle_while_sick', False) and self.sick > 0:
-            return f"sick={self.sick}"
+        blocked = ailments.blocks_battle(self, module)
+        if blocked:
+            return f"{blocked}={ailments.doses(self, blocked)}"
         if self.stage <= 1:
             return f"stage={self.stage}"
         if self.power <= 0:

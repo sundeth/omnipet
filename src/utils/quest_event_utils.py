@@ -71,6 +71,9 @@ def create_quest_instance_from_data(quest_data: QuestData, module_name: str) -> 
         quest_name = f"Armor Evo {target_amount} Time{'s' if target_amount > 1 else ''}"
     elif quest_type_enum == QuestType.JOGRESS:
         quest_name = f"Jogress {target_amount} Time{'s' if target_amount > 1 else ''}"
+    elif quest_type_enum == QuestType.DAILY_GIFT:
+        quest_name = quest_data.name or "Daily Gift"
+        target_amount = 1
     else:
         # Fallback to original name if type is unknown
         quest_name = quest_data.name
@@ -91,7 +94,7 @@ def create_quest_instance_from_data(quest_data: QuestData, module_name: str) -> 
         reward_value = reward_item
         reward_quantity = reward_amount
     
-    return GameQuest(
+    quest = GameQuest(
         quest_id=quest_data.id,
         name=quest_name,
         module=module_name,
@@ -102,6 +105,10 @@ def create_quest_instance_from_data(quest_data: QuestData, module_name: str) -> 
         reward_value=reward_value,
         reward_quantity=reward_quantity
     )
+    if quest_type_enum == QuestType.DAILY_GIFT:
+        # Nothing to do: it is claimable from the start.
+        quest.update_progress(1)
+    return quest
 
 
 def create_event_instance_from_data(event_data: EventData, module_name: str) -> GameEvent:
@@ -134,15 +141,29 @@ def generate_daily_quests() -> List[GameQuest]:
     Generate 3 random daily quests for the player.
     Attempts to select quests with different types when possible.
     This should be called once per day.
-        
+
+    A daily gift (QuestType.DAILY_GIFT) is not drawn: each party module
+    that has one offers one of its gifts every day, in one of the three
+    slots, and the rest are drawn as before (owner, 2026-10-20: the gift
+    may take the place of another module's quest).
+
     Returns:
         List of 3 randomly selected quest instances
     """
     all_quest_data = get_all_available_quest_data()
-    
+
     if not all_quest_data:
         return []
-    
+
+    gift_ids = {q.id for q in all_quest_data if q.type == QuestType.DAILY_GIFT.value}
+    gifts_by_module = {}
+    for mod_name, module in (runtime_globals.game_modules.items() if gift_ids else ()):
+        own = [q for q in module.load_quests_json() if q.id in gift_ids]
+        if own:
+            gifts_by_module[mod_name] = own
+    gifts = [random.choice(own) for _, own in sorted(gifts_by_module.items())][:3]
+    all_quest_data = [q for q in all_quest_data if q.type != QuestType.DAILY_GIFT.value]
+
     # Organize quests by type
     quests_by_type = {}
     for quest_data in all_quest_data:
@@ -154,11 +175,11 @@ def generate_daily_quests() -> List[GameQuest]:
     # Get list of available types
     available_types = list(quests_by_type.keys())
     
-    selected_quest_data = []
+    selected_quest_data = list(gifts)
     used_types = []
     
-    # Select 3 quests, preferring different types
-    for i in range(3):
+    # Fill the 3 slots, preferring different types
+    for i in range(3 - len(gifts) if quests_by_type else 0):
         # If we have unused types, pick from them
         if available_types:
             selected_type = random.choice(available_types)
@@ -269,9 +290,13 @@ def complete_quest(quest_id: str) -> Optional[dict]:
                     pet.vital_values = min(pet.vital_values + quest.reward_quantity, 999999)  # Cap at 999999
                 runtime_globals.game_console.log(f"All pets received +{quest.reward_quantity} vital values")
             elif quest.reward_type == RewardType.TROPHY:
-                # Add trophies to all pets
+                # Add trophies to every pet whose module shows them
+                from core import pet_stats
+                from utils.module_utils import get_module
                 for pet in game_globals.pet_list:
-                    pet.trophies += quest.reward_quantity
+                    module = get_module(pet.module)
+                    if pet_stats.tracks_trophies(getattr(module, "visible_stats", [])):
+                        pet.trophies += quest.reward_quantity
                 runtime_globals.game_console.log(f"All pets received +{quest.reward_quantity} trophies")
             elif quest.reward_type == RewardType.EXPERIENCE:
                 # Add experience to all pets using the GamePet method

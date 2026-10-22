@@ -430,8 +430,9 @@ class OnlineFailureTests(unittest.TestCase):
     # but its answer arrives after the client's timeout, the view reports a
     # failure and the pets stay in the party, unlocked; the hub then shows
     # the team (from GET /teams/current) and nothing ever locks them.
-    @unittest.expectedFailure
     def test_a_team_created_after_a_timeout_still_locks_its_pets(self):
+        # Fixed 2026-10-16: the hub locks party pets whose uid is on the
+        # current team (ArenaView._lock_loose_pets).
         env = self.env
         game, _hub = self._arena()
         tap_button(env, game, "CREATE TEAM")
@@ -440,8 +441,13 @@ class OnlineFailureTests(unittest.TestCase):
         for i in range(3):
             tap_pet(env, game, v.pet_selector, i)
         self.fake.fault("/api/v1/teams", "slow_after", delay=1.0, method="POST")
-        tap_button(env, game, "CONFIRM", frames=0)
-        self.assertTrue(wait_for(lambda: not v._submitting, timeout=10))
+        tap_button(env, game, "CONFIRM")
+        self.svc.ARENA_TIMEOUT = 0          # only the test's short timeout
+        try:
+            tap_button(env, game, "SURE?", frames=0)
+            self.assertTrue(wait_for(lambda: not v._submitting, timeout=10))
+        finally:
+            del self.svc.ARENA_TIMEOUT
         self.assertTrue(wait_for(lambda: self.fake.teams, timeout=5))
         self.fake.clear_faults()
         game, hub = self._arena()

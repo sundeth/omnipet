@@ -91,7 +91,7 @@ those of 2026-10-13.
 - **Test:** `test_online_failures.py::test_a_logo_arriving_during_a_download_keeps_the_download_state`.
 - **Fix:** while `_downloading`, only swap the logo image; never rebuild the action button and status line.
 
-### 15. A team created after a client timeout leaves its pets unlocked (ARN-05)
+### ~~15. A team created after a client timeout leaves its pets unlocked (ARN-05)~~ Fixed 2026-10-16: every upload carries the pet's `uid`, the server returns it per team pet, and `ArenaView._lock_loose_pets` locks party pets whose uid is on the current team; registration and FIND BATTLE also wait `OmninetService.ARENA_TIMEOUT` (20 s) instead of 5
 - **What:** if the server creates the team but its answer arrives after the client's 5 s timeout, the view reports a failure and the pets stay in the party, unlocked; the hub then shows the team (`GET /teams/current`) and nothing ever moves its pets to the freezer, so they keep being raised, evolved or released while they fight on the server.
 - **Where:** `src/scenes/connect_views/arena_team_creation_view.py:342-373`; `arena_view.py:173-177`.
 - **Test:** `test_online_failures.py::test_a_team_created_after_a_timeout_still_locks_its_pets`.
@@ -108,6 +108,30 @@ those of 2026-10-13.
 - **Where:** `src/scenes/connect_views/arena_history_view.py:115-128`.
 - **Test:** `test_online_failures.py::test_a_history_that_failed_to_load_does_not_read_as_empty`.
 - **Fix:** keep an error flag and render it instead of the empty state.
+
+### ~~18. Arena replays of uneven teams crash or drop a shot (ARN-02)~~ Fixed 2026-10-16: `GameBattle.lanes` = the larger team; a lone PvP opponent keeps its own lane (`BattleEncounter.setup_enemy_attack`)
+- **What:** arena teams hold 1-3 Digimon. A viewer outnumbered (1v3, 2v3) crashed the battle scene: `GameBattle` sized every lane array by the player's team, so `get_hp` overflowed (`IndexError`, swallowed by the scene) and the empty battle then failed on `max(turns)`. A viewer facing a lone opponent (3v1) saw it as an adventure boss whose shot went to the target's lane slot; lane 0 never learnt it landed, stalled, and the battle ended on the 10 s fallback with a shot unplayed (the HP differed from the server's).
+- **Where:** `src/battle/game_battle.py` (lane arrays), `src/battle/battle_encounter.py` (`own_lane` in `setup_enemy_attack`).
+- **Test:** `test_arena_replay_scene.py::test_uneven_teams_replay_from_both_seats`; found by `tests/arena_sim`.
+
+### ~~19. The arena hub's buttons never redraw after loading (ARN-07)~~ Fixed 2026-10-16: the arena views use `Button.set_enabled` / `set_text`
+- **What:** the hub assigned `button.enabled` and `button.text` directly. `Button` caches its surface and only redraws (and updates `focusable`) through `set_enabled` / `set_text`, so FIND BATTLE, HISTORY (and the new RANKS) stayed drawn greyed with their first text after the data arrived, although tapping them worked.
+- **Where:** `src/scenes/connect_views/arena_view.py`, `arena_history_view.py`.
+- **Test:** seen on the `tests/arena_sim` screenshots.
+
+### ~~20. Matchmaking picked rarely-attacking teams far more often (ARN-06)~~ Fixed 2026-10-16 (Omninet `TeamService.find_opponent`)
+- **What:** the first fair-matchmaking key counted meetings in both directions, so a team that attacked little looked "unmet" to everyone and defended 2-3x as often as active teams (season 1 of the simulation: 9-26 defences).
+- **Fix:** rotate on the attacker's own attacks today, then on defences received today, then the same over the season.
+
+### ~~21. A version-0 Digimon cannot join an arena team (ARN-05)~~ Fixed 2026-10-17: `_pet_to_upload` sends the pet's version as it is (`_version`)
+- **What:** the upload sent `int(pet.version or 1)`, so a species whose monster.json version is 0 (PENC's Agumon and its line) went up as version 1 and the server refused it: "Agumon (version 1) is not in PENC".
+- **Where:** `src/scenes/connect_views/arena_team_creation_view.py`.
+- **Test:** `tests/unit/arena/test_arena_seasons.py::UploadTests`; found by `tests/arena_sim`.
+
+### ~~22. The team picker never says why a pet is disabled (ARN-05)~~ Fixed 2026-10-17: `PetSelector.disabled_callback`
+- **What:** `PetSelector` ignored taps (and A) on disabled cells, so `ArenaTeamCreationView` could never show its reasons ("Fought last season: evolve it first", "Wrong stage for this season", ...).
+- **Where:** `src/ui/components/pet_selector.py` (opt-in callback; other pickers unchanged), `arena_team_creation_view.py`.
+- **Test:** seen by `tests/arena_sim` (game instances tap a veteran).
 
 ## Gaps in the shared harness (not game bugs)
 

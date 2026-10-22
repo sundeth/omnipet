@@ -32,7 +32,16 @@ def get_shadow(sprite, shadow_color=(0, 0, 0, 100)):
     cached = shadow_cache.get(key)
     if cached is not None and cached.get_size() == sprite.get_size():
         return cached
-    shadow = sprite.copy()
+    if sprite.get_flags() & pygame.SRCALPHA:
+        shadow = sprite.copy()
+    else:
+        # Text from the pixel font is an 8-bit surface whose background is a
+        # colour key. Multiplying a copy of it mapped the background to the
+        # text's palette entry, so the "shadow" was a solid box drawn under
+        # the text (every shadowed label showed as a block). Taken onto an
+        # alpha surface first, the key stays transparent.
+        shadow = pygame.Surface(sprite.get_size(), pygame.SRCALPHA)
+        shadow.blit(sprite, (0, 0))
     shadow.fill(shadow_color, special_flags=pygame.BLEND_RGBA_MULT)
     shadow_cache[key] = shadow
     return shadow
@@ -304,8 +313,10 @@ def rle_accelerate(surface):
     runs and copies opaque ones instead of blending every pixel; the picture
     is the same (half-transparent pixels may round one level apart). On the
     Pi Zero 2W, whose pygame has no NEON blitters, blending one 240x240
-    overlay cost 17 ms a frame. Drawing into the surface later still works:
-    SDL decodes it and encodes it again at the next blit."""
+    overlay cost 17 ms a frame. Once blitted, the surface is encoded: fill()
+    and blits into it still work, but pygame.draw into it is an access
+    violation (pygame 2.6.1), so turn RLE off first (`set_alpha(255)`) and
+    call this again after drawing (UIManager._rebuild_master_ui_surface)."""
     if surface is not None:
         try:
             surface.set_alpha(255, pygame.RLEACCEL)

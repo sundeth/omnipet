@@ -21,15 +21,19 @@ class ArmorItemList(ItemList):
         self.load_armor_items()
         
     def load_armor_items(self):
-        """Load items with effect='digimental' from all modules."""
+        """Load the evolution items the player holds, from all modules: the
+        armor items (DigiMentals), the evolving items (the iC's, Digimon
+        World's) and any item a party pet's route names
+        (utils.evolution_items)."""
+        from core import game_globals
+        from utils.evolution_items import is_evolution_item
         items = []
-        
-        # Get armor items from all loaded modules
+        party = list(game_globals.pet_list or [])
+
         for module in runtime_globals.game_modules.values():
             if hasattr(module, "items"):
                 for item in module.items:
-                    # Check if this item has effect='digimental' and player has it in inventory
-                    if hasattr(item, 'effect') and item.effect == "digimental":
+                    if is_evolution_item(item, party):
                         amount = get_inventory_value(item.id)
                         if amount > 0:
                             # Load sprite for this item

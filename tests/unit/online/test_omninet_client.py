@@ -169,10 +169,10 @@ class OmninetClientTests(unittest.TestCase):
         self.assertFalse(self.svc.has_saved_credentials())
         self.assertFalse(os.path.exists(self.svc._credentials_path))
 
-    # BUG online-logout-key-stays-valid: OmninetService.logout() posts to
+    # BUG online-logout-key-stays-valid: OmninetService.logout() posted to
     # /api/v1/auth/logout, a route the server does not have (404), so the
-    # device key is never revoked and keeps working for anyone holding it.
-    @unittest.expectedFailure
+    # device key was never revoked. Fixed 2026-10-17: logout deletes its own
+    # device (DELETE /users/me/devices/{id}); kept as a regression test.
     def test_logout_revokes_the_key_on_the_server(self):
         acc = self._account()
         login_service(self.svc, self.fake, acc)
@@ -266,6 +266,10 @@ class OmninetClientTests(unittest.TestCase):
         acc = self._account()
         login_service(self.svc, self.fake, acc)
         key = self.svc.get_device_key()
+        # Arena calls wait longer (the server fights before it answers);
+        # here every call gets the test's short timeout.
+        self.svc.ARENA_TIMEOUT = 0
+        self.addCleanup(lambda: self.svc.__dict__.pop("ARENA_TIMEOUT", None))
         for mode in FAULTS:
             self.fake.clear_faults()
             self.fake.fault("/", mode, delay=1.5)

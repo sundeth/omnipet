@@ -147,7 +147,8 @@ class OnlineShopTests(unittest.TestCase):
     # /shop/items) carries no json_data, and the client never calls
     # /shop/download/item/{id}, so a bought item has no effect or status and
     # the inventory refuses it ("has no implemented effect").
-    @unittest.expectedFailure
+    # Fixed 2026-10-17 (module_utils.ensure_shop_item_data after a purchase);
+    # kept as a regression test.
     def test_a_bought_item_can_be_used_from_the_inventory(self):
         self._buy_item()
         env = self.env
@@ -202,27 +203,39 @@ class OnlineShopTests(unittest.TestCase):
         env.frames(game, 2)
         self.assertIn(self.item["id"], [it.id for it in game.scene.item_list.items])
 
-    # BUG online-refused-purchase-reported-as-success (UI side): the server
-    # sells an item once per account and answers the second Buy with
-    # {"success": false, "message": "You already own Super Meat"}; the view
-    # still takes the coins and adds one more locally.
+    def test_an_item_can_be_bought_again(self):
+        """Items are consumables, bought whenever the player has the coins
+        (owner, 2026-10-17); unlocks stay once per account."""
+        game, item = self._buy_item()
+        tap_button(self.env, game, "Buy", frames=0)
+        self.assertTrue(settle(self.env, game, lambda: item.quantity == 2), "the second purchase never landed")
+        self.assertEqual(self._server_coins(), 80)
+        self.assertEqual(self.env.gg.coins, 80)
+        self.assertEqual(len(self.fake.owned(self.acc, "item")), 2)
+
+    # BUG online-refused-purchase-reported-as-success (UI side): a refused
+    # purchase is HTTP 200 with {"success": false}; the view took the coins
+    # and added one more locally. Items are no longer once per account
+    # (2026-10-17), so the refusal here is the server's coins running short
+    # of what the game shows.
     # Fixed 2026-10-13; kept as a regression test.
     def test_a_purchase_the_server_refuses_costs_nothing(self):
         game, item = self._buy_item()
+        self.fake.account(self.acc)["coins"] = 5               # spent elsewhere
         tap_button(self.env, game, "Buy", frames=0)
         self.assertTrue(wait_for(lambda: len(self.fake.calls("/api/v1/shop/purchase")) == 2))
         wait_for(lambda: item.quantity == 2, timeout=1.0)
         idle()
         self.env.frames(game, 1)
-        self.assertEqual(self._server_coins(), 90)
+        self.assertEqual(self._server_coins(), 5)
         self.assertEqual(self.env.gg.coins, 90, "coins were taken for a refused purchase")
         self.assertEqual(self.env.gg.purchases.get_item_quantity(self.item["id"]), 1)
 
     # BUG online-consumed-item-regranted: sync_account_data (run at every
-    # login and at boot) sets every purchased item whose local quantity is 0
-    # back to 1 (module_utils._apply_purchase_entries), so a used item comes
-    # back after each restart.
-    @unittest.expectedFailure
+    # login and at boot) set every purchased item whose local quantity is 0
+    # back to 1 (module_utils._apply_purchase_entries), so a used item came
+    # back after each restart. Fixed 2026-10-17 (each purchase row counts
+    # once, GamePurchases.item_purchase_ids); kept as a regression test.
     def test_a_used_item_does_not_come_back_at_the_next_login(self):
         self._buy_item()
         gg = self.env.gg

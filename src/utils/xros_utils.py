@@ -11,6 +11,9 @@ Requirements checked at selection time:
     strength  — [min, max] range on the pet's strength stat (999999 = no cap)
     unlock    — a module unlock name the player must have obtained
     friend    — pet names that must be registered in the player's digidex
+    friend_count — [min, max] Friends on the module's list (DMXW's Shoutmon X7:
+                Superior Mode, "only available when there are 13 or more
+                Digimon in the Friend list"; 999999 = no cap)
     megahit   — battle-time condition; does NOT gate the pre-battle selection
 
 While transformed the pet uses the target form's sprites and power, plus its
@@ -21,6 +24,7 @@ import os
 import pygame
 
 from core import runtime_globals
+from utils import ailments
 from utils.asset_utils import image_load, resolve_path
 from utils.data_compat import availability as read_availability
 from utils.module_utils import get_module
@@ -212,7 +216,7 @@ def _build_friend_event(module_name, pet_name):
     if pet is None:
         runtime_globals.game_console.log(f"[Friend] {pet_name} left the party; promise dropped")
         return None
-    if pet.state in ("dead", "nap") or getattr(pet, "sick", 0) > 0:
+    if pet.state in ("dead", "nap") or ailments.ailing(pet):
         runtime_globals.game_console.log(f"[Friend] {pet_name} is in no shape to battle; promise dropped")
         return None
     if not pet.can_battle():
@@ -258,9 +262,15 @@ def find_friend_encounter(module, name):
 
 def _friends_ok(evo, pet) -> bool:
     friends = evo.get("friend") or []
-    if not friends:
+    count = evo.get("friend_count")
+    if not friends and not count:
         return True
     module_friends = get_module_friends(pet.module)
+    if count:
+        lo = count[0] if len(count) > 0 and count[0] not in (-1, None) else 0
+        hi = count[1] if len(count) > 1 and count[1] not in (-1, None) else 999999
+        if not lo <= len(module_friends) <= hi:
+            return False
     return all(fname in module_friends for fname in friends)
 
 
@@ -405,7 +415,25 @@ def make_xros_pet(pet, evo):
     form = XrosPet(pet, evo, data)
     runtime_globals.game_console.log(
         f"[Xros] {pet.name} fights as {form.name} ({evo.get('type')})")
+    record_form(module, form.name, pet.version)
     return form
+
+
+def record_form(module, name, version):
+    """A temporary evolution reached counts as reaching the form (owner,
+    2026-10-21: "any temporary evolution should unlock itself in the
+    library"): the Library (Digidex) records it, and the module's evolution
+    unlocks that name it are earned, as an evolution into it earns them
+    (GamePet._apply_evolution). The Xros Wars Color's Album entries are
+    these: Shoutmon X5B opens OmniShoutmon, MetalGreymon (2010) ZeigGreymon,
+    Shoutmon X7 the King Version and Gumdramon."""
+    from models.game_digidex import register_digidex_entry
+    from utils.utils_unlocks import check_digidex_unlocks, unlock_item
+    register_digidex_entry(name, module.name, version)
+    for unlock in getattr(module, "unlocks", None) or []:
+        if unlock.get("type") == "evolution" and name in (unlock.get("to") or []):
+            unlock_item(module.name, "evolution", unlock["name"])
+    check_digidex_unlocks(module.name)
 
 
 # =====================================================================

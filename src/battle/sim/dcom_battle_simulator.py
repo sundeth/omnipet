@@ -16,6 +16,7 @@ from battle.sim.battle_simulator import (BattleSimulator, DMDevice, DM20Device,
                                          PEN20Device, DMXDevice, DMCDevice)
 from battle.sim import protocol_constants
 from core import runtime_globals
+from utils import ailments
 from battle.sim.battle_utils import get_dm20_single_battle_attack_pattern
 
 
@@ -249,9 +250,14 @@ def pet_to_digimon(pet, battle_format: str, minigame_result: int = 0) -> Digimon
         # A Digitama's index is -1, which no protocol can carry; it is also
         # never in a battle, so 0 ("an outsider") is the honest value.
         index = fit(getattr(pet, 'index', 0), 'MAX_INDEX', 0xFF)
-        version = protocol_constants.clamp_oem_version(
-            battle_format,
-            getattr(pet, 'device_version', getattr(pet, 'version', 1)))
+        # A participant on a line it does not own announces the line's number
+        # for its device (an iC on the Mini's wire sends 1); a native pet its
+        # own device_version.
+        version = protocol_constants.participant_wire_version(battle_format, getattr(pet, 'module', None))
+        if version is None:
+            version = protocol_constants.clamp_oem_version(
+                battle_format,
+                getattr(pet, 'device_version', getattr(pet, 'version', 1)))
         runtime_globals.game_console.log(
             f"[DCom] OEM battle: sending index={index}, version={version}")
     else:
@@ -328,6 +334,12 @@ def pet_to_digimon(pet, battle_format: str, minigame_result: int = 0) -> Digimon
     else:
         main, alt = raw('atk_main'), raw('atk_alt')
         fallback = main or alt
+        # shot1 is the strong shot and shot2 the weak; which field holds the
+        # weak one is the pet's data's (PEN20's module keeps it in atk_main).
+        modules = getattr(runtime_globals, 'game_modules', None) or {}
+        own = getattr(modules.get(getattr(pet, 'module', None)), 'battle_protocol', None)
+        if protocol_constants.weak_shot_field(own, limits.NAME) == 'atk_main':
+            main, alt = alt, main
         shot1 = shot(main or fallback)
         shot2 = shot(alt or fallback)
         shot_m = 0
@@ -360,7 +372,7 @@ def pet_to_digimon(pet, battle_format: str, minigame_result: int = 0) -> Digimon
         mini_game=minigame_result,
         level=fit(getattr(pet, 'level', 1), 'MAX_LEVEL', 0xFF, 'LEVEL_OFFSET'),
         stage=fit(getattr(pet, 'stage', 3), 'MAX_STAGE', 0xFF, 'STAGE_OFFSET'),
-        sick=1 if getattr(pet, 'sick', 0) else 0,
+        sick=1 if ailments.ailing(pet) else 0,
         shot1=shot1,
         shot2=shot2,
         tag_meter=0,
@@ -371,9 +383,11 @@ def pet_to_digimon(pet, battle_format: str, minigame_result: int = 0) -> Digimon
     #: bonus for it (DM20: "+1 for each attack in Single Battles"). The meter
     #: itself never goes on the wire -- only the Power it has already bought
     #: -- so this is knowable for our own pet and for nobody else's.
-    stomach = getattr(pet, 'stomach', 0) or 0
-    digimon.strength_full = bool(stomach and
-                                 getattr(pet, 'strength', 0) >= stomach)
+    # Full is the module's Strength cap where it sets one, else the stomach.
+    full = (pet.strength_cap() if hasattr(pet, 'strength_cap')
+            else getattr(pet, 'stomach', 0)) or 0
+    digimon.strength_full = bool(full and
+                                 getattr(pet, 'strength', 0) >= full)
     digimon.dmx_shot_m = shot_m
     #: The Pendulum's own hidden training stat, 0-40. It is the only strength
     #: figure that wire carries -- there is no Power field on it at all.
@@ -1872,6 +1886,10 @@ class DComBattleSimulator:
                    fields.get('mini_power', 0)))
         opponent.version = version
         self.opponent_device_version = version
+        if limits.NAME == 'IC' and fields.get('index') == limits.DIGIWINDOW_INDEX:
+            # A DigiWindow announces a 20X's version; its index says what it
+            # is, and the module's events and unlock name it device 4.
+            self.opponent_device_version = limits.DIGIWINDOW_DEVICE
         opponent.penx_fields = fields
         return opponent
 

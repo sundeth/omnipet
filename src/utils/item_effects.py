@@ -12,11 +12,13 @@ then follow it, for the pets that took the item:
 * its `extra_effects`: rows shaped like the main effect.
 
 A `status_change` row is a plain change of the stat, not a meal. Its amount is
-the change itself (not scaled by the module's meal gains), it is never
-refused, it puts on no weight, and it stops at the stat's own limits: so +99
-fills a stat and -99 empties it. A positive hunger row on a full pet counts as
-overfeeding instead, where the module has overfeeding (`care_overfeed_timer`
-above 0). A `currency` row pays once per use, however many pets took it.
+the change itself (not scaled by the module's meal gains), it puts on no
+weight, and it stops at the stat's own limits: so +99 fills a stat and -99
+empties it. An extra row that puts Hunger on makes a full pet refuse the
+whole item (`fits`: anything that recovers Hunger is refused when full); run
+on a full pet otherwise, a positive hunger row counts as overfeeding where the
+module has it (`care_overfeed_timer` above 0). A `currency` row pays once per
+use, however many pets took it.
 
 Effects: status_change, status_boost, dna, currency, devolve, and the
 Digivice iC's (`PET_EFFECTS`, run by `apply_pet_effect`):
@@ -52,14 +54,17 @@ effect `item` (each `item` x `amount`), handed over once per use (the iC
 20X's Weapon MAX, every weapon the Weapon Shop sells).
 
 An item's `min_stage` keeps it from pets below that stage and its
-`max_stage` (0: no limit) from pets above it; a `reusable` one is not used
-up (the inventory's business).
+`max_stage` (0: no limit) from pets above it; anything that recovers Hunger
+is refused by a full pet -- a food by `GamePet.set_eating`, an item whose
+extra effect puts Hunger on (the iC's Level Reverse) by `fits`; a `reusable`
+one is not used up (the inventory's business).
 """
 
 import random
 from datetime import datetime, timedelta
 
-from core import game_globals, runtime_globals
+from core import game_globals, pet_stats, runtime_globals
+from utils import ailments
 from utils.module_utils import get_module
 
 #: Effects an item can name that do nothing yet: the inventory refuses them
@@ -121,11 +126,14 @@ def apply_status(pet, status, amount) -> bool:
             return False
         old = pet.hunger
         pet.hunger = max(0, min(pet.stomach, old + amount))
+        _note_refilled(pet)
         return pet.hunger != old
 
     if status == "strength":
         old = pet.strength
-        pet.strength = max(0, min(max(pet.stomach, old), old + amount))
+        cap = pet_stats.strength_cap(getattr(module, "strength_max", 0), pet.stomach)
+        pet.strength = max(0, min(max(cap, old), old + amount))
+        _note_refilled(pet)
         return pet.strength != old
 
     if status == "dp":
@@ -153,6 +161,13 @@ def apply_status(pet, status, amount) -> bool:
 
     _log(f"[ItemEffects] status '{status}' is not a stat an item can change")
     return False
+
+
+def _note_refilled(pet):
+    """A full meter clears its starvation counter (GamePet.note_meters_refilled)."""
+    note = getattr(pet, "note_meters_refilled", None)
+    if callable(note):
+        note()
 
 
 def add_battle_boost(item, status, amount, boost_time):
@@ -237,25 +252,23 @@ def apply_extra_effects(item, pets):
     return notes
 
 
+def _cure_kind(status):
+    """The ailment a `cure` of *status* heals: "sick" a sickness, "injury"
+    an injury, anything else either (utils.ailments)."""
+    return status if status in ailments.KINDS else None
+
+
 def has_ailment(pet, status) -> bool:
     """Whether *pet* has the ailment a `cure` of *status* heals."""
-    if int(getattr(pet, "sick", 0) or 0) <= 0:
-        return False
-    dots = getattr(pet, "sick_type", "") == "dots"
-    if status == "sick":
-        return dots
-    if status == "injury":
-        return not dots
-    return True
+    kind = _cure_kind(status)
+    return ailments.doses(pet, kind) > 0 if kind else ailments.ailing(pet)
 
 
 def cure(pet, status) -> bool:
     """Heal *pet*'s ailment of *status* outright. Returns whether it had one."""
     if not has_ailment(pet, status):
         return False
-    pet.sick = 0
-    pet.sick_type = ""
-    return True
+    return ailments.cure(pet, _cure_kind(status))
 
 
 def bedding(pet, minutes) -> bool:
@@ -351,11 +364,29 @@ def multiplier_targets(item) -> list:
     return [t.strip().lower() for t in str(getattr(item, "status", "") or "").split(",") if t.strip()]
 
 
+def is_full(pet) -> bool:
+    """Whether *pet*'s Hunger is at its stomach (a pet with none is never full)."""
+    stomach = _int(getattr(pet, "stomach", 0))
+    return stomach > 0 and _int(getattr(pet, "hunger", 0)) >= stomach
+
+
+def feeds_by_extra(item) -> bool:
+    """Whether *item* puts Hunger on through an extra effect (the iC's Level
+    Reverse, Reliability Max). A food's own Hunger is `GamePet.set_eating`'s,
+    which already refuses a full pet and counts its overfeeding."""
+    if getattr(item, "effect", "") in ("", "status_change") and getattr(item, "status", "") == "hunger":
+        return False
+    return any(row.get("effect") == "status_change" and row.get("status") == "hunger"
+               and _int(row.get("amount")) > 0 for row in getattr(item, "extra_effects", None) or [])
+
+
 def fits(item, pet) -> bool:
-    """Whether *item*'s own rules let *pet* take it: its stages, for
-    the evolving effects a form to become, and for a multiplier a target
-    that exists here."""
+    """Whether *item*'s own rules let *pet* take it: its stages, a full pet
+    refusing anything that recovers Hunger, for the evolving effects a form
+    to become, and for a multiplier a target that exists here."""
     if not stage_fits(item, pet):
+        return False
+    if feeds_by_extra(item) and is_full(pet):
         return False
     effect = getattr(item, "effect", "")
     if effect == "evolve":

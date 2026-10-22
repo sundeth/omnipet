@@ -29,7 +29,9 @@ An event has a **trigger** and a **type** (models.quest_event_data.EventData):
                          adventure plays is refused, and special-only areas
                          never appear in the adventure (GameModule.area_exists)
     5 shop access        opens shop.json's ``shop`` (marked ``event_only``)
-                         for ``access_minutes`` (0: for good), at once
+                         for ``access_minutes`` (0: for good), at once; -1
+                         (ONE_VISIT) is one visit: the pending event, the
+                         shop entered when it is accepted and gone once left
     6 card battle        the Vital Bracelet's random battle: a monster of the
                          pet's own version by its ``encounter_chances``; a
                          win pays the next of ``item_sequence`` and Vital
@@ -41,7 +43,11 @@ of the module (Digimon World's recruits: met until recruited).
 an adventure or area_clear event to battles in those adventure areas (the
 area fought in, or the area just cleared); a connection event may
 name the ``opponent_device_version`` it needs (combat_constants.
-ANY_OTHER_DEVICE: any device but the pet's own).
+ANY_OTHER_DEVICE: any device but the pet's own) and the ``protocol``, the
+battle format it is fought on (device numbers repeat across formats).
+Battle-triggered events sharing a ``draw`` are a single roll: at most one of
+those fitting the battle happens, each taking its ``chance_percent`` of the
+hundred in turn.
 
 A battle-triggered event of type 1-4 becomes the pending event the main game
 offers (the alert), unless one is pending already. A Friend battle with
@@ -62,6 +68,10 @@ import time
 from core import game_globals, runtime_globals
 
 TRIGGERS = ("random", "adventure", "area_clear", "connection", "schedule")
+
+#: A shop event's ``access_minutes`` for one visit: offered as the pending
+#: event, opened when accepted, closed as the player leaves it.
+ONE_VISIT = -1
 OUTCOMES = ("win", "loss", "any")
 
 
@@ -284,6 +294,18 @@ def _outcome_ok(data, won) -> bool:
     return outcome == "any" or (outcome == "win") == bool(won)
 
 
+def _protocol_ok(data, battle_format) -> bool:
+    """A connection event naming a ``protocol`` needs the battle fought on
+    that format: device numbers repeat across formats (a Digimon Mini Ver.1
+    and an iC 10X both read 1)."""
+    wanted = getattr(data, "protocol", "") or ""
+    if not wanted:
+        return True
+    from battle.sim.protocol_constants import canonical_format
+    return (canonical_format(str(wanted).upper())
+            == canonical_format(str(battle_format or "").upper()))
+
+
 def _device_ok(data, pets, opponent_device_version) -> bool:
     wanted = data.opponent_device_version
     if wanted is None:
@@ -322,12 +344,15 @@ def grant_shop_access(module_name, shop_name, minutes=0):
 
 
 def after_battle(trigger, module_name, pets, won, opponent_device_version=None, rng=random,
-                 area=None):
+                 area=None, battle_format=None):
     """Roll *module_name*'s *trigger* events ("adventure", "area_clear",
     "connection") for a battle *pets* (its pets in it) just fought, in
-    adventure *area* (fought in, or just cleared) where there is one. Shops
-    open at once; the first battle or item event to hit becomes the pending
-    event. Returns the names of what happened, for the caller's log."""
+    adventure *area* (fought in, or just cleared) where there is one, on
+    *battle_format* (a connection's). Shops open at once; the first battle or
+    item event to hit becomes the pending event, and so does a one-visit shop
+    (``access_minutes`` ONE_VISIT). Events sharing a ``draw`` are one roll:
+    the first of those that fit, by their chances added up in order, or none.
+    Returns the names of what happened, for the caller's log."""
     from models.game_event import EventType
     from utils.module_utils import get_module
     module = get_module(module_name)
@@ -337,6 +362,28 @@ def after_battle(trigger, module_name, pets, won, opponent_device_version=None, 
     if not pets:
         return []
     done = []
+
+    def happen(data, mine):
+        kind = int(data.type or 0)
+        if kind == EventType.SHOP_ACCESS.value and int(data.access_minutes or 0) != ONE_VISIT:
+            if grant_shop_access(module_name, data.shop, data.access_minutes):
+                _announce(f"{data.shop} opened!")
+                done.append(data.name)
+            return
+        if kind == EventType.FRIEND_BATTLE.value and data.delay_minutes:
+            low, high = (list(data.delay_minutes) + [1, 1])[:2]
+            from utils.xros_utils import promise_friend_event
+            if promise_friend_event(module_name, mine, minutes=rng.randint(int(low), int(high))):
+                done.append(data.name)
+            return
+        if getattr(game_globals, "event", None) is not None:
+            return
+        event = resolve(module_name, module, data, mine, rng)
+        if event is not None:
+            game_globals.event = event
+            done.append(data.name)
+
+    draws = {}
     for data in module.load_events_json():
         if data.trigger != trigger or not _outcome_ok(data, won):
             continue
@@ -345,35 +392,30 @@ def after_battle(trigger, module_name, pets, won, opponent_device_version=None, 
         mine = [p for p in pets if _for_pet(data, p)]
         if not mine or not _device_ok(data, mine, opponent_device_version):
             continue
+        if not _protocol_ok(data, battle_format):
+            continue
+        if getattr(data, "draw", ""):
+            draws.setdefault(data.draw, []).append((data, mine))
+            continue
         if rng.random() * 100 >= float(data.chance_percent or 0):
             continue
-        kind = int(data.type or 0)
-        if kind == EventType.SHOP_ACCESS.value:
-            if grant_shop_access(module_name, data.shop, data.access_minutes):
-                _announce(f"{data.shop} opened!")
-                done.append(data.name)
-            continue
-        if kind == EventType.FRIEND_BATTLE.value and data.delay_minutes:
-            low, high = (list(data.delay_minutes) + [1, 1])[:2]
-            from utils.xros_utils import promise_friend_event
-            if promise_friend_event(module_name, mine, minutes=rng.randint(int(low), int(high))):
-                done.append(data.name)
-            continue
-        if getattr(game_globals, "event", None) is not None:
-            continue
-        event = resolve(module_name, module, data, mine, rng)
-        if event is not None:
-            game_globals.event = event
-            done.append(data.name)
+        happen(data, mine)
+    for entries in draws.values():
+        roll, total = rng.random() * 100, 0.0
+        for data, mine in entries:
+            total += float(data.chance_percent or 0)
+            if roll < total:
+                happen(data, mine)
+                break
     if done:
         _log(f"[Events] {trigger} ({module_name}): {', '.join(done)}")
     return done
 
 
-def after_connection(results, opponent_device_version=None):
+def after_connection(results, opponent_device_version=None, battle_format=None):
     """After a battle with another device or pet: each module's "connection"
     events, and its Connect Points, for its own pets. *results* is
-    ``[(pet, won), ...]``."""
+    ``[(pet, won), ...]``; *battle_format* the format it was fought on."""
     from utils import connect_points
     by_module = {}
     for pet, won in results:
@@ -383,7 +425,7 @@ def after_connection(results, opponent_device_version=None):
             connect_points.award(pet, won)
         won_any = any(won for _pet, won in entries)
         after_battle("connection", module_name, [p for p, _w in entries], won_any,
-                     opponent_device_version)
+                     opponent_device_version, battle_format=battle_format)
 
 
 def _announce(text):

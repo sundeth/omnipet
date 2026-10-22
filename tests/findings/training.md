@@ -30,7 +30,7 @@ Tests: `tests/game/training/test_minigame_outcomes.py` (the ten training-menu mi
 - **Test:** `test_minigame_outcomes.py::test_head_to_head_shows_the_currency_it_earned`.
 - **Fix:** only move to the result from the charge: `if self.head_charge.is_complete() and self.phase == "charge":`.
 
-### 4. Mogera's verdict and grade disagree (TRN-03)
+### ~~4. Mogera's verdict and grade disagree (TRN-03)~~ Fixed 2026-10-17 (owner: like the device, DMGZ manual): Phase 1 failed (under 3 counters) pays nothing; cleared, M.O.G.E.R.A. surviving is a lost Good (Strength +1, phase-2 G-Cells), destroyed an Excellent win; a lost training pays its grade's row; cancelling before the attack pays nothing (`test_mogera_follows_the_dmgz_manual`)
 
 - **What:** `check_victory` reads only the charge (`strength >= 7`) while `get_attack_count` needs all five counters. So:
   - 3 or 4 counters and a full charge: the screen shows Mogera destroyed with GREAT/EXCELLENT, the verdict is a win (success sound, TRAINING quest step, Reliability, DMGZ's success G-Cells, the disturbance penalty forgiven, a happy pet) but the grade is 0, so effort/Strength/weight come from the failure row and the iC is paid nothing.
@@ -62,4 +62,4 @@ Tests: `tests/game/training/test_minigame_outcomes.py` (the ten training-menu mi
 
 - The ready sound's real length decides READY on a device with audio; the tests mute it so READY runs on the fake clock (`ALERT_DURATION_FRAMES`/the asset's duration).
 - Real shake input (accelerometer on Android, the Pi's I2C shake detector, the mouse/touch shake gesture of `ShakeDetector`) is not driven; the tests send the `Y`/`SHAKE` actions those produce.
-- Gotcha! (Bonus list) has no minigame yet (`cls` None); `test_training_menu.py` covers that it does not start.
+- Gotcha! (Bonus list, 2026-10-20) is played through by `test_bonus_minigame_outcomes.py` and its rules pinned by `test_gotcha.py`; the rules the one video leaves open (the speed a turn takes, catch columns 6 and 10, the two fall rates, stages 2-3) are the implementation's, not checked against a device. `test_training_menu.py` still covers that an unwritten minigame does not start (with Gotcha! set back to `cls` None).

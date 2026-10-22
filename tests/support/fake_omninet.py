@@ -467,6 +467,7 @@ class FakeOmninet:
                          "atk_alt2": e.get("atk_alt_2", 0), "power": e["power"],
                          "attribute": e["attribute"], "hp": e["hp"], "star": 0,
                          "critical_turn": 0, "extra_data": {"slot": slot},
+                         "uid": (team["uploads"][slot] if slot < len(team["uploads"]) else {}).get("uid"),
                          "created_at": iso(team["created_at"])})
         return rows
 
@@ -624,6 +625,17 @@ class FakeOmninet:
         raise _HTTPError(404, "Not Found")
 
     # /shop/...
+    # /users/me/devices/{id}: revoking a device's key (routes/users.py)
+    def _r_users(self, method, rest, query, headers, body):
+        if rest[:2] == ["me", "devices"] and len(rest) == 3 and method == "DELETE":
+            user = self._user(headers)
+            for key, dev in list(self.devices.items()):
+                if dev["device_id"] == rest[2] and dev["account"] == user["id"]:
+                    del self.devices[key]
+                    return 200, {"message": "Device deleted successfully"}
+            raise _HTTPError(404, "Device not found")
+        raise _HTTPError(404, "Not Found")
+
     def _r_shop(self, method, rest, query, headers, body):
         op = rest[0] if rest else ""
         if method == "GET" and op in ("modules", "items", "cosmetics", "gameplay", "specials") and len(rest) == 1:
@@ -671,7 +683,9 @@ class FakeOmninet:
             price = row.get("price", 0)
             if kind == "module":
                 price = MODULE_FIXED_PRICE if self._has_module(user) else 0
-            if self._owns(user, item_id, kind):
+            # Items are consumables bought again and again; the rest are
+            # unlocks, bought once (Omninet services/shop.py, 2026-10-17).
+            if kind != "item" and self._owns(user, item_id, kind):
                 return fail(f"You already own {row['name']}")
             if user["coins"] < price:
                 return fail(f"Not enough coins. Need {price}, have {user['coins']}")

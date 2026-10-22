@@ -17,7 +17,6 @@ from battle.sim.models import Digimon, BattleResult
 from battle.sim.dcom_battle_simulator import DComBattleSimulator, pet_to_digimon
 from battle.sim import protocol_constants
 from core import runtime_globals
-from battle.combat_constants import ANY_OTHER_DEVICE
 
 
 class BattleEncounterDCom(BattleEncounter):
@@ -418,19 +417,18 @@ class BattleEncounterDCom(BattleEncounter):
         connection_results = []
         for i, pet in enumerate(self.battle_player.team1):
             try:
-                pet.pvp_battles += 1
-                # Charge the module's battle cost (the parent PvP path does
-                # this too; the override was skipping it, making DCom free)
-                pet._deduct_battle_cost()
                 if hasattr(self.battle_player, 'winners') and i < len(self.battle_player.winners):
                     winner = self.battle_player.winners[i]
                     local_won = (winner == 'team1') or (self.victory_status == 'Victory')
                 else:
                     local_won = (self.victory_status == 'Victory')
-                if local_won:
-                    pet.pvp_wins += 1
-                    # A connection win is a battle win (the iC's +1 Reliability).
-                    pet._apply_reliability_event('reliability_battle_win')
+                # A battle with a device counts like any other: the battle
+                # and win counts, the cost (the override once skipped it,
+                # making DCom free), Reliability, defeat tags, G-Cells and
+                # injury (GamePet.finish_versus), plus the PvP counts.
+                team2 = getattr(self.battle_player, 'team2', None) or []
+                pet.finish_versus(local_won, opponent=team2[i] if i < len(team2) else None,
+                                  connection=True)
                 connection_results.append((pet, local_won))
                 runtime_globals.game_console.log(f"[PvP] Pet {getattr(pet,'name',i)} pvp_battles={pet.pvp_battles} pvp_wins={pet.pvp_wins}")
             except Exception as e:
@@ -440,10 +438,13 @@ class BattleEncounterDCom(BattleEncounter):
         # device the other side announced.
         try:
             from utils.event_utils import after_connection
+            pvp_data = getattr(runtime_globals, 'pvp_battle_data', None) or {}
             opponent = getattr(self.dcom_simulator, 'opponent_device_version', None)
             if opponent is None:
-                opponent = (getattr(runtime_globals, 'pvp_battle_data', None) or {}).get('opponent_device_version')
-            after_connection(connection_results, opponent)
+                opponent = pvp_data.get('opponent_device_version')
+            battle_format = (getattr(self.dcom_simulator, 'battle_format', None)
+                             or getattr(self, 'battle_format', None) or pvp_data.get('battle_format'))
+            after_connection(connection_results, opponent, battle_format=battle_format)
         except Exception as exc:
             runtime_globals.game_console.log(f"[Events] connection trigger failed: {exc}")
         
@@ -468,45 +469,30 @@ class BattleEncounterDCom(BattleEncounter):
             try:
                 module_unlocks = getattr(self.module, 'unlocks', []) or []
                 
-                # Versus-type unlocks: triggered by any OEM DCom battle
-                for unlock in module_unlocks:
-                    if unlock.get('type') == 'versus':
-                        name = unlock.get('name')
-                        if name:
-                            ver_req = unlock.get('version', None)
-                            dev_req = unlock.get('device_version', None)
-                            opp_req = unlock.get('opponent_device_version', None)
-                            pet = self.battle_player.team1[0] if self.battle_player.team1 else None
-                            pet_version = getattr(pet, 'version', 0) if pet else 0
-                            # The hardware the pet was hatched on, and what the
-                            # other device announced in its battle packets.
-                            dev = getattr(pet, 'device_version', pet_version) if pet else 0
-                            # The connection view runs the exchange, so the
-                            # version the toy announced arrives with the
-                            # battle data rather than off a live simulator.
-                            opp = getattr(self.dcom_simulator, 'opponent_device_version', None)
-                            if opp is None:
-                                pvp_data = getattr(runtime_globals, 'pvp_battle_data', None) or {}
-                                opp = pvp_data.get('opponent_device_version')
+                # Versus-type unlocks: triggered by any OEM DCom battle,
+                # counted where a record asks for several (utils_unlocks).
+                pet = self.battle_player.team1[0] if self.battle_player.team1 else None
+                pet_version = getattr(pet, 'version', 0) if pet else 0
+                # The hardware the pet was hatched on, and what the other
+                # device announced in its battle packets. The connection view
+                # runs the exchange, so the version the toy announced arrives
+                # with the battle data rather than off a live simulator.
+                own = {"device_version": getattr(pet, 'device_version', pet_version) if pet else 0,
+                       "version": pet_version, "name": getattr(pet, 'name', None)}
+                # The opponent as the packets named it (a roster index the
+                # module resolves; a toy's own species otherwise unknown).
+                foe = next((e for e in (self.battle_player.team2 or []) if e), None)
+                opp = getattr(self.dcom_simulator, 'opponent_device_version', None)
+                if opp is None:
+                    pvp_data = getattr(runtime_globals, 'pvp_battle_data', None) or {}
+                    opp = pvp_data.get('opponent_device_version')
+                from utils.utils_unlocks import record_connection_battle
+                record_connection_battle(
+                    self.module.name,
+                    [(own, {"device_version": opp, "version": None, "name": getattr(foe, 'name', None)},
+                      self.victory_status == "Victory")],
+                    self.battle_format)
 
-                            if dev_req is not None or opp_req is not None:
-                                # ANY_OTHER_DEVICE means "any device that is not
-                                # this one" - see battle_encounter_versus.
-                                if opp_req == ANY_OTHER_DEVICE:
-                                    opponent_ok = opp is not None and opp != dev
-                                else:
-                                    opponent_ok = opp_req is None or opp == opp_req
-                                if (dev_req is None or dev == dev_req) and opponent_ok:
-                                    unlock_item(self.module.name, 'versus', name)
-                                    runtime_globals.game_console.log(f"[DCom OEM] Unlocked versus: {name}")
-                            elif ver_req is not None:
-                                if pet_version == ver_req:
-                                    unlock_item(self.module.name, 'versus', name)
-                                    runtime_globals.game_console.log(f"[DCom OEM] Unlocked versus: {name}")
-                            else:
-                                unlock_item(self.module.name, 'versus', name)
-                                runtime_globals.game_console.log(f"[DCom OEM] Unlocked versus: {name}")
-                
                 # Battle-type unlocks: triggered by OEM DCom victories
                 if self.victory_status == "Victory":
                     if self.module.name not in game_globals.total_victories:

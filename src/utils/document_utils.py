@@ -18,7 +18,10 @@ class DocumentationBuilder:
         self.project_root = project_root
         self.modules_dir = os.path.join(project_root, "modules")
         self.docs_dir = os.path.join(project_root, "Documentation")
-        self.template_path = os.path.join(project_root, "game", "core", "utils", "module-guide_template.html")
+        # The page's skeleton, with a marker for the CSS and one for the list.
+        # It lived under the long-gone game/core/utils, so every start logged
+        # "Template not found" and the page stayed as built in 2025 (P-07).
+        self.template_path = os.path.join(self.docs_dir, "templates", "module-guide_template.html")
         self.output_path = os.path.join(self.docs_dir, "pages", "module-guide.html")
     
     def scan_modules(self) -> List[Dict[str, Optional[str]]]:
@@ -300,37 +303,23 @@ class DocumentationBuilder:
             # Generate module cards HTML
             module_cards_html = self.generate_module_cards_html(modules)
             
-            # Get CSS
-            css_content = self.get_module_guide_css()
-            
-            # Insert CSS before </head>
-            final_content = template_content.replace('</head>', f'{css_content}\n</head>')
-            
-            # If we have modules, replace the entire content section with module cards
-            if modules:
-                # Remove the template message section and replace with module cards
-                module_list_start = '<h2 class="section-title">Module List</h2>'
-                section_end = '</div>\n    </div>'
-                
-                if module_list_start in final_content:
-                    # Find the start and end of the content section
-                    start_pos = final_content.find(module_list_start)
-                    end_pos = final_content.find(section_end, start_pos) + len('</div>')
-                    
-                    if start_pos != -1 and end_pos != -1:
-                        replacement = f'{module_list_start}\n{module_cards_html}\n    </div>'
-                        final_content = final_content[:start_pos] + replacement + final_content[end_pos:]
-            else:
-                # No modules found, just add the no-modules message after the section title
-                final_content = final_content.replace(
-                    '<h2 class="section-title">Module List</h2>',
-                    f'<h2 class="section-title">Module List</h2>\n{module_cards_html}'
-                )
-            
+            # The template marks where the CSS and the list go. Splicing the
+            # list in by searching for closing tags once wrote a second copy
+            # of the page into it.
+            final_content = (template_content
+                             .replace('<!-- MODULE_GUIDE_CSS -->', self.get_module_guide_css())
+                             .replace('<!-- MODULE_LIST -->', module_cards_html))
+
             # Ensure output directory exists
             os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
-            
-            # Write final content
+
+            # Only when something changed: the page is rebuilt at every start
+            try:
+                with open(self.output_path, 'r', encoding='utf-8') as f:
+                    if f.read() == final_content:
+                        return True
+            except OSError:
+                pass
             with open(self.output_path, 'w', encoding='utf-8') as f:
                 f.write(final_content)
             

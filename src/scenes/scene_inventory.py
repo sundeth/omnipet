@@ -16,6 +16,7 @@ from ui.components.item_list import ItemList
 from ui.components.text_panel import TextPanel
 from ui.windows.window_background import WindowBackground
 from core import runtime_globals, game_globals
+from utils import ailments
 import core.constants as constants
 from utils.module_utils import get_module
 from utils.pet_utils import get_selected_pets
@@ -49,7 +50,10 @@ class SceneInventory:
         self.discard_button = None
         self.selection_button = None
         self.exit_button = None
-        
+        # An item of one module waiting for the player to choose which of
+        # that module's Digimon takes it (`_start_pick`).
+        self.picking_item = None
+
         # Black background for areas not covered by UI
         self.window_background = WindowBackground(False)
         
@@ -301,8 +305,11 @@ class SceneInventory:
         """Handle events in the inventory scene."""        
         event_type, event_data = event
 
-        if event_type in ["A", "LCLICK"]:
-            print(f"[SceneInventory] Handling event: {event_type} with data: {event_data}")
+        if self.picking_item is not None and event_type == "B":
+            # Back out of choosing a Digimon: the item is kept.
+            runtime_globals.game_sound.play("cancel")
+            self._end_pick()
+            return
 
         # Handle events through UI manager first
         if self.ui_manager.handle_event(event):
@@ -383,6 +390,17 @@ class SceneInventory:
         # Create a mapping of selected pets for quick lookup
         selected_pet_set = set(selected_pets)
 
+        if item.game_item.effect == "status_boost":
+            # A battle item is chosen before a battle, not here.
+            self.pet_selector.set_enabled_pets([])
+            return
+        if self._item_module(item) is not None:
+            # A module's item: that module's Digimon, whoever is selected.
+            eligible = self._eligible_pets(item, self._module_pool(item))
+            self.pet_selector.set_enabled_pets(
+                [i for i, pet in enumerate(all_pets) if pet in eligible])
+            return
+
         # Food (hunger/strength) items can't be used by a pet with stomach 0.
         is_food = self._is_food_item(item)
 
@@ -427,10 +445,31 @@ class SceneInventory:
 
             self.pet_selector.set_enabled_pets(enabled_indices)
             
-    def _use_item(self, item, index):
-        """Internal method to use an item - dispatches to effect-specific handlers"""
-        # Get targets (selected pets), excluding sleep-blocked pets
-        targets = [pet for pet in get_selected_pets() if not pet._is_blocked_by_sleep()]
+    #: Effects that act once for the item, not on a Digimon: no one is
+    #: chosen for them.
+    ITEM_WIDE_EFFECTS = ("component", "bundle", "currency", "encounter")
+
+    @staticmethod
+    def _item_module(item):
+        """The module an item belongs to, or None for the core foods and a
+        shop's cross-module items, which any Digimon can take."""
+        gi = item.game_item
+        if getattr(gi, "cross_module", False):
+            return None
+        name = getattr(gi, "module", None)
+        return name if name in runtime_globals.game_modules else None
+
+    def _module_pool(self, item):
+        """The party's Digimon of the item's module."""
+        module_name = self._item_module(item)
+        return [pet for pet in game_globals.pet_list
+                if pet is not None and getattr(pet, "module", None) == module_name]
+
+    def _eligible_pets(self, item, pool):
+        """Who in *pool* can take the item now: awake, with room to eat a
+        food, of the family a family item names and, in NEED mode, needing
+        it."""
+        targets = [pet for pet in pool if not pet._is_blocked_by_sleep()]
         # Food items (hunger/strength) can't be eaten by a pet with stomach 0.
         if self._is_food_item(item):
             targets = [pet for pet in targets if pet.stomach > 0]
@@ -455,11 +494,73 @@ class SceneInventory:
                     if pet.can_battle():
                         filtered.append(pet)
             targets = filtered
+        return targets
+
+    def _use_item(self, item, index):
+        """Use an item: the core foods and shop items on the selected
+        Digimon; a module's item on one Digimon of that module, the player
+        choosing when there is more than one. A battle item is chosen before
+        a battle instead (`utils.battle_items`)."""
+        gi = item.game_item
+        if gi.effect == "status_boost":
+            runtime_globals.game_sound.play("cancel")
+            self._show_notes(["Use it before a battle"])
+            return
+        module_name = self._item_module(item)
+        if module_name is None:
+            targets = self._eligible_pets(item, get_selected_pets())
+        else:
+            targets = self._eligible_pets(item, self._module_pool(item))
         if not targets:
             runtime_globals.game_sound.play("cancel")
-            runtime_globals.game_console.log("[SceneInventory] No pets selected for feeding")
+            runtime_globals.game_console.log(
+                f"[SceneInventory] No Digimon can take {gi.name}"
+                + (f" ({module_name}'s item)" if module_name else ""))
             return
-        
+        if module_name is not None and gi.effect not in self.ITEM_WIDE_EFFECTS and len(targets) > 1:
+            self._start_pick(item, targets)
+            return
+        self._dispatch_item(item, targets)
+
+    def _start_pick(self, item, targets):
+        """Let the player choose which of the module's Digimon takes it."""
+        self.picking_item = item
+        all_pets = game_globals.pet_list
+        self.pet_selector.set_enabled_pets([i for i, pet in enumerate(all_pets) if pet in targets])
+        self.pet_selector.set_interactive(True)
+        self.pet_selector.max_selection = 1
+        self.pet_selector.activation_callback = self._on_pick
+        self.pet_selector.focused_cell = next(i for i, pet in enumerate(all_pets) if pet in targets)
+        self.ui_manager.set_focused_component(self.pet_selector)
+        if self.text_panel:
+            self.text_panel.set_text(f"Choose a Digimon for {item.game_item.name}")
+        runtime_globals.game_sound.play("menu")
+
+    def _on_pick(self):
+        cell = self.pet_selector.get_activation_cell()
+        item = self.picking_item
+        if item is None or cell not in self.pet_selector.enabled_pets \
+                or not 0 <= cell < len(game_globals.pet_list):
+            runtime_globals.game_sound.play("cancel")
+            return True
+        pet = game_globals.pet_list[cell]
+        self._end_pick()
+        self._dispatch_item(item, [pet])
+        return True
+
+    def _end_pick(self):
+        item, self.picking_item = self.picking_item, None
+        self.pet_selector.set_interactive(False)
+        self.pet_selector.activation_callback = None
+        self.pet_selector.selected_pets = []
+        if self.item_list:
+            self.ui_manager.set_focused_component(self.item_list)
+        if item is not None:
+            self._update_item_description(item)
+            self._update_pet_selector_for_item(item)
+
+    def _dispatch_item(self, item, targets):
+        """Hand the item to the handler for its effect."""
         # Dispatch to appropriate handler based on item effect
         effect = item.game_item.effect
         status = item.game_item.status
@@ -565,7 +666,7 @@ class SceneInventory:
         if game_item.effect == "cure":
             return item_effects.has_ailment(pet, game_item.status)
         if game_item.effect == "bedding":
-            return pet.sick > 0 or getattr(pet, "mistakes", 0) > 0
+            return ailments.ailing(pet) or getattr(pet, "mistakes", 0) > 0
         if game_item.effect == "multiplier":
             # A BE item whose targets have no stat here, or Vital Values
             # for a pet without them.

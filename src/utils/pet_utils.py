@@ -37,6 +37,27 @@ def get_training_targets():
         return [pet for pet in get_selected_pets() if pet.can_train() and (pet.effort < 16 or (
             pet.strength < 4 and pays_strength(pet)))]
 
+def pay_training_cost(pet):
+    """Charge one training on a module whose training costs what a battle
+    does (`training_uses_battle_cost`, the iC): the battle's Hunger or DP,
+    without the battle's weight loss (a training has its own). Any pet-like
+    object with `module`, `hunger` and `dp` will do. True if paid."""
+    module = runtime_globals.game_modules.get(getattr(pet, "module", None))
+    if not getattr(module, "training_uses_battle_cost", False):
+        return False
+    cost_type = getattr(module, "battle_cost_type", "DP")
+    amount = getattr(module, "battle_cost_amount", 1.0)
+    if float(amount).is_integer():
+        amount = int(amount)
+    if cost_type == "Hunger":
+        pet.hunger = max(0, (getattr(pet, "hunger", 0) or 0) - amount)
+    elif cost_type == "DP":
+        pet.dp = max(0, (getattr(pet, "dp", 0) or 0) - amount)
+    else:
+        return False
+    return True
+
+
 def get_battle_targets():
     """
     Returns pets eligible to start a battle.

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Starting Omnimon Virtual Pet Game setup..."
+echo "🚀 Starting Omnipet Virtual Pet Game setup..."
 echo "This script works on Raspberry Pi, Ubuntu, Debian, and other Linux distributions"
 
 # Detect the distribution
@@ -56,13 +56,29 @@ elif command -v pacman &> /dev/null; then
     sudo pacman -S --noconfirm sdl2 sdl2_image sdl2_mixer sdl2_ttf
 fi
 
+# The game needs Python 3.10 or newer; launch.sh looks for python3.NN before python3
+PYTHON_CMD=""
+for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v "$candidate" &> /dev/null && \
+       "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2> /dev/null; then
+        PYTHON_CMD="$candidate"
+        break
+    fi
+done
+if [ -z "$PYTHON_CMD" ]; then
+    echo "❌ The game needs Python 3.10 or newer; this system has $(python3 --version 2>&1)"
+    echo "   Install Python 3.10+ (or use the GamePi image), then run setup again"
+    exit 1
+fi
+
 # Install Python packages
-echo "🐍 Installing Python packages..."
-pip3 install --user pygame psutil
+echo "🐍 Installing Python packages for $PYTHON_CMD..."
+"$PYTHON_CMD" -m pip install --user pygame psutil || \
+    echo "⚠️  pip refused; install pygame and psutil for $PYTHON_CMD with your package manager"
 
 # Test if pygame works
 echo "🧪 Testing pygame installation..."
-python3 -c "import pygame; print('Pygame version:', pygame.version.ver)" || {
+"$PYTHON_CMD" -c "import pygame; print('Pygame version:', pygame.version.ver)" || {
     echo "❌ Pygame installation failed"
     exit 1
 }
@@ -73,26 +89,26 @@ chmod +x launch.sh
 # Create desktop shortcut if we're on a desktop environment
 if [ -n "$XDG_CURRENT_DESKTOP" ] && [ -d "$HOME/Desktop" ]; then
     echo "🖥️  Creating desktop shortcut..."
-    cat > "$HOME/Desktop/Omnimon.desktop" << EOF
+    cat > "$HOME/Desktop/Omnipet.desktop" << EOF
 [Desktop Entry]
-Name=Omnimon Virtual Pet
+Name=Omnipet Virtual Pet
 Comment=Virtual Pet Game
 Exec=$(pwd)/launch.sh
-Icon=$(pwd)/resources/icon.png
+Icon=$(pwd)/assets/icon.png
 Terminal=false
 Type=Application
 Categories=Game;
 Path=$(pwd)
 EOF
-    chmod +x "$HOME/Desktop/Omnimon.desktop"
+    chmod +x "$HOME/Desktop/Omnipet.desktop"
 fi
 
 # Optional: Create systemd service for auto-start (Raspberry Pi/embedded systems)
 if [ "$1" = "--service" ] && [ -f "/usr/bin/raspi-config" ]; then
     echo "🚀 Creating systemd service for auto-start..."
-    sudo tee /etc/systemd/system/omnimon.service > /dev/null << EOF
+    sudo tee /etc/systemd/system/omnipet.service > /dev/null << EOF
 [Unit]
-Description=Omnimon Virtual Pet Game
+Description=Omnipet Virtual Pet Game
 After=graphical-session.target
 
 [Service]
@@ -108,11 +124,11 @@ WantedBy=graphical-session.target
 EOF
     
     sudo systemctl daemon-reload
-    sudo systemctl enable omnimon.service
+    sudo systemctl enable omnipet.service
     echo "Service created. Game will start automatically after reboot."
 fi
 
 echo "✅ Setup complete!"
 echo "🎮 Run './launch.sh' to start the game"
 echo "⚙️  Settings (display, sound, buttons) are in the game's Settings menu"
-echo "🔄 Run './update.sh' to update the game"
+echo "🔄 To update, copy a new release's files over this folder"

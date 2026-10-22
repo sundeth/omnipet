@@ -26,9 +26,7 @@ def _pet(**fields):
     pet.name = "Testmon"
     pet.state = "idle"
     pet.stage = 3
-    pet.sick = 0
-    pet.sick_type = ""
-    pet.injuries = 0
+    pet.sick = pet.injury = pet.sick_total = pet.injury_total = 0
     pet.heal_doses = 1
     pet.atk_main = 1
     pet.sleep_disturbances = 0
@@ -87,15 +85,14 @@ class DisturbanceSicknessTests(unittest.TestCase):
         pet = self.disturb(module, 9)
         self.assertEqual(pet.sick, 0)
         pet = self.disturb(module, 10)
-        self.assertEqual(pet.sick, pet.heal_doses)
-        self.assertEqual(pet.sick_type, "dots")
-        self.assertEqual(pet.injuries, 1)
+        # Dots: a sickness, counted as one
+        self.assertEqual((pet.sick, pet.injury), (pet.heal_doses, 0))
+        self.assertEqual((pet.sick_total, pet.injury_total), (1, 0))
 
     def test_it_lands_again_once_healed(self):
         module = _module(care_disturbance_sickness_count=10)
         pet = self.disturb(module, 10)
         pet.sick = 0          # treated
-        pet.sick_type = ""
         with patch("models.game_pet.get_module", return_value=module):
             for _ in range(10):
                 pet.state = "nap"
@@ -106,8 +103,9 @@ class DisturbanceSicknessTests(unittest.TestCase):
     def test_the_effect_is_the_devices(self):
         skull = self.disturb(_module(care_disturbance_sickness_count=2,
                                      care_disturbance_sickness_effect="Skull"), 2)
-        self.assertEqual(skull.sick_type, "")
-        self.assertEqual(skull.sick, skull.heal_doses)
+        # Skull: an injury
+        self.assertEqual((skull.sick, skull.injury), (0, skull.heal_doses))
+        self.assertEqual((skull.sick_total, skull.injury_total), (0, 1))
         nothing = self.disturb(_module(care_disturbance_sickness_count=2,
                                        care_disturbance_sickness_effect="Nothing"), 2)
         self.assertEqual(nothing.sick, 0)

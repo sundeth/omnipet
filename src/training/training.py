@@ -94,6 +94,20 @@ class Training:
         # move-forward → TRAIN2). False once the shot has fired and the sprite
         # is flying. Re-armed when the next wave begins.
         self._wave_in_prep = False
+        self._costs_paid = False
+
+    def pay_training_costs(self):
+        """Charge each pet that plays this training its module's training cost
+        (GamePet.pay_training_cost: the battle cost, where the module says
+        training costs the same). Once a play: the training scene calls it as
+        the play starts; a minigame that narrows `pets` (the iC's) calls it
+        itself once they are known, and the scene's call is then a no-op."""
+        if getattr(self, "_costs_paid", False):
+            return
+        self._costs_paid = True
+        from utils.pet_utils import pay_training_cost
+        for pet in getattr(self, "pets", None) or []:
+            pay_training_cost(pet)
 
     def _is_dot_pet(self, pet):
         """Return True if this pet is currently rendered using dot sprites."""

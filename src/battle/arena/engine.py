@@ -11,7 +11,11 @@ power, base HP, attacks -- always comes from the server's module copy, never
 from the upload. The status (level, strength, hunger, weight, effort,
 traited/shaken egg, Vital Values) is clamped to what that species can hold
 and then run through the same power/HP rules the game uses
-(``core.pet_stats``). A module the server does not have is refused.
+(``core.pet_stats``). A module the server does not have is refused. The
+upload may also say what the game holds for the species (``base``); when the
+game runs the server's own version of the module those values must match,
+or the Digimon is refused as edited (a different module version may differ
+honestly, and the server's data wins anyway).
 
 **Battle rules.** Arena battles are OMNIPET battles with the DMX default
 patterns (the battle contract in CLAUDE.md): ``GlobalBattleSimulator`` on
@@ -65,6 +69,13 @@ STATUS_FIELDS = ("level", "strength", "hunger", "weight", "effort",
 #: Effort is a training count; nothing reads past a few full meters.
 MAX_EFFORT = 99
 MAX_WEIGHT = 99
+
+#: Species values an upload's ``base`` is checked against (``check_base``):
+#: the ones that decide a battle or a season's restrictions. Attack ids only
+#: choose the art a replay draws (arena battles take their patterns from
+#: stage, level and charge), and a module may change them without a new
+#: version, so they are not checked.
+BASE_FIELDS = ("stage", "attribute", "power", "hp")
 
 
 class ArenaError(Exception):
@@ -162,6 +173,7 @@ def _load_module(path):
         "power_bonus_rule": pet_stats.resolve_power_bonus_rule(meta),
         "effort_power_tiers": meta.get("effort_power_tiers") or [],
         "visible_stats": pet_stats.parse_visible_stats(meta.get("visible_stats", "")),
+        "strength_max": max(0, _int(meta.get("care_strength_max"), 0)),
         "monsters": monsters,
     }
 
@@ -170,8 +182,9 @@ def _load_module(path):
 # Building a battle entry from an upload
 # ---------------------------------------------------------------------------
 
-def clamp_status(monster, status):
-    """The upload's care status, restricted to what *monster* can hold."""
+def clamp_status(monster, status, strength_max=0):
+    """The upload's care status, restricted to what *monster* can hold.
+    *strength_max* is its module's ``care_strength_max`` (0: the stomach)."""
     status = status if isinstance(status, dict) else {}
     stage = _int(monster.get("stage"), 0)
     stomach = max(0, _int(monster.get("stomach"), 4))
@@ -179,7 +192,8 @@ def clamp_status(monster, status):
     max_level = max(1, pet_stats.MAX_LEVEL.get(stage, 10))
     return {
         "level": _clamp(_int(status.get("level"), 1), 1, max_level),
-        "strength": _clamp(_int(status.get("strength"), 0), 0, stomach),
+        "strength": _clamp(_int(status.get("strength"), 0), 0,
+                           pet_stats.strength_cap(strength_max, stomach)),
         "hunger": _clamp(_int(status.get("hunger"), 0), 0, stomach),
         "weight": _clamp(_int(status.get("weight"), min_weight), min_weight,
                          max(min_weight, MAX_WEIGHT)),
@@ -218,7 +232,7 @@ def build_entry(catalog, upload):
         raise ArenaError("dead", "%s is dead" % name)
 
     stage = _int(monster.get("stage"), 0)
-    clamped = clamp_status(monster, status)
+    clamped = clamp_status(monster, status, module.get("strength_max", 0))
     base_power = _int(monster.get("power"), 0)
     base_hp = _int(monster.get("hp"), 0) or pet_stats.HP_LEVEL.get(stage, 0)
     power = pet_stats.power_with_bonus_rule(
@@ -228,7 +242,8 @@ def build_entry(catalog, upload):
         level=clamped["level"], version=version, effort=clamped["effort"],
         traited=clamped["traited"], shook=clamped["shook"],
         star=_int(monster.get("star"), 0),
-        effort_tiers=module.get("effort_power_tiers"))
+        effort_tiers=module.get("effort_power_tiers"),
+        strength_max=module.get("strength_max", 0))
     vital_cap = (pet_stats.vital_value_cap(stage)
                  if pet_stats.tracks_vital_values(module["visible_stats"]) else 0)
     hp = pet_stats.hp_with_bonuses(base_hp, level=clamped["level"],
@@ -238,6 +253,9 @@ def build_entry(catalog, upload):
     atk_alt = _int(monster.get("atk_alt"), 0) or atk_main
     if power <= 0 or hp <= 0 or atk_main <= 0:
         raise ArenaError("cannot_battle", "%s cannot battle" % name)
+    check_base(upload, module, {
+        "stage": stage, "attribute": normalize_attribute(monster.get("attribute")),
+        "power": base_power, "hp": base_hp, "atk_main": atk_main, "atk_alt": atk_alt})
 
     return {
         "module": module_name,
@@ -260,6 +278,38 @@ def build_entry(catalog, upload):
     }
 
 
+def check_base(upload, module, server):
+    """Refuse an upload whose ``base`` contradicts the server's species data.
+
+    Only when the upload says it comes from the module version the server
+    holds: another version may honestly differ (the server's data is used
+    either way). Raises ArenaError ``stats_mismatch``.
+    """
+    claimed = upload.get("base")
+    if not isinstance(claimed, dict) or not claimed:
+        return
+    if str(upload.get("module_version") or "") != str(module["version"]):
+        return
+    for field in BASE_FIELDS:
+        if field not in claimed:
+            continue
+        value = claimed[field]
+        if field == "attribute":
+            try:
+                value = normalize_attribute(value)
+            except ArenaError:
+                value = None
+        elif field == "hp":
+            value = _int(value, 0) or pet_stats.HP_LEVEL.get(server["stage"], 0)
+        else:
+            value = _int(value, None)
+        if value != server[field]:
+            raise ArenaError(
+                "stats_mismatch",
+                "%s does not match the server's %s data (%s)"
+                % (upload.get("name") or "?", module["name"], field))
+
+
 def restriction_error(entry, restrictions):
     """Why *entry* breaks the season *restrictions*, or None."""
     restrictions = restrictions or {}
@@ -277,9 +327,21 @@ def restriction_error(entry, restrictions):
     return None
 
 
-def validate_team(catalog, uploads, restrictions=None, team_size=TEAM_SIZE):
-    """Build every entry of a team; returns (entries, errors)."""
-    if not isinstance(uploads, list) or len(uploads) != team_size:
+def validate_team(catalog, uploads, restrictions=None, team_size=TEAM_SIZE,
+                  min_size=None, max_size=None):
+    """Build every entry of a team; returns (entries, errors).
+
+    The team holds exactly *team_size* Digimon, or, when *min_size* /
+    *max_size* are given, any number in that range.
+    """
+    if min_size is not None or max_size is not None:
+        low = _int(min_size, 1) if min_size is not None else 1
+        high = _int(max_size, TEAM_SIZE) if max_size is not None else TEAM_SIZE
+        if not isinstance(uploads, list) or not low <= len(uploads) <= high:
+            raise ArenaError("team_size", (
+                "A team must have exactly %d Digimon" % low if low == high
+                else "A team must have %d to %d Digimon" % (low, high)))
+    elif not isinstance(uploads, list) or len(uploads) != team_size:
         raise ArenaError("team_size", "A team must have exactly %d Digimon" % team_size)
     entries, errors = [], []
     for i, upload in enumerate(uploads):
@@ -439,7 +501,8 @@ def handle(request):
     if command == "validate_team":
         entries, errors = validate_team(
             catalog, request.get("pets"), request.get("restrictions"),
-            _int(request.get("team_size"), TEAM_SIZE))
+            _int(request.get("team_size"), TEAM_SIZE),
+            request.get("min_team_size"), request.get("max_team_size"))
         return {"ok": not errors, "entries": entries, "errors": errors}
     if command == "battle":
         outcome = run_battle(request.get("team1") or [], request.get("team2") or [],

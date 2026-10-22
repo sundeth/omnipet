@@ -2,8 +2,18 @@
 # Creates a Batocera version
 
 param(
-    [string]$Version = "0.9.8"
+    [string]$Version = ""
 )
+
+# The release version is src/core/version.py's unless -Version is given
+if (-not $Version) {
+    if ((Get-Content (Join-Path $PSScriptRoot "..\src\core\version.py") -Raw) -match 'VERSION\s*=\s*"([^"]+)"') {
+        $Version = $matches[1]
+    } else {
+        Write-Host "[ERROR] No VERSION in src/core/version.py" -ForegroundColor Red
+        exit 1
+    }
+}
 
 $RELEASE_DIR = "..\Release"
 $BUILD_NAME = "Omnipet_Batocera_Ver_$Version"

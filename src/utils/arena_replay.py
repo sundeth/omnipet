@@ -26,7 +26,7 @@ def _local_pet(entry):
     return pet
 
 
-def _enemy_data(entry):
+def enemy_data(entry):
     """The dict ``BattleEncounter.setup_pvp_teams`` builds an enemy from."""
     return {
         "name": entry["name"],
@@ -73,7 +73,7 @@ def start_replay(battle: dict, viewer_team_id, return_view="arena",
         "is_host": True,
         "my_pets": my_pets,
         "my_team_data": [],
-        "enemy_team_data": [_enemy_data(entry) for entry in theirs["pets"]],
+        "enemy_team_data": [enemy_data(entry) for entry in theirs["pets"]],
         "simulation_data": {
             "battle_log": result,
             "victory_status": arena_replay.victory_status(result.get("winner")),

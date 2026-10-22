@@ -1093,7 +1093,7 @@ class ICAttackSpriteTests(unittest.TestCase):
 
     def test_a_usable_weapon_raises_packet_three_power(self):
         """Own family +15 for the Attack +1 weapon and +8 for the +2; Digi
-        Cannon +4, Metal Armor +15, Silver Rope +8; another family's 0."""
+        Cannon +4, Metal Armor +15, Silver Robe +8; another family's 0."""
         from battle.sim.battle_simulator import ICDevice
         from battle.sim.dcom_battle_simulator import pet_to_digimon
         IC = self.IC
@@ -1103,7 +1103,7 @@ class ICAttackSpriteTests(unittest.TestCase):
         # ShineGreymon below 31: Dragon Sword, then Dragon Break (Kind 6).
         self.assertEqual(read("C147", "4107", "1C27", "0007", "71F7"), (4, 1, 194))
         self.assertEqual(read("C147", "6107", "0BB7", "0007", "E1F7"), (6, 16, 187))
-        # MirageGaogamon: Beast Claw, Silver Rope.
+        # MirageGaogamon: Beast Claw, Silver Robe.
         self.assertEqual(read("C167", "4317", "2C27", "0007", "11F7"), (4, 2, 194))
         self.assertEqual(read("C167", "4317", "BBB7", "0007", "01F7"), (4, 11, 187))
         for weapon, family, power in ((1, "Dragon", 15), (16, "Dragon", 8),
@@ -1328,7 +1328,9 @@ class ICAttackSpriteTests(unittest.TestCase):
                 continue
             # Enemies throw the standard sprites only (owner, 2026-10-01),
             # and below Perfect nothing has a strong shot (owner, 2026-10-05).
-            enemy = record.get("availability") == "Unobtainable"
+            # The Burst (version 3) is held back for 1.0, Unobtainable for
+            # its missing data, not an enemy roster (owner, 2026-10-15).
+            enemy = record.get("availability") == "Unobtainable" and record.get("version") != 3
             alt = 1 if enemy else 2
             if record["stage"] < protocol_constants.IC.MAX_RELIABILITY_MIN_STAGE:
                 alt = 0

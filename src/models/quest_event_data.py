@@ -32,7 +32,10 @@ class EventData:
     ``pools`` by a monster field of the pet (``pool_field``), 4 a run of
     special encounters, every round of ``area`` in turn, paying ``item`` after
     ``reward_round`` (0: the last), 5 access to the shop.json shop ``shop``
-    for ``access_minutes`` (0: for good), 6 a card battle (the Vital
+    for ``access_minutes`` (0: for good; -1: one visit -- after a battle it
+    is the pending event, accepting it opens the shop, and leaving it, or
+    letting the alert go, closes it: the iC's DigiShops that appear after a
+    connection), 6 a card battle (the Vital
     Bracelet's random battle, utils.card_battle): a monster of the pet's own
     version by its ``encounter_chances``, each win paying the next item of
     ``item_sequence`` ("" a win without one).
@@ -44,7 +47,13 @@ class EventData:
     ``chance_percent`` as a chance in 100 -- or "schedule" (at the times of
     the pet's ``encounter_time_group`` in the module's schedule). A battle
     trigger takes ``outcome`` ("win", "loss", "any"); a connection one may
-    name the ``opponent_device_version`` it needs. ``versions`` limits the
+    name the ``opponent_device_version`` it needs and the ``protocol`` (battle
+    format) it is fought on: the iC's DigiShop 10 opens against a 10X on
+    the IC wire, 13 and 14 against a Digimon Mini on DMM's, whose Ver.1 also
+    reads 1. Battle-triggered events sharing a ``draw`` are one roll: at most
+    one of those that fit the battle happens, each with its ``chance_percent``
+    of the hundred (the iC 20X after a connection: half the time a shop or
+    the Coliseum run, the shop by the device beaten). ``versions`` limits the
     event to pets of those versions, ``trigger_areas`` an adventure or area
     clear event to battles in those adventure areas (Digimon World's
     recruits, met in their own region). ``until_friend`` ends a special
@@ -65,6 +74,8 @@ class EventData:
     trigger: str = "random"
     outcome: str = "win"
     opponent_device_version: Optional[int] = None
+    protocol: str = ""
+    draw: str = ""
     versions: Optional[List[int]] = None
     pools: Optional[dict] = None
     pool_field: str = ""

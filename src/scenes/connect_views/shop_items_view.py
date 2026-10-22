@@ -18,6 +18,7 @@ from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals, game_globals
 from services.omninet_service import omninet_service
 from utils.asset_utils import image_load
+from utils.module_utils import shop_item_effect_known
 
 
 class ShopItemsView:
@@ -194,20 +195,26 @@ class ShopItemsView:
             # Shop items apply their effect to *all* pets (cross-module),
             # so we tag them with cross_module=True for the consumer.
             json_data = item_data.get('json_data') or {}
-            game_globals.shop_items_data[item_id] = {
+            meta = game_globals.shop_items_data.setdefault(item_id, {})
+            meta.update({
                 'id': item_id,
                 'name': item_data.get('name', 'Unknown'),
                 'description': item_data.get('description', ''),
                 'sprite_name': sprite_name,
-                'effect': json_data.get('effect', ''),
-                'status': json_data.get('status', ''),
-                'amount': json_data.get('amount', 1),
-                'boost_time': json_data.get('boost_time', 0),
-                'protocol_value': json_data.get('protocol_value', 0),
-                'attack_sprite': json_data.get('attack_sprite', 0),
-                'digisoul': json_data.get('digisoul', ''),
                 'cross_module': True,
-            }
+            })
+            # The listing carries no effect; keep one fetched after a purchase
+            # (module_utils.ensure_shop_item_data) rather than blank it.
+            if json_data or not shop_item_effect_known(meta):
+                meta.update({
+                    'effect': json_data.get('effect', ''),
+                    'status': json_data.get('status', ''),
+                    'amount': json_data.get('amount', 1),
+                    'boost_time': json_data.get('boost_time', 0),
+                    'protocol_value': json_data.get('protocol_value', 0),
+                    'attack_sprite': json_data.get('attack_sprite', 0),
+                    'digisoul': json_data.get('digisoul', ''),
+                })
 
             new_item = ShopInventoryItem(
                 item_id=item_id,
@@ -384,7 +391,12 @@ class ShopItemsView:
                 success, message = omninet_service.purchase_item('item', item.id)
                 if success:
                     game_globals.coins -= item.price
-                    game_globals.purchases.add_item(item.id, 1)
+                    # One item for this purchase row (the account sync then
+                    # does not count it again), and its effect from the
+                    # server: the listing has none (online findings 5, 7).
+                    game_globals.purchases.apply_item_purchase(item.id, omninet_service.last_purchase_id)
+                    from utils.module_utils import ensure_shop_item_data
+                    ensure_shop_item_data(item.id)
                     game_globals.save()
                     
                     item.quantity = game_globals.purchases.get_item_quantity(item.id)

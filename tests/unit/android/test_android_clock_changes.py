@@ -436,8 +436,8 @@ class ClockSetBackWhileAsleep(unittest.TestCase):
     # Bug A3 (findings/android.md): OfflinePet.check_wake_up waits for the
     # first wake time after sleep_start_time; GamePet.check_wake_up wakes at
     # the wake time on the clock. Set back across the wake time, the closed
-    # pet sleeps a further day.
-    @unittest.expectedFailure
+    # pet slept a further day. Fixed 2026-10-17 (a nap start later than the
+    # clock becomes the clock's time, open and closed); kept as a regression test.
     def test_pet_wakes_at_its_wake_time_after_the_clock_was_set_back(self):
         mod = clock_module()
         # Asleep since 21:00; the clock is then set back to 02:00 the same day.

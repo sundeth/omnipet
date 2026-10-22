@@ -26,9 +26,7 @@ from utils.document_utils import build_module_documentation
 # sys.stderr = open(os.devnull, 'w')  # Commented out to allow error stack traces
 
 from vpet import VirtualPetGame
-
-# Game Version
-VERSION = "1.0.0 Beta 3"
+from core.version import VERSION
 
 # Check Pygame version for compatibility
 PYGAME_VERSION = tuple(map(int, pygame.version.ver.split('.')))

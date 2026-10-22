@@ -1,6 +1,12 @@
 """
-BattleConfirmView - Pre-battle confirmation screen
-Shows enemy info and allows starting or cancelling the battle
+BattleConfirmView - the last screen before a WiFi or online battle.
+
+Both games arrive here with a link to each other -- a local connection
+(``battle.lan_link``) for WiFi, a Discord relay room (``battle.relay_link``)
+for an online battle -- and run the battle's handshake
+(``battle.lan_battle.Session``): each says hello with its team, each player
+presses START, the host fights the battle and sends the result, and both
+open the PvP battle scene on it. Cancel (or the opponent leaving) ends it.
 """
 from ui.ui_manager import UIManager
 from ui.components.title_scene import TitleScene
@@ -10,236 +16,197 @@ from ui.components.label import Label
 from ui.components.text_panel import TextPanel
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals
+from utils.scene_utils import change_scene
 
 
 class BattleConfirmView:
-    """Pre-battle confirmation view."""
-    
+    """Pre-battle confirmation for a WiFi or online battle."""
+
+    STATUS = {
+        "hello": "Connecting...",
+        "confirm": "Press START to battle",
+        "waiting": "Waiting for opponent...",
+    }
+
     def __init__(self, ui_manager: UIManager, change_view_callback,
-                 connection_mode="wifi", connection_socket=None, 
-                 enemy_name="Unknown", enemy_device="Unknown",
-                 selected_pet=None, dcom_controller=None, protocol_type=None,
-                 battle_format=None, discord_module=None, discord_room=None):
+                 connection_mode="wifi", link=None, is_host=False, enemy_name="",
+                 selected_pets=None, discord_module=None, discord_room_id=None,
+                 **_other_modes):
         """Initialize the battle confirm view.
-        
+
         Args:
             ui_manager: The UI manager instance
             change_view_callback: Callback to change to another view
-            connection_mode: Type of connection (wifi, dcom, discord)
-            connection_socket: Socket for WiFi connections
-            enemy_name: Name of enemy device/user
-            enemy_device: Device type of enemy
-            selected_pet: Selected pet for battle
-            dcom_controller: DCom controller for device battles
-            protocol_type: DCom protocol type
-            battle_format: Battle format (DM20, PEN20, etc.)
-            discord_module: Discord module reference
-            discord_room: Discord room info
+            connection_mode: "wifi" or "discord"
+            link: The open LanConnection to the other game (WiFi)
+            is_host: Whether this game hosted (it then fights the battle)
+            enemy_name: What the joining list called the host, until its
+                hello names it
+            selected_pets: The pets that fight
+            discord_module: The Discord client (online battles)
+            discord_room_id: The relay room both players are in (online)
         """
         self.ui_manager = ui_manager
         self.change_view = change_view_callback
-        
         self.connection_mode = connection_mode
-        self.connection_socket = connection_socket
+        self.is_host = is_host
         self.enemy_name = enemy_name
-        self.enemy_device = enemy_device
-        self.selected_pet = selected_pet
-        self.dcom_controller = dcom_controller
-        self.protocol_type = protocol_type
-        self.battle_format = battle_format
+        self.selected_pets = list(selected_pets or [])
         self.discord = discord_module
-        self.discord_room = discord_room
-        
-        # UI Components
+        self.session = None
+        self._started = False
+
+        name = None
+        if connection_mode == "discord" and link is None and discord_room_id and discord_module:
+            link = discord_module.room_link(discord_room_id, is_host)
+            name = discord_module.get_account_name() or ""
+        if connection_mode in ("wifi", "discord") and link is not None and self.selected_pets:
+            from battle.lan_battle import Session
+            from core.version import VERSION
+            from scenes.connect_views.wifi_hosting_view import player_name
+            self.session = Session(link, is_host, self.selected_pets,
+                                   name=player_name() if name is None else name, game=VERSION)
+        elif link is not None:
+            link.close()
+
         self.background = None
         self.title_scene = None
         self.info_panel = None
+        self.status_label = None
         self.start_button = None
         self.cancel_button = None
-        
+        self._shown_state = None
+
         self._setup_ui()
-    
+
     def _setup_ui(self):
-        """Setup the UI components."""
         ui_width = ui_height = BASE_RESOLUTION
-        
-        # Background
+
         self.background = Background(ui_width, ui_height)
         self.background.set_regions([(0, ui_height, "black")])
         self.ui_manager.add_component(self.background)
-        
-        # Title
-        mode_title = {
-            "wifi": "WIFI BATTLE",
-            "dcom": "DCOM BATTLE",
-            "discord": "ONLINE BATTLE"
-        }.get(self.connection_mode, "BATTLE")
-        
-        self.title_scene = TitleScene(0, 9, mode_title)
+
+        self.title_scene = TitleScene(
+            0, 9, "ONLINE BATTLE" if self.connection_mode == "discord" else "WIFI BATTLE")
         self.ui_manager.add_component(self.title_scene)
-        
-        # Info panel with battle details
-        info_lines = [
-            f"Opponent: {self.enemy_name}",
-            f"Device: {self.enemy_device}",
-        ]
-        
-        if self.selected_pet:
-            pet_name = self.selected_pet.get("name", "Unknown")
-            info_lines.append(f"Your Pet: {pet_name}")
-        
-        if self.battle_format:
-            info_lines.append(f"Format: {self.battle_format}")
-        
-        self.info_panel = TextPanel(
-            20, 50,
-            ui_width - 40, 100,
-            info_lines
-        )
+
+        self.info_panel = TextPanel(20, 45, ui_width - 40, 95, self._info_text())
         self.ui_manager.add_component(self.info_panel)
-        
-        # Buttons
-        btn_y = 170
-        btn_w = 80
-        btn_h = 30
-        gap = 20
-        
+
+        self.status_label = Label(20, 148, "", is_title=False)
+        self.ui_manager.add_component(self.status_label)
+
+        btn_y, btn_w, btn_h, gap = 180, 80, 30, 20
         self.start_button = Button(
             (BASE_RESOLUTION // 2) - btn_w - (gap // 2), btn_y, btn_w, btn_h,
-            "Start", self._on_start
+            "START", self._on_start
         )
         self.ui_manager.add_component(self.start_button)
-        
+
         self.cancel_button = Button(
             (BASE_RESOLUTION // 2) + (gap // 2), btn_y, btn_w, btn_h,
-            "Cancel", self._on_cancel
+            "CANCEL", self._on_cancel
         )
         self.ui_manager.add_component(self.cancel_button)
-        
-        runtime_globals.game_console.log(f"[BattleConfirmView] Ready - mode={self.connection_mode}")
-    
-    def _on_start(self):
-        """Start the battle."""
-        runtime_globals.game_sound.play("menu")
-        runtime_globals.game_console.log("[BattleConfirmView] Starting battle...")
-        
-        try:
-            if self.connection_mode == "wifi":
-                self._start_wifi_battle()
-            elif self.connection_mode == "dcom":
-                self._start_dcom_battle()
-            elif self.connection_mode == "discord":
-                self._start_discord_battle()
-        except Exception as e:
-            runtime_globals.game_console.log(f"[BattleConfirmView] Error starting battle: {e}")
-    
-    def _start_wifi_battle(self):
-        """Start a WiFi battle."""
-        from scenes.scene_battle import SceneBattle
-        
-        if not self.connection_socket:
-            runtime_globals.game_console.log("[BattleConfirmView] No connection socket!")
-            return
-        
-        # Create battle scene with WiFi parameters
-        battle_scene = SceneBattle(
-            connection_type="wifi",
-            connection_socket=self.connection_socket,
-            selected_pet=self.selected_pet,
-            enemy_name=self.enemy_name
-        )
-        
-        runtime_globals.scene_manager.push(battle_scene)
-    
-    def _start_dcom_battle(self):
-        """Start a DCom battle."""
-        from scenes.scene_battle import SceneBattle
-        
-        if not self.dcom_controller:
-            runtime_globals.game_console.log("[BattleConfirmView] No DCom controller!")
-            return
-        
-        # Create battle scene with DCom parameters
-        battle_scene = SceneBattle(
-            connection_type="dcom",
-            dcom_controller=self.dcom_controller,
-            protocol_type=self.protocol_type,
-            battle_format=self.battle_format,
-            selected_pet=self.selected_pet,
-            enemy_name=self.enemy_name
-        )
-        
-        runtime_globals.scene_manager.push(battle_scene)
-    
-    def _start_discord_battle(self):
-        """Start a Discord battle."""
-        from scenes.scene_battle import SceneBattle
-        
-        if not self.discord:
-            runtime_globals.game_console.log("[BattleConfirmView] No Discord module!")
-            return
-        
-        # Create battle scene with Discord parameters
-        battle_scene = SceneBattle(
-            connection_type="discord",
-            discord_module=self.discord,
-            discord_room=self.discord_room,
-            selected_pet=self.selected_pet,
-            enemy_name=self.enemy_name
-        )
-        
-        runtime_globals.scene_manager.push(battle_scene)
-    
-    def _on_cancel(self):
-        """Cancel and return to previous view."""
-        runtime_globals.game_sound.play("cancel")
-        
-        # Cleanup connection if needed
-        if self.connection_mode == "wifi" and self.connection_socket:
-            try:
-                self.connection_socket.close()
-            except:
-                pass
-        
-        # Return to appropriate view
-        if self.connection_mode == "discord":
-            self.change_view("discord")
-        elif self.connection_mode == "dcom":
-            self.change_view("dcom")
+
+        self._refresh()
+        runtime_globals.game_console.log(
+            f"[BattleConfirmView] Ready - mode={self.connection_mode} host={self.is_host}")
+
+    # ------------------------------------------------------------- display
+    def _info_text(self):
+        mine = ", ".join(getattr(p, "name", "?") for p in self.selected_pets)
+        session = self.session
+        if session is None or session.opponent is None:
+            opponent = self.enemy_name or "?"
+            theirs = "..."
         else:
-            self.change_view("main_menu")
-    
+            opponent = session.opponent["name"] or self.enemy_name or "Rival"
+            theirs = ", ".join(e["name"] for e in session.opponent["team"])
+        return f"Opponent: {opponent}. Their team: {theirs}. Your team: {mine}."
+
+    def _refresh(self):
+        """Show the session's state (once per change)."""
+        session = self.session
+        if session is None:
+            state, status = "unavailable", "Battle not available"
+        else:
+            state = session.state
+            status = session.error if state == "closed" else self.STATUS.get(state, "")
+        if state == self._shown_state:
+            return
+        self._shown_state = state
+        self.status_label.set_text(status)
+        self.info_panel.set_text(self._info_text())
+        self.start_button.set_enabled(state == "confirm")
+        self.cancel_button.set_text("BACK" if state in ("closed", "unavailable") else "CANCEL")
+
+    # ------------------------------------------------------------- actions
+    def _on_start(self):
+        if self.session is not None and self.session.press_start():
+            runtime_globals.game_sound.play("menu")
+            runtime_globals.game_console.log("[BattleConfirmView] START pressed")
+            self._refresh()
+
+    def _on_cancel(self):
+        runtime_globals.game_sound.play("cancel")
+        if self.session is not None:
+            self.session.cancel()
+        if self.connection_mode == "discord":
+            self.change_view("discord", selected_pets=self.selected_pets, is_online_mode=True)
+        else:
+            self.change_view("wifi_hosting", selected_pets=self.selected_pets)
+
+    def _start_battle(self):
+        """The log is in: open the battle scene on it from this game's seat."""
+        from battle.lan_battle import pvp_battle_data
+        self._started = True
+        try:
+            data = pvp_battle_data(self.session.log, self.selected_pets, self.is_host,
+                                   online=self.connection_mode == "discord")
+        except Exception as exc:  # pylint: disable=broad-except
+            runtime_globals.game_console.log(f"[BattleConfirmView] Cannot show the battle: {exc}")
+            self.session.error = "Battle could not be shown"
+            self.session.log = None
+            self.session.close()
+            self._refresh()
+            return
+        self.session.close()
+        runtime_globals.pvp_battle_data = data
+        runtime_globals.game_console.log(
+            f"[BattleConfirmView] Battle: {data['simulation_data']['victory_status']}")
+        change_scene("battle_pvp")
+
     def update(self):
-        """Update the view."""
-        pass
-    
+        if self.session is None or self._started:
+            return
+        if self.session.update() == "battle":
+            self._start_battle()
+            return
+        self._refresh()
+
     def draw(self, surface):
-        """Draw view-specific elements."""
         pass
-    
+
     def handle_event(self, event):
-        """Handle input events."""
         if not isinstance(event, tuple) or len(event) != 2:
             return
-        
-        event_type, event_data = event
-        
+        event_type, _event_data = event
         if event_type == "B":
             self._on_cancel()
             return True
-        elif event_type == "A":
+        if event_type in ("A", "START"):
             self._on_start()
             return True
-    
+
     def cleanup(self):
-        """Cleanup when view is destroyed."""
+        if self.session is not None and not self._started:
+            self.session.cancel()
         components = [
-            self.background, self.title_scene, self.info_panel,
+            self.background, self.title_scene, self.info_panel, self.status_label,
             self.start_button, self.cancel_button,
         ]
-        
         for comp in components:
             if comp and comp in self.ui_manager.components:
                 self.ui_manager.remove_component(comp)
-        
         runtime_globals.game_console.log("[BattleConfirmView] Cleanup complete")

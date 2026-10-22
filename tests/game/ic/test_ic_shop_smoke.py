@@ -146,11 +146,13 @@ class ICShopSmoke(unittest.TestCase):
         from utils import currency_utils, event_utils
         env = self.env
         currency_utils.add_currency("IC", "Fight Money", 1000)
-        event_utils.after_connection([(self.ic, False)], 2)       # lost to a 20X
+        event_utils.after_connection([(self.ic, False)], 1, battle_format="IC")   # lost to a 20X (wire 1)
         self.assertEqual(self.gg.shop_access.get("IC", {}), {})
-        event_utils.after_connection([(self.ic, True)], 1)        # beat a 10X
+        event_utils.after_connection([(self.ic, True)], 0, battle_format="DMM")  # a Mini on the 10X's number: not a 10X
+        self.assertEqual(self.gg.shop_access.get("IC", {}), {})
+        event_utils.after_connection([(self.ic, True)], 0, battle_format="IC")   # beat a 10X (wire 0)
         self.assertEqual(self.gg.shop_access["IC"], {"DigiShop 1": 0}, "for good")
-        self.assertEqual(self.ic.connect_points, 2, "a point for each battle")
+        self.assertEqual(self.ic.connect_points, 3, "a point for each battle")
 
         game, hub = self.open_ic_specials()
         titles = [t.special.title for t in hub.tiles]
@@ -170,6 +172,35 @@ class ICShopSmoke(unittest.TestCase):
         self.assertEqual(self.gg.inventory.get(LEVEL_REVERSE, 0), 0, "used up")
         self.assertEqual(pet.weight, min(99, weight + 10), "Weight +10")
         self.assertEqual(pet.hunger, 5, "Hunger +4")
+        self.assertEqual(env.error_logs(), [])
+
+    def test_an_after_battle_digishop_is_one_visit(self):
+        """Owner, 2026-10-17: the 20X's DigiShops after a connection open
+        there and then and cannot be reached afterwards. The roll lands on
+        DigiShop 10 (a 10X beaten): the alert, accepted, goes straight into
+        the shop; leaving it goes back to the game and leaves nothing open."""
+        from utils import currency_utils, event_utils
+        env = self.env
+        self.ic.version = 2                                   # a 20X
+        currency_utils.add_currency("IC", "Fight Money", 1000)
+        with patch("random.random", return_value=0.10):      # inside DigiShop 10's 25
+            done = event_utils.after_connection([(self.ic, True)], 0, battle_format="IC")   # a 10X
+        self.assertIsNotNone(self.gg.event)
+        self.assertEqual((self.gg.event.shop, self.gg.event.access_minutes), ("DigiShop 10", -1))
+        self.assertNotIn("DigiShop 10", self.gg.shop_access.get("IC", {}))
+
+        game = env.game("game")
+        game.scene.event_stage = 2                            # the player answered the alert
+        env.frames(game, 4)
+        self.assertEqual(game.scene.current_view_name, "module_shop")
+        shop = game.scene.current_view
+        self.assertTrue(shop.visit)
+        self.buy(game, shop, "Weapon MAX")
+        self.assertEqual(self.balance(), 800)
+        self.tap(game, shop.back_button, frames=4)
+        self.assertEqual(self.rg.game_state, "game")
+        self.assertIsNone(self.gg.event)
+        self.assertNotIn("DigiShop 10", self.gg.shop_access.get("IC", {}), "gone once left")
         self.assertEqual(env.error_logs(), [])
 
 

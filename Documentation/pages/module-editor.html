@@ -253,11 +253,16 @@
           <!-- Battle -->
           <li style="margin-bottom: 15px; padding-left: 20px;">
             <strong>Battle Base Sick Chance Win:</strong><br>
-            Base percentage chance of getting sick after winning a battle.
+            Percentage chance a won battle injures the pet (Skull). A battle never makes a pet sick.
           </li>
           <li style="margin-bottom: 15px; padding-left: 20px;">
             <strong>Battle Base Sick Chance Lose:</strong><br>
-            Base percentage chance of getting sick after losing a battle.
+            Percentage chance a lost battle injures the pet (Skull), plus the protein and disturbance penalties.
+          </li>
+          <li style="margin-bottom: 15px; padding-left: 20px;">
+            <strong>Injury Chance Step:</strong><br>
+            Points a form's Injury Probability rises after each lost battle and falls after each won one
+            (1 on the Digivice iC). Each form starts from its own; 0 keeps it fixed.
           </li>
           <li style="margin-bottom: 15px; padding-left: 20px;">
             <strong>Battle Atribute Advantage:</strong><br>
@@ -274,7 +279,12 @@
           <!-- Death -->
           <li style="margin-bottom: 15px; padding-left: 20px;">
             <strong>Death Max Injuries:</strong><br>
-            Maximum injuries before death. Injuries are gained from sickness, poop neglect, and battle losses.
+            Injuries (Skull) in one form that kill: battles, and the causes whose effect is Skull. 0: none.
+          </li>
+          <li style="margin-bottom: 15px; padding-left: 20px;">
+            <strong>Death Max Sicknesses:</strong><br>
+            Sicknesses (Dots) in one form that kill, counted apart from injuries: the causes whose effect is Dots
+            (poop, 99g, sleep disturbances). 0: none.
           </li>
           <li style="margin-bottom: 15px; padding-left: 20px;">
             <strong>Death Care Mistake:</strong><br>
@@ -282,7 +292,15 @@
           </li>
           <li style="margin-bottom: 15px; padding-left: 20px;">
             <strong>Death Sick Timer:</strong><br>
-            Minutes of continuous sickness before death.
+            Minutes a sickness (Dots) may go untreated, awake, before the pet dies.
+          </li>
+          <li style="margin-bottom: 15px; padding-left: 20px;">
+            <strong>Death Injury Timer:</strong><br>
+            Minutes an injury (Skull) may go untreated, awake, before the pet dies.
+          </li>
+          <li style="margin-bottom: 15px; padding-left: 20px;">
+            <strong>Care Can Battle / Train While Injured:</strong><br>
+            The same as While Sick, for an injured pet.
           </li>
           <li style="margin-bottom: 15px; padding-left: 20px;">
             <strong>Death Hunger Timer:</strong><br>
@@ -305,13 +323,20 @@
             Mistakes threshold for stage 6+ pets after 48 hours of age.
           </li>
           <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Save By B Press:</strong><br>
-            Enables death prevention by B button press. Gives a 1 minute window to save pet from death conditions.
+            <strong>Death Save By:</strong><br>
+            How a dying pet can be saved: B presses, shakes, or Nothing (it dies).
           </li>
           <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Save By Shake:</strong><br>
-            Enables death prevention by device shaking. Gives a 1 minute window to save pet through physical
-            interaction.
+            <strong>Death Save Amount:</strong><br>
+            Presses or shakes the save needs.
+          </li>
+          <li style="margin-bottom: 15px; padding-left: 20px;">
+            <strong>Death Save Time:</strong><br>
+            Seconds to make them in. Out of time, the pet dies.
+          </li>
+          <li style="margin-bottom: 15px; padding-left: 20px;">
+            <strong>Death Save Chance:</strong><br>
+            Chance (%) the pet lives once they are made: 100 on most devices, 5 on the Digivice iC.
           </li>
         </ul>
       </div>
@@ -548,7 +573,8 @@
           </li>
           <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
             <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Heal Doses:</strong> Number of medicine doses needed to cure sickness.
+            <strong>Heal Doses:</strong> Number of medicine doses needed to cure a sickness or an injury; 0: the
+            form can neither fall sick nor be injured.
           </li>
           <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
             <span style="position: absolute; left: 0; color: #667eea;">•</span>

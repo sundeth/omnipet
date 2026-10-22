@@ -222,9 +222,11 @@ msbuild.wrn
 # Claude Code working files. CLAUDE.md and the docs it points at live in the
 # working copy only (utilities/, research, docs and scripts, is ignored above).
 # tmp/ holds the tests' scratch files and the release reports; tests/ itself
-# is versioned.
+# is versioned (including tests/release/, which the build rule [Rr]elease/
+# above would otherwise catch).
 CLAUDE.md
 tmp/
+!tests/release/
 
 # Android native sources (alarm receiver, notifications, activity) that
 # buildozer compiles in (buildozer.spec android.add_src): kept out of git.

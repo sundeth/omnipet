@@ -73,7 +73,7 @@ def snapshot(meta, monotonic_time=None, restored=False):
     mono = time.monotonic() if monotonic_time is None else monotonic_time
     at = meta['clock']['wall']
     data = {k: copy.deepcopy(getattr(game, k)) for k in (
-        'unlocks', 'traited', 'gcell_fragments', 'quests', 'friends',
+        'unlocks', 'traited', 'generations', 'gcell_fragments', 'quests', 'friends',
         'friend_event_pending', 'xai', 'xai_date', 'event_time', 'event')}
     data.update(at=at, generation=meta['generation'], rng=meta['rng'],
                 zone=meta.get('zone'), utc_offset=meta.get('utc_offset', 0),
@@ -343,7 +343,7 @@ def apply_world(world, monotonic_time=None):
         poop.__dict__.update(data)
         poop.patch()
         game.poop_list.append(poop)
-    for key in ('unlocks', 'traited', 'gcell_fragments', 'quests', 'friend_event_pending',
+    for key in ('unlocks', 'traited', 'generations', 'gcell_fragments', 'quests', 'friend_event_pending',
                 'xai', 'xai_date', 'event_time'):
         setattr(game, key, copy.deepcopy(getattr(world, key)))
     # Offline arrivals are represented by native claims, never replayed in bulk.

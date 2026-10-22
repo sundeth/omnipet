@@ -1128,6 +1128,27 @@ class BattleProtocolTester:
                    digimon.shot1 == protocol_constants.DMX.MAX_SHOT,
                    str(digimon.shot1))
 
+        # shot1 is the strong shot. PEN20 keeps it in atk_alt, DM20 in
+        # atk_main (protocol_constants.weak_shot_field).
+        class Paired(Pet):
+            atk_main = 7
+            atk_alt = 9
+
+        pen20 = pet_to_digimon(Paired(), 'PEN20', 3)
+        dm20 = pet_to_digimon(Paired(), 'DM20', 3)
+        self.check("PEN20 sends atk_alt as its strong shot, DM20 atk_main",
+                   (pen20.shot1, pen20.shot2) == (dm20.shot2, dm20.shot1),
+                   f"PEN20 {(pen20.shot1, pen20.shot2)} DM20 {(dm20.shot1, dm20.shot2)}")
+
+        class OneSprite(Pet):
+            atk_main = 7
+            atk_alt = 0
+
+        single = pet_to_digimon(OneSprite(), 'PEN20', 3)
+        self.check("...and a single-sprite PEN20 pet sends it in both slots",
+                   single.shot1 == single.shot2 == dm20.shot1,
+                   str((single.shot1, single.shot2)))
+
     # ------------------------------------------------------------------
     # Section 10: the shared protocol menu
     # ------------------------------------------------------------------
@@ -2546,8 +2567,9 @@ class BattleProtocolTester:
                        (fields["version"], fields["index"]) == (version, index),
                        str((fields["version"], fields["index"])))
 
-        # 0/1/2 are the 10X, the 20X and the Burst, and the module numbers
-        # the same three 1/2/3 -- the offset IC_RESEARCH_AND_TODO.md called.
+        # 0/1/2 are the 10X, the 20X and the Burst -- their devices.json
+        # device_version too since 2026-10-17 -- and their gameplay versions
+        # are 1/2/3, so the roster lookup takes the wire plus one.
         self.check("the wire is the module version minus one",
                    IC.WIRE_VERSION_OFFSET == -1
                    and protocol_constants.module_versions_for_wire("IC", 0) == [1]
@@ -6581,6 +6603,23 @@ class BattleProtocolTester:
             got = BattleEncounter._paired_shot(holder, armed, damage)
             self.check(f"DM20 damage {damage} draws {want[1]} x sprite {want[0]}",
                        (got[0], got[1]) == want and not got[2], str(got))
+        # PEN20's module keeps its weak shot in atk_main (re-read from a video
+        # of every Ver.20th Digimon training, 2026-10-15), and the field
+        # follows the data's module before the wire.
+        pen20 = _types.SimpleNamespace(battle_format="PEN20")
+        expected = {1: ("17", 1), 2: ("13", 1), 3: ("17", 2), 4: ("13", 2)}
+        for damage, want in expected.items():
+            got = BattleEncounter._paired_shot(pen20, armed, damage)
+            self.check(f"PEN20 damage {damage} draws {want[1]} x sprite {want[0]}",
+                       (got[0], got[1]) == want and not got[2], str(got))
+        for module_protocol, wire, want in (("PEN20", "DM20", "atk_main"),
+                                            ("DM20", "PEN20", "atk_alt"),
+                                            (None, "PEN20", "atk_main"),
+                                            ("DMX", "DM20", "atk_alt"),
+                                            (None, None, "atk_alt")):
+            self.check(f"a {module_protocol} Digimon on the {wire} wire draws weak from {want}",
+                       protocol_constants.weak_shot_field(module_protocol, wire) == want,
+                       protocol_constants.weak_shot_field(module_protocol, wire))
         # Without atk_alt the four separate by count instead.
         bare = _types.SimpleNamespace(atk_main=17, atk_alt=0)
         counts = [BattleEncounter._paired_shot(holder, bare, d) for d in (1, 2, 3, 4)]
@@ -6703,23 +6742,29 @@ class BattleProtocolTester:
                    and DMOG.slot_for_power(176) == 0xE,
                    f"{DMOG.slot_for_power(175)}/{DMOG.slot_for_power(176)}")
 
-        # DMOG announces the first release rather than 0. An OEM pet sends
-        # its own device_version -- the module has six, one per Ver.1..Ver.6
-        # device -- and only an outsider falls back to this.
-        self.check("DMOG announces version 1 in a compatibility battle",
-                   protocol_constants.get_compatibility_version("DMOG") == 1)
+        # DMOG's packet 2 numbers releases from 0: Ver.1 sends 0 (a player's
+        # report, 2026-10-21; wificom's "DMOG you win", V1-FC03-FD02, carries
+        # 0). An OEM pet sends its own device_version -- the module's six
+        # devices are 0-5, one per Ver.1..Ver.6 -- and an outsider the first
+        # release.
+        self.check("DMOG announces Ver.1 (0) in a compatibility battle",
+                   protocol_constants.get_compatibility_version("DMOG") == 0)
         self.check("...and the legacy DM name resolves to it",
-                   protocol_constants.get_compatibility_version("DM") == 1)
+                   protocol_constants.get_compatibility_version("DM") == 0)
 
         # The Digital Monster's Ver.6 was an Australia-only release with no
-        # wire version of its own, so it is clamped to the nearest real one
-        # rather than sent as the 0 that means "special" on this wire.
-        self.check("a DMOG Ver.6 pet announces Ver.5",
-                   protocol_constants.clamp_oem_version("DMOG", 6) == 5,
-                   protocol_constants.clamp_oem_version("DMOG", 6))
-        self.check("...and Ver.1 to Ver.5 pass through unchanged",
+        # wire version of its own, so it is clamped to the nearest real one.
+        self.check("a DMOG Ver.6 pet (device 5) announces Ver.5 (4)",
+                   protocol_constants.clamp_oem_version("DMOG", 5) == 4,
+                   protocol_constants.clamp_oem_version("DMOG", 5))
+        self.check("...and Ver.1 to Ver.5 (0-4) pass through unchanged",
                    [protocol_constants.clamp_oem_version("DMOG", v)
-                    for v in range(1, 6)] == [1, 2, 3, 4, 5])
+                    for v in range(0, 5)] == [0, 1, 2, 3, 4])
+        self.check("...and a received 0 is the roster's Ver.1",
+                   protocol_constants.module_versions_for_wire("DMOG", 0) == [1]
+                   and protocol_constants.module_versions_for_wire("DMOG", 4) == [5],
+                   (protocol_constants.module_versions_for_wire("DMOG", 0),
+                    protocol_constants.module_versions_for_wire("DMOG", 4)))
         # No other wire clamps: a version they do not have stays "special".
         self.check("the DMX still spells an unknown version 0",
                    protocol_constants.clamp_oem_version("DMX", 9) == 0,

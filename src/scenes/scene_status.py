@@ -4,7 +4,8 @@ A status scene showing pet information using the new UI components.
 """
 
 import pygame
-from core import game_globals, runtime_globals, constants
+from core import game_globals, runtime_globals, constants, pet_stats
+from utils import connect_points
 from utils.module_utils import get_module
 from utils.power_display import power_display
 from ui.ui_manager import UIManager
@@ -25,6 +26,35 @@ from ui.components.flag_panel import FlagPanel
 from ui.components.digisoul_icon import DigiSoulIcon, normalize_digisoul
 from ui.windows.window_background import WindowBackground
 from utils.scene_utils import change_scene
+
+
+HUNGER_TOOLTIP = "Hunger - basic need stat, keep your pet well fed to avoid penalties"
+
+
+def hunger_tooltip(visible_stats, hunger, stomach):
+    """The hunger meter's tooltip. With "Stomach" in visible_stats it gives
+    the fill as current/max: four hearts stop at 4 while a stomach holds up
+    to 15 (the iC, whose battles spend hearts from all of it)."""
+    if "Stomach" in visible_stats and stomach > 0:
+        return f"Hunger {int(hunger)}/{int(stomach)} - how full the stomach is; keep your pet well fed"
+    return HUNGER_TOOLTIP
+
+
+def connect_points_slot(visible_stats):
+    """Where the Connect Points meter goes: "left", the row below
+    Reliability (Effort's, which the iC leaves free), or "right", the top of
+    the right column when Effort or G-Cells take that row and no DP bar
+    takes this one (DW1). None when both are taken."""
+    if "Effort" not in visible_stats and "G-Cells" not in visible_stats:
+        return "left"
+    if "DP" not in visible_stats:
+        return "right"
+    return None
+
+
+def connect_points_tooltip(points, cap):
+    return (f"Connect Points {int(points)}/{int(cap)} - earned in every battle "
+            "with another device or pet; a full meter gives an item")
 
 
 def digisoul_below_flags_available(visible_stats, use_condition_hearts=False):
@@ -82,6 +112,7 @@ class SceneStatus:
             self.hunger_meter = None
             self.strength_meter = None  # Changed from vitamin_meter
             self.reliability_meter = None
+            self.connect_points_meter = None
             self.effort_meter = None
             self.gcell_bar = None
             self.dp_bar = None
@@ -277,9 +308,10 @@ class SceneStatus:
             heart_height = 24
             heart_width = 85
             heart_y = current_y + 15
+            hunger_y = heart_y
 
             self.hunger_meter = HeartMeter(margin, heart_y, heart_width, heart_height, "Hunger", 0, 4, 1)
-            self.hunger_meter.set_tooltip("Hunger - basic need stat, keep your pet well fed to avoid penalties")
+            self.hunger_meter.set_tooltip(HUNGER_TOOLTIP)
             self.hunger_meter.visible = False  # Hidden by default, shown based on visible_stats
             self.ui_manager.add_component(self.hunger_meter)
             heart_y += 22
@@ -311,6 +343,22 @@ class SceneStatus:
             self.gcell_bar.set_tooltip("G-Cells - evolution requirement indicator.")
             self.gcell_bar.visible = False  # Hidden by default, shown based on visible_stats
             self.ui_manager.add_component(self.gcell_bar)
+
+            # Connect Points, for a module whose events.json has them: the
+            # iC draws them on Reliability's gauge, in the row below it.
+            # Where Effort takes that row they go to the top of the right
+            # column instead, DP's place (connect_points_slot).
+            self.connect_points_positions = {
+                "left": (margin, heart_y),
+                "right": (margin + column_width + column_gap, hunger_y),
+            }
+            self.connect_points_meter = ReliabilityMeter(
+                margin, heart_y, heart_width, heart_height, 0,
+                label="CP", minimum=0, maximum=15
+            )
+            self.connect_points_meter.set_tooltip(connect_points_tooltip(0, 15))
+            self.connect_points_meter.visible = False
+            self.ui_manager.add_component(self.connect_points_meter)
 
             # Add DP Bar in second column, aligned with hunger meter
             dp_start_y = current_y + 13
@@ -582,6 +630,7 @@ class SceneStatus:
                 # Dynamic hearts based on stomach (1-4)
                 self.hunger_meter.factor = 2
                 self.hunger_meter.set_max_value(max(1, min(4, stomach // 2)))
+            self.hunger_meter.set_tooltip(hunger_tooltip(visible_stats, pet.hunger, stomach))
             self.hunger_meter.visible = True
         else:
             self.hunger_meter.visible = False
@@ -590,7 +639,14 @@ class SceneStatus:
             self.strength_meter.set_value(pet.strength)
             stomach = getattr(pet, 'stomach', 4)
             care_fixed_4_hearts = getattr(module, 'care_fixed_4_hearts', True)
-            if stomach <= 0:
+            strength_max = getattr(module, 'strength_max', 0)
+            if strength_max:
+                # A capped meter (the Mini's 0-15) shows its share of the cap,
+                # so the hearts fall with it instead of reading full until 4.
+                self.strength_meter.factor = 1
+                self.strength_meter.set_max_value(4)
+                self.strength_meter.set_value(pet_stats.strength_hearts(pet.strength, strength_max))
+            elif stomach <= 0:
                 # No stomach capacity — the pet can't eat, so show no hearts.
                 self.strength_meter.factor = 1
                 self.strength_meter.set_max_value(0)
@@ -625,7 +681,23 @@ class SceneStatus:
         else:
             self.effort_meter.visible = False
             self.gcell_bar.visible = False
-            
+
+        # Connect Points: shown wherever the module has them (events.json's
+        # connect_points block), not by a visible_stats entry.
+        cp_settings = connect_points.settings(module)
+        cp_slot = connect_points_slot(visible_stats) if cp_settings else None
+        if cp_slot:
+            cap = int(cp_settings["cap"])
+            points = getattr(pet, 'connect_points', 0) or 0
+            self.connect_points_meter.set_position(*self.connect_points_positions[cp_slot])
+            self.connect_points_meter.set_maximum(cap)
+            self.connect_points_meter.set_value(points)
+            self.connect_points_meter.set_tooltip(
+                connect_points_tooltip(self.connect_points_meter.value, cap))
+            self.connect_points_meter.visible = True
+        else:
+            self.connect_points_meter.visible = False
+
         # Update DP bar and stats based on visible_stats
         if "DP" in visible_stats:
             self.dp_bar.set_value(pet.dp)
@@ -687,7 +759,8 @@ class SceneStatus:
             'condition_hearts': getattr(pet, 'condition_hearts', 0),
             'sleep_disturbances': getattr(pet, 'sleep_disturbances', 0),
             'overfeed': getattr(pet, 'overfeed', 0),
-            'injuries': getattr(pet, 'injuries', 0),
+            'injuries': getattr(pet, 'injury_total', 0),
+            'sicknesses': getattr(pet, 'sick_total', 0),
             'virus': getattr(pet, 'virus', 0),
             'evolution_timer': getattr(pet, 'time', '00:00'),
             'timer': getattr(pet, 'timer', 0),

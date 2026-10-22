@@ -32,6 +32,9 @@ class PetSelector(UIComponent):
         
         # Callback for custom activation behavior
         self.activation_callback = None
+        # Called with the cell when a disabled pet is tapped or activated, so
+        # the view can say why it cannot be picked (None: ignored silently).
+        self.disabled_callback = None
         
         # Mouse interaction state
         self._clicked_cell = None  # Stores the cell that was clicked (for mouse activation)
@@ -413,7 +416,12 @@ class PetSelector(UIComponent):
             else:
                 # Default behavior: toggle selection (same as keyboard)
                 return self._pick(cell)
-            
+        if cell != -1 and self.disabled_callback:
+            self.focused_cell = cell
+            self.needs_redraw = True
+            self.disabled_callback(cell)
+            return True
+
         return False
         
     def render(self):
@@ -632,6 +640,9 @@ class PetSelector(UIComponent):
                 else:
                     # Default behavior: toggle selection
                     return self._pick(self.focused_cell)
+            if self.disabled_callback:
+                self.disabled_callback(self.focused_cell)
+                return True
         return False
         
     def _pick(self, cell):

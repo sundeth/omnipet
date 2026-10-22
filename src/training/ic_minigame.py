@@ -124,9 +124,9 @@ class ICMinigame(Training):
         self._ready_started = None
         self._art = {}
         self._pet_frames = {}
-        # Each play costs a heart, whether or not it is finished.
-        for pet in self.pets:
-            pet.hunger = max(0, int(getattr(pet, "hunger", 0) or 0) - 1)
+        # Each play costs a heart, whether or not it is finished: the iC
+        # charges a training as a battle (`training_uses_battle_cost`, Hunger 1).
+        self.pay_training_costs()
 
     #-----------------------------------------------------------------
     # The opening scene, in place of READY
@@ -203,15 +203,18 @@ class ICMinigame(Training):
         """Milliseconds into the current step."""
         return pygame.time.get_ticks() - self.step_started
 
-    def end_game(self, grade, prize, succeeded, cleared=None):
+    def end_game(self, grade, prize, succeeded, cleared=None, sound=True):
         """The minigame is over: on to the result, with the device's own
         sound -- its success jingle when the game was *cleared* (by default,
-        when it *succeeded*), its fail sound when it ended on a miss."""
+        when it *succeeded*), its fail sound when it ended on a miss. A game
+        that sounded its end already (Gotcha!'s taunt plays the fail sound
+        as it starts) passes *sound* False."""
         self.grade = max(0, min(3, int(grade)))
         self.prize = int(prize)
         self.succeeded = bool(succeeded)
         self.game_cleared = self.succeeded if cleared is None else bool(cleared)
-        runtime_globals.game_sound.play("ic_success" if self.game_cleared else "ic_fail")
+        if sound:
+            runtime_globals.game_sound.play("ic_success" if self.game_cleared else "ic_fail")
         self.animated_sprite.stop()
         self.phase = "result"
         self.frame_counter = 0

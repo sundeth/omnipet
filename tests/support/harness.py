@@ -105,6 +105,13 @@ class Env:
                 omninet_service._credentials_path = os.path.join(self.save_root, "omninet_device.json")
             except Exception:
                 pass
+            # The Discord link lives beside the save too (save/discord_data.json):
+            # a developer's own linked account must not leak into a test run.
+            try:
+                from scenes.scene_connect import DiscordModule
+                DiscordModule.SAVE_PATH = os.path.join(self.save_root, "discord_data.json")
+            except Exception:
+                pass
             self._party(party)
             self._apply_fixture(fixture)
             self._hook_sound_and_log()
@@ -142,7 +149,7 @@ class Env:
 
         default  four pets, a full party
         room     three pets: an empty party slot opens egg selection
-        sick     one pet sick with Dots and one with a Skull: Heal opens
+        sick     one pet sick (Dots) and one injured (Skull): Heal opens
                  the healing scene instead of healing everyone
         empty    no pets at all: the first-run path to an egg
         boot     the default party, for a crawl that starts at the boot scene
@@ -155,9 +162,9 @@ class Env:
         if fixture == "room":
             del pets[3:]
         elif fixture == "sick":
-            for pet, kind in zip(pets[:2], ("dots", "skull")):
-                pet.sick = 2
-                pet.sick_type = kind
+            for pet, kind in zip(pets[:2], ("sick", "injury")):
+                setattr(pet, kind, 2)
+                setattr(pet, kind + "_total", 1)
         elif fixture == "empty":
             del pets[:]
         elif fixture == "replay":
@@ -236,8 +243,18 @@ class Env:
     def reset(self, seed=0, input_mode=None):
         """Back to the fixture: save files, save-backed globals, plain runtime globals."""
         with quiet():
-            shutil.rmtree(self.save_root, ignore_errors=True)
-            shutil.copytree(self.fixture, self.save_root, dirs_exist_ok=True)
+            # Windows keeps a deleted file "delete pending" while a scanner or
+            # indexer still holds it, and writing it again is then refused for
+            # a moment (a 2026-10-17 release run): retry the restore briefly.
+            for attempt in range(6):
+                shutil.rmtree(self.save_root, ignore_errors=True)
+                try:
+                    shutil.copytree(self.fixture, self.save_root, dirs_exist_ok=True)
+                    break
+                except (shutil.Error, PermissionError):
+                    if attempt == 5:
+                        raise
+                    time.sleep(0.1 * (attempt + 1))
             for k, v in self._gg_plain.items():
                 setattr(self.gg, k, copy.copy(v))
             # runtime first: load() reloads every pet's sprites into rg.pet_sprites

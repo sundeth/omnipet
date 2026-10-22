@@ -26,6 +26,10 @@ def _readable(exc):
 
 class OmninetService:
     """API client for Omninet server communication."""
+
+    #: Seconds a team registration or an arena battle may take: the server
+    #: runs its battle engine before it answers.
+    ARENA_TIMEOUT = 20
     
     # Singleton instance
     _instance = None
@@ -50,6 +54,7 @@ class OmninetService:
         self._device_id: Optional[str] = None
         self._player_id: Optional[str] = None  # Cached player UUID from server
         self._user_info: Optional[Dict[str, Any]] = None
+        self.last_purchase_id: Optional[str] = None  # the row purchase_item made
         self._timeout = 5  # seconds
         
         # Path for storing device credentials
@@ -264,24 +269,19 @@ class OmninetService:
         Returns:
             True if logout was successful
         """
-        # Try to invalidate on server (if we have credentials and server is available)
-        if self._device_key:
+        # Revoke this device's key on the server: deleting the device is what
+        # does it (DELETE /users/me/devices/{id}). It posted to
+        # /auth/logout, which the server does not have, so the key stayed
+        # valid for anyone holding it (online finding 2).
+        if self._device_key and self._device_id:
             try:
                 base_url = self._get_base_url()
-                url = urljoin(base_url, '/api/v1/auth/logout')
-                
-                headers = {
-                    'X-Device-Key': self._device_key,
-                    'Content-Type': 'application/json'
-                }
-                
-                response = requests.post(
+                url = urljoin(base_url, f'/api/v1/users/me/devices/{self._device_id}')
+                response = requests.delete(
                     url,
-                    headers=headers,
-                    json={'secret_key': self._device_key},
+                    headers={'X-Device-Key': self._device_key},
                     timeout=self._timeout
                 )
-                
                 runtime_globals.game_console.log(f"[OmninetService] Logout response: {response.status_code}")
             except Exception as e:
                 runtime_globals.game_console.log(f"[OmninetService] Logout error: {e}")
@@ -511,7 +511,7 @@ class OmninetService:
     # =========================================================================
     
     def _make_request(self, method: str, endpoint: str, json_data: dict = None, 
-                      require_auth: bool = True) -> Tuple[bool, Any]:
+                      require_auth: bool = True, timeout: float = None) -> Tuple[bool, Any]:
         """
         Make an API request with optional authentication.
         
@@ -532,12 +532,13 @@ class OmninetService:
             if require_auth and self._device_key:
                 headers['X-Device-Key'] = self._device_key
             
+            timeout = timeout or self._timeout
             if method.upper() == 'GET':
-                response = requests.get(url, headers=headers, timeout=self._timeout)
+                response = requests.get(url, headers=headers, timeout=timeout)
             elif method.upper() == 'POST':
-                response = requests.post(url, headers=headers, json=json_data or {}, timeout=self._timeout)
+                response = requests.post(url, headers=headers, json=json_data or {}, timeout=timeout)
             elif method.upper() == 'DELETE':
-                response = requests.delete(url, headers=headers, timeout=self._timeout)
+                response = requests.delete(url, headers=headers, timeout=timeout)
             else:
                 return False, f"Unsupported method: {method}"
             
@@ -632,18 +633,22 @@ class OmninetService:
         """
         if not self._device_key:
             return False, "Not logged in"
-        
+
+        self.last_purchase_id = None
         success, data = self._make_request('POST', '/api/v1/shop/purchase', {
             'purchase_type': item_type,  # Server expects 'purchase_type', not 'item_type'
             'item_id': item_id
         })
-        
+
         if success and isinstance(data, dict):
             # A refused purchase (not enough coins, already owned) is HTTP 200
             # with success false: it used to be booked as bought, the coins
             # taken and the item granted locally.
             if data.get('success', True) is False:
                 return False, data.get('message') or 'Purchase refused'
+            # The row an item purchase made, so the account sync does not
+            # count that item a second time (GamePurchases.apply_item_purchase)
+            self.last_purchase_id = data.get('purchase_id')
             return True, data.get('message', 'Purchase successful')
         return False, data if isinstance(data, str) else 'Purchase failed'
     
@@ -812,16 +817,19 @@ class OmninetService:
         Args:
             pets: one dict per pet naming the species (name, module_name,
                   module_version, pet_version) and carrying its care
-                  ``status``. The server rebuilds stage, attribute, power,
-                  HP and attacks from its own copy of the module.
+                  ``status``, its ``uid``, the species values the game
+                  holds (``base``) and its full save copy (``pet_json``).
+                  The server rebuilds stage, attribute, power, HP and
+                  attacks from its own copy of the module.
             team_name: optional display name for the team.
         """
         if not self._device_key:
             return False, "Not logged in"
+        # The server's engine rebuilds and checks every pet: allow it time.
         return self._make_request('POST', '/api/v1/teams', {
             'name': team_name,
             'pets': pets,
-        })
+        }, timeout=max(self._timeout, self.ARENA_TIMEOUT))
 
     def deactivate_team(self, team_id: str) -> Tuple[bool, Any]:
         """Soft-delete (deactivate) an arena team."""
@@ -862,7 +870,27 @@ class OmninetService:
         """
         if not self._device_key:
             return False, "Not logged in"
-        return self._make_request('POST', f'/api/v1/battles/find/{team_id}')
+        # The server fights the whole battle before answering.
+        return self._make_request('POST', f'/api/v1/battles/find/{team_id}',
+                                  timeout=max(self._timeout, self.ARENA_TIMEOUT))
+
+    def get_season_standings(self, season_id: str, limit: int = 50) -> Tuple[bool, Any]:
+        """A season's table (live while it runs, final once closed); the
+        player's own row is flagged ``is_you``."""
+        return self._make_request(
+            'GET', f'/api/v1/seasons/{season_id}/standings?limit={int(limit)}',
+            require_auth=bool(self._device_key))
+
+    def get_season_winners(self, season_id: str) -> Tuple[bool, Any]:
+        """A finished season's podium."""
+        return self._make_request('GET', f'/api/v1/seasons/{season_id}/winners',
+                                  require_auth=False)
+
+    def get_arena_winners(self, user_id: str = None, limit: int = 30) -> Tuple[bool, Any]:
+        """Every finished season's podium, newest first (one player's with
+        *user_id*)."""
+        query = f'?limit={int(limit)}' + (f'&user_id={user_id}' if user_id else '')
+        return self._make_request('GET', f'/api/v1/arena/winners{query}', require_auth=False)
 
     # ------------------------------------------------------------------
     # Reward claims

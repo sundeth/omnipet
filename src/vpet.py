@@ -36,8 +36,9 @@ from scenes.scene_inventory import SceneInventory
 from scenes.scene_training import SceneTraining
 from scenes.scene_debug import SceneDebug
 
-# Game Version
-runtime_globals.VERSION = "1.0.0 Beta 3"
+from core.version import VERSION
+
+runtime_globals.VERSION = VERSION
 
 # Global timing variable for system stats updates
 last_stats_update = time.time()
@@ -174,6 +175,10 @@ class VirtualPetGame:
         Updates the current scene and handles scene transitions if needed.
         """
         self.scene.update()
+        # A card pack being opened plays over the scene (ui.card_reveal).
+        from ui.card_reveal import REVEAL
+        if REVEAL.pending():
+            REVEAL.update(type(self.scene).__name__)
 
         # Poll joystick actions (including analog stick directions)
         #for action in runtime_globals.game_input.get_just_pressed_joystick():
@@ -207,6 +212,9 @@ class VirtualPetGame:
         Draws the current scene to the given surface.
         """
         self.scene.draw(surface)
+        from ui.card_reveal import REVEAL
+        if REVEAL.active:
+            REVEAL.draw(surface)
 
         global last_stats_update, cached_stats
 
@@ -324,6 +332,10 @@ class VirtualPetGame:
         Returns what the scene's handler returned.
         """
         event_type = input_event[0] if isinstance(input_event, tuple) else None
+        from ui.card_reveal import REVEAL
+        if REVEAL.active:
+            # A card pack reveal holds the input until it is done.
+            return REVEAL.handle_event(input_event)
         sound = runtime_globals.game_sound
         watch = (event_type in self.SOUNDED_INPUTS
                  and not self._scene_plays_own_input_sounds())

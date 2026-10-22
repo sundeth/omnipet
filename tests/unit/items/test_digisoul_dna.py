@@ -205,7 +205,9 @@ class ICDataTests(unittest.TestCase):
                                 "DigiShop 2": [("iD Plate 02", 2000)],
                                 "DigiShop 3": [("iD Plate 03", 2000)],
                                 "DigiShop 4": [("Digimon iD Plate Limited", 5000)],
-                                "DigiShop 10": []})
+                                # The 20X's (owner, 2026-10-17; 8 2026-10-21): no pack.
+                                "DigiShop 8": [], "DigiShop 9": [], "DigiShop 10": [], "DigiShop 13": [],
+                                "DigiShop 14": [], "DigiShop 15": [], "DigiShop 16": []})
 
     def test_routes_name_types_only_and_no_dna_routes_come_last(self):
         for monster in self.monsters:

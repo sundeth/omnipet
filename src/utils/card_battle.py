@@ -16,7 +16,10 @@ After the battle each pet of the module that fought:
 
 * gains or loses Vital Values by its stage against the opponent's
   (`vital_change`, the BE table), within its stage's cap; a win counts
-  double under an active ``vp`` multiplier (`GamePet.active_boost`);
+  double under an active ``vp`` multiplier (`GamePet.active_boost`). An
+  Adventure battle pays the same (`battle_vital_values`): "winning battles
+  will increase them, while losing battles will decrease them" (humulos'
+  VB and BE guides);
 * on a win, gets the next item of the event's ``item_sequence`` (Cyanic's BE
   grant order; "" a win without an item), its place kept per event in
   ``GamePet.event_sequence``.
@@ -114,6 +117,23 @@ def vital_change(stage, enemy_stage, won) -> int:
     return VITAL_WIN[own][other] if won else -VITAL_LOSS[own][other]
 
 
+def battle_vital_values(pet, enemy_stage, won):
+    """Pay *pet* the Vital Values of a battle against an opponent of
+    *enemy_stage* (`vital_change`, a win doubled under a ``vp`` multiplier),
+    within its stage's cap. Only a pet of a module with the meter that can
+    battle (stage III+) is paid. Returns the change made."""
+    if not can_battle(pet) or not pet.tracks_vital_values():
+        return 0
+    change = vital_change(pet.stage, enemy_stage, won)
+    if change > 0:
+        change *= boost_factor(pet, "vp")
+    ceiling = pet.vital_value_cap() or 9999
+    old = int(getattr(pet, "vital_values", 0) or 0)
+    pet.vital_values = max(0, min(max(ceiling, old), old + change))
+    _log(f"[Battle] {pet.name}: Vital Values {old} -> {pet.vital_values}")
+    return pet.vital_values - old
+
+
 # The pet's active item ----------------------------------------------------
 
 def boost_factor(pet, target) -> int:
@@ -160,14 +180,7 @@ def finish(module_name, data, pets, enemy_stage, won):
     for pet in pets:
         if getattr(pet, "module", None) != module_name or not can_battle(pet):
             continue
-        if pet.tracks_vital_values():
-            change = vital_change(pet.stage, enemy_stage, won)
-            if change > 0:
-                change *= boost_factor(pet, "vp")
-            ceiling = pet.vital_value_cap() or 9999
-            old = int(getattr(pet, "vital_values", 0) or 0)
-            pet.vital_values = max(0, min(max(ceiling, old), old + change))
-            _log(f"[CardBattle] {pet.name}: Vital Values {old} -> {pet.vital_values}")
+        battle_vital_values(pet, enemy_stage, won)
         if not won:
             continue
         name = next_reward(pet, data)
