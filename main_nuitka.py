@@ -12,8 +12,8 @@ import platform
 import logging
 from datetime import datetime
 
-# Game Version
-VERSION = "0.9.8"
+# Game Version: core.version's, imported once src/ is on the path (the __main__ block)
+VERSION = None
 
 # Global scaling variables
 render_surface = None
@@ -165,14 +165,18 @@ def setup_display():
 
     # The final screen always uses native resolution if scaling is enabled
     final_screen = pygame.display.set_mode(
-        (native_width if scale_to_screen else screen_width,
-         native_height if scale_to_screen else screen_height),
+        (native_width if scale_to_screen else (config.window_width or screen_width),
+         native_height if scale_to_screen else (config.window_height or screen_height)),
         screen_mode,
         bit_depth
     )
 
-    # Create the render surface if scaling
-    render_surface = pygame.Surface((screen_width, screen_height)) if scale_to_screen else final_screen
+    # Render canvas = internal resolution; scaled onto the window each frame.
+    if final_screen.get_size() == (screen_width, screen_height):
+        render_surface = final_screen
+    else:
+        render_surface = pygame.Surface((screen_width, screen_height))
+    runtime_globals.render_surface = render_surface
 
     pygame.display.set_caption(f"Omnipet {VERSION}")
     pygame.mouse.set_visible(False)
@@ -239,15 +243,14 @@ def main():
             # Update game state
             game.update()
             
-            # Draw game
-            game.draw(screen, clock)
+            # Draw to the internal render canvas, then scale it onto the
+            # window (handles fullscreen and windowed window sizes that differ
+            # from the render resolution).
+            from core import runtime_globals
+            from utils import display_utils
+            game.draw(runtime_globals.render_surface, clock)
+            display_utils.present()
 
-            # If scaling, blit scaled render surface to fullscreen display
-            if scale_to_screen:
-                pygame.transform.scale(screen, (native_width, native_height), final_screen)
-
-            pygame.display.flip()
-            
             # Maintain framerate
             clock.tick(game_globals.configuration.frame_rate)
         
@@ -305,14 +308,19 @@ if __name__ == "__main__":
             base_dir = sys._MEIPASS
             print(f"[Nuitka] Using temporary extraction directory: {base_dir}")
         elif '__compiled__' in globals():
-            # Nuitka specific: use the compiled module's directory
+            # Nuitka: the folder of the running omnipet.exe. A standalone
+            # build's __compiled__.containing_dir is the folder above it
+            # (2026-10-22: the game looked for assets/ one level too high),
+            # so take the first candidate that holds the game's assets.
+            candidates = [os.path.dirname(os.path.abspath(sys.argv[0])), os.path.dirname(sys.executable)]
             try:
                 import __main__
-                base_dir = __main__.__compiled__.containing_dir
-                print(f"[Nuitka] Using __compiled__.containing_dir: {base_dir}")
-            except:
-                base_dir = os.path.dirname(sys.executable)
-                print(f"[Nuitka-fallback] Using executable directory: {base_dir}")
+                candidates.append(__main__.__compiled__.containing_dir)
+            except Exception:
+                pass
+            base_dir = next((d for d in candidates if os.path.isdir(os.path.join(d, "assets"))),
+                            candidates[0])
+            print(f"[Nuitka] Using program directory: {base_dir}")
         else:
             # Standard frozen executable directory
             base_dir = os.path.dirname(sys.executable)
@@ -357,6 +365,8 @@ if __name__ == "__main__":
         else:
             print(f"[Error] Could not find src directory with core/ in any expected location")
     
+    from core.version import VERSION
+
     # Debug output for troubleshooting
     print(f"[Debug] Working directory: {os.getcwd()}")
     print(f"[Debug] Python path entries: {[p for p in sys.path if 'src' in p or p == base_dir]}")

@@ -135,8 +135,11 @@ class TutorialFocus:
             
             # Draw highlight border around focus area
             border_width = max(2, int(2 * ui_scale))
-            pygame.draw.rect(self.overlay_surface, (255, 255, 0, 200), 
+            pygame.draw.rect(self.overlay_surface, (255, 255, 0, 200),
                            screen_rect, width=border_width)
+        # Blitted every frame: RLE skips the cut-out holes' transparent runs.
+        from utils.pygame_utils import rle_accelerate
+        rle_accelerate(self.overlay_surface)
     
     def update(self):
         """Update focus overlay animation."""
@@ -160,13 +163,18 @@ class TutorialFocus:
         if self.state == self.STATE_OFF or self.overlay_surface is None:
             return
         
-        # Create alpha-adjusted surface  
-        alpha_surface = self.overlay_surface.copy()
-        # Adjust alpha based on current fade state
-        alpha_ratio = self.alpha / self.max_alpha
-        alpha_surface.fill((255, 255, 255, int(alpha_ratio * 255)), 
-                          special_flags=pygame.BLEND_RGBA_MULT)
-        
+        if self.alpha >= self.max_alpha:
+            # Steady: the overlay as built (copying and re-fading a
+            # full-screen surface every frame cost the Pi Zero 2W dearly).
+            alpha_surface = self.overlay_surface
+        else:
+            # Create alpha-adjusted surface
+            alpha_surface = self.overlay_surface.copy()
+            # Adjust alpha based on current fade state
+            alpha_ratio = self.alpha / self.max_alpha
+            alpha_surface.fill((255, 255, 255, int(alpha_ratio * 255)),
+                              special_flags=pygame.BLEND_RGBA_MULT)
+
         # Draw at (0, 0) since overlay is now full-screen
         surface.blit(alpha_surface, (0, 0))
     

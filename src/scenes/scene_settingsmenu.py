@@ -54,25 +54,42 @@ def _get_sections():
 
     def _cycle_max_pets(increase):
         v = cfg.max_pets + (1 if increase else -1)
-        cfg.max_pets = max(1, min(10, v))
-
-    def _cycle_resolution(increase):
-        cur = cfg.resolution_multiplyer
-        choices = [1, 2, 3, 4]
-        best = min(choices, key=lambda c: abs(c - cur))
-        idx = choices.index(best)
-        idx = (idx + (1 if increase else -1)) % len(choices)
-        new_mult = choices[idx]
-        cfg.resolution_multiplyer = new_mult
-        cfg.screen_width = cfg.base_resolution_width * new_mult
-        cfg.screen_height = cfg.base_resolution_height * new_mult
+        new_value = max(1, min(10, v))
+        if new_value == cfg.max_pets:
+            return
+        cfg.max_pets = new_value
+        # PET_WIDTH/HEIGHT derive from max_pets — recompute immediately and
+        # reload the cached pet sprites so the change doesn't need a reboot.
+        # The resolution in force is passed explicitly: on Android it is half
+        # the device's and is NOT what the configuration holds, so a
+        # no-argument call would resize the whole render surface here.
+        from core import runtime_globals as rg
+        from core import game_globals
+        rg.update_resolution_constants(rg.SCREEN_WIDTH, rg.SCREEN_HEIGHT)
+        rg.pet_sprites = {}
+        for pet in game_globals.pet_list:
+            try:
+                pet.load_sprite()
+            except Exception as exc:
+                rg.game_console.log(f"[Settings] pet sprite reload failed: {exc}")
         try:
-            pygame.display.set_mode(
-                (cfg.screen_width, cfg.screen_height),
-                pygame.FULLSCREEN if cfg.fullscreen else 0,
-            )
-        except Exception:
-            pass
+            from utils.pet_utils import distribute_pets_evenly
+            distribute_pets_evenly()
+        except Exception as exc:
+            rg.game_console.log(f"[Settings] pet reposition failed: {exc}")
+
+    def _cycle_render_res(increase):
+        # Render Res = the 1x-4x internal-resolution multiplier.  Clamp (no
+        # wrap) between 1x and 4x.  apply_render_multiplier recomputes the
+        # internal resolution proportional to the window and rescales the
+        # canvas live; the scene rebuilds its UI when the scale changes
+        # (see SceneSettingsMenu.update).
+        from utils import display_utils
+        cur = max(1, min(4, int(round(cfg.resolution_multiplyer or 1))))
+        new = max(1, min(4, cur + (1 if increase else -1)))
+        if new == cur:
+            return
+        display_utils.apply_render_multiplier(new)
 
     def _cycle_sprite_pref(increase):
         v = cfg.sprite_resolution_preference + (1 if increase else -1)
@@ -137,16 +154,7 @@ def _get_sections():
         {"key": "unlockables",  "label": "Secrets",      "type": "action"},
     ]
     if runtime_globals.IS_ANDROID:
-        # Surface a "(!)" marker on the System row when the background
-        # service is in a non-OK state so MIUI users notice it before
-        # they have to go digging.
-        try:
-            from services import android_background_service as _bg
-            _result = _bg.get_status().get("last_result")
-        except Exception:
-            _result = None
-        _system_label = "System" if _result in (None, "ok") else "System (!)"
-        main_options.append({"key": "system", "label": _system_label, "type": "action"})
+        main_options.append({"key": "system", "label": "System", "type": "action"})
 
     sections = [
         {
@@ -175,9 +183,11 @@ def _get_sections():
             "key": "display",
             "title": "DISPLAY",
             "options": [
-                {"key": "resolution",   "label": "Resolution",    "type": "cycle",
-                 "get": lambda: f"{int(cfg.resolution_multiplyer)}x",
-                 "set": _cycle_resolution},
+                {"key": "render_res",   "label": "Render Res",    "type": "cycle",
+                 "get": lambda: f"{max(1, min(4, int(round(cfg.resolution_multiplyer or 1))))}x",
+                 "set": _cycle_render_res},
+                {"key": "window_size",  "label": "Window Size",   "type": "action",
+                 "enabled": not cfg.fullscreen},
                 {"key": "show_clock",    "label": "Show Clock",    "type": "toggle",
                  "get": lambda: "ON" if game_globals.showClock else "OFF",
                  "set": lambda inc: setattr(game_globals, 'showClock', not game_globals.showClock)},
@@ -214,16 +224,12 @@ def _get_sections():
         },
     ]
     if runtime_globals.IS_ANDROID:
-        from services import android_background_service as _bg
+        from services import android_progress
         sections.append({
-            "key": "system",
-            "title": "SYSTEM",
-            "options": [
-                {"key": "service_status",  "label": "Bg Service",     "type": "cycle",
-                 "get": _bg.get_status_label,
-                 "set": lambda inc: None},
-                {"key": "service_retry",   "label": "Retry Service",  "type": "action"},
-                {"key": "service_help",    "label": "Service Help",   "type": "action"},
+            "key": "system", "title": "SYSTEM", "options": [
+                {"key": "notification_status", "label": "Notifications", "type": "cycle",
+                 "get": android_progress.notification_status, "set": lambda inc: None},
+                {"key": "notification_settings", "label": "Notification Settings", "type": "action"},
             ],
         })
     return {s["key"]: s for s in sections}
@@ -286,7 +292,14 @@ class SceneSettingsMenu:
         self._unlock_left_button = None
         self._unlock_right_button = None
         self._unlock_back_button = None
+        self._unlock_up_button = None
+        self._unlock_down_button = None
         self._unlock_instruction_labels = []
+
+        # Window-size dialog state
+        self._winsize_presets = []
+        self._winsize_index = 0
+        self._winsize_label = None
 
         self._load_unlockables()
         self._build_section_view()
@@ -314,7 +327,10 @@ class SceneSettingsMenu:
         self._unlock_left_button = None
         self._unlock_right_button = None
         self._unlock_back_button = None
+        self._unlock_up_button = None
+        self._unlock_down_button = None
         self._unlock_instruction_labels = []
+        self._winsize_label = None
 
     def _add_dynamic(self, comp):
         self._dynamic_components.append(comp)
@@ -330,83 +346,10 @@ class SceneSettingsMenu:
             self._build_background_view()
         elif key == "unlockables":
             self._build_unlockables_view()
-        elif key == "service_help":
-            self._build_service_help_view()
+        elif key == "window_size":
+            self._build_window_size_view()
         else:
             self._build_option_list_view(key)
-
-    def _build_service_help_view(self):
-        """Android-only help screen explaining what the bg service does
-        and how to unblock it when the OS (notably MIUI) refuses to start
-        it.  Reuses the same Label / Button components as the other
-        sub-section views for visual consistency.
-        """
-        from services import android_background_service as _bg
-        status = _bg.get_status()
-        self.title_scene.set_text("BG SERVICE")
-
-        result = status.get("last_result")
-        status_color = {
-            "ok": (160, 230, 160),
-            "blocked": (230, 160, 160),
-            "unsupported": (200, 200, 200),
-        }.get(result, (220, 220, 220))
-
-        status_text = _bg.get_status_label()
-        self._add_dynamic(Label(8, 36, f"Status: {status_text}",
-                                color_override=status_color))
-
-        fail_count = status.get("fail_count", 0)
-        success_count = status.get("success_count", 0)
-        self._add_dynamic(Label(8, 56, f"OK: {success_count}  Fail: {fail_count}"))
-
-        # Help body — keep lines short so they fit at 240-base width.
-        if result == "blocked":
-            lines = [
-                "Service blocked by the OS.",
-                "On Xiaomi/MIUI: enable",
-                "Autostart and set Battery",
-                "to 'No restrictions' for",
-                "Omnipet in app settings.",
-            ]
-        elif result == "unsupported":
-            lines = [
-                "Service unavailable here.",
-                "Pets will keep ticking when",
-                "the app is open; progress",
-                "auto-saves every 30s.",
-            ]
-        elif result == "ok":
-            lines = [
-                "Service is running.",
-                "Pets keep ticking while",
-                "the app is in the",
-                "background.",
-            ]
-        else:
-            lines = [
-                "Service has not started",
-                "yet. It launches when the",
-                "app is backgrounded.",
-            ]
-        y = 84
-        for line in lines:
-            self._add_dynamic(Label(8, y, line))
-            y += 16
-
-        # Last error (truncated) — only when we have one.
-        err = status.get("last_error", "")
-        if err:
-            self._add_dynamic(Label(8, y + 6, "Last error:",
-                                    color_override=(220, 160, 160)))
-            self._add_dynamic(Label(8, y + 22, err[:36]))
-
-        back_btn = Button(
-            BASE_RESOLUTION - 68, BASE_RESOLUTION - 38, 60, 28,
-            "BACK", self._go_back,
-        )
-        back_btn.visible = self._mouse_enabled()
-        self._add_dynamic(back_btn)
 
     # ------------------------------------------------------------------
     # Generic option list (uses OptionRow)
@@ -445,6 +388,7 @@ class SceneSettingsMenu:
                 set_value=opt.get("set"),
                 on_activate=lambda o=opt: self._on_option_activate(o),
                 cut_corners={"tl": True, "tr": False, "bl": False, "br": True},
+                enabled=opt.get("enabled", True),
             )
             self._option_rows.append(row)
             self._add_dynamic(row)
@@ -505,7 +449,7 @@ class SceneSettingsMenu:
 
         self._bg_instruction_labels = []
         instr_y = nav_y + 2
-        for i, txt in enumerate(["L/R: Change", "SELECT: Hi-Res", "B: Back"]):
+        for i, txt in enumerate(["LEFT/RIGHT: Change", "SELECT: Hi-Res", "B: Back"]):
             lbl = Label(6, instr_y + i * 10, txt, shadow_mode="full")
             lbl.visible = not mouse
             self._bg_instruction_labels.append(lbl)
@@ -575,9 +519,22 @@ class SceneSettingsMenu:
         self._unlock_back_button.visible = mouse
         self._add_dynamic(self._unlock_back_button)
 
+        # Scroll the list by touch or mouse too (UP/DOWN and the wheel do it
+        # from keys): past the first five names nothing else showed them.
+        aw = 26
+        ax = 6 + 2 * nw + 2 * ns
+        self._unlock_up_button = Button(ax, nav_y, aw, nh, "", lambda: self._scroll_unlockables(-1),
+                                        decorators=["ArrowUp"])
+        self._unlock_up_button.visible = mouse
+        self._add_dynamic(self._unlock_up_button)
+        self._unlock_down_button = Button(ax + aw + 2, nav_y, aw, nh, "", lambda: self._scroll_unlockables(1),
+                                          decorators=["ArrowDown"])
+        self._unlock_down_button.visible = mouse
+        self._add_dynamic(self._unlock_down_button)
+
         self._unlock_instruction_labels = []
         instr_y = nav_y + 2
-        for i, txt in enumerate(["L/R: Module", "UP/DOWN: Scroll", "B: Back"]):
+        for i, txt in enumerate(["LEFT/RIGHT: Module", "UP/DOWN: Scroll", "B: Back"]):
             lbl = Label(6, instr_y + i * 10, txt, shadow_mode="full")
             lbl.visible = not mouse
             self._unlock_instruction_labels.append(lbl)
@@ -608,6 +565,19 @@ class SceneSettingsMenu:
             else:
                 self._unlock_item_labels[i].set_text("")
 
+    def _scroll_unlockables(self, step):
+        """Move the Secrets list by *step* names, wrapping like UP/DOWN."""
+        n = len(self.unlockables_data)
+        if not n:
+            return False
+        unlocked = self.unlockables_data[self.current_unlock_module_index]["unlocked"]
+        if not unlocked:
+            return False
+        self.current_unlock_item_index = (self.current_unlock_item_index + step) % len(unlocked)
+        runtime_globals.game_sound.play("menu")
+        self._update_unlockables_labels()
+        return True
+
     def _unlockables_prev_module(self):
         n = len(self.unlockables_data)
         if n:
@@ -637,6 +607,111 @@ class SceneSettingsMenu:
             })
         self.current_unlock_module_index = 0
         self.current_unlock_item_index = 0
+
+    # ------------------------------------------------------------------
+    # Window size dialog
+    # ------------------------------------------------------------------
+
+    def _build_window_size_view(self):
+        """Pick the output window size from a preset list (windowed only).
+
+        Cycling only previews the value; the change is committed on Apply,
+        which resizes the window live and rescales the canvas.
+        """
+        from utils import display_utils
+        cfg = game_globals.configuration
+        self.title_scene.set_text("WINDOW SIZE")
+        self.ui_background.visible = True
+
+        self._winsize_presets = display_utils.available_window_presets()
+        cur = (cfg.window_width, cfg.window_height)
+        try:
+            self._winsize_index = self._winsize_presets.index(cur)
+        except ValueError:
+            self._winsize_index = 0
+
+        self._winsize_label = Label(120, 64, "", is_title=True, center=True,
+                                    color_override=YELLOW_BRIGHT, shadow_mode="full")
+        self._add_dynamic(self._winsize_label)
+
+        self._add_dynamic(Label(120, 92, "Output window", center=True,
+                                color_override=(190, 190, 190)))
+        self._add_dynamic(Label(120, 104, "Game is scaled to fit", center=True,
+                                color_override=(150, 150, 150)))
+
+        mouse = self._mouse_enabled()
+        nav_y = 126
+        aw, ah = 36, 30
+        left_btn = Button(28, nav_y, aw, ah, "", lambda: self._cycle_window_size(False),
+                          icon_name="Left", icon_prefix="Settings")
+        left_btn.visible = mouse
+        self._add_dynamic(left_btn)
+        right_btn = Button(BASE_RESOLUTION - 28 - aw, nav_y, aw, ah, "",
+                           lambda: self._cycle_window_size(True),
+                           icon_name="Right", icon_prefix="Settings")
+        right_btn.visible = mouse
+        self._add_dynamic(right_btn)
+
+        ay = BASE_RESOLUTION - 38
+        self._add_dynamic(Button(28, ay, 78, 28, "Apply", self._apply_window_size))
+        self._add_dynamic(Button(BASE_RESOLUTION - 28 - 78, ay, 78, 28, "Cancel",
+                                 self._go_back))
+
+        instr_y = nav_y - 2
+        for i, txt in enumerate(["LEFT/RIGHT: Change", "START: Apply", "B: Cancel"]):
+            lbl = Label(6, instr_y + i * 10, txt, shadow_mode="full")
+            lbl.visible = not mouse
+            self._add_dynamic(lbl)
+
+        self._update_window_size_label()
+
+    def _update_window_size_label(self):
+        if not (self._winsize_label and self._winsize_presets):
+            return
+        w, h = self._winsize_presets[self._winsize_index]
+        cfg = game_globals.configuration
+        tag = "  (current)" if (w, h) == (cfg.window_width, cfg.window_height) else ""
+        self._winsize_label.set_text(f"{w} x {h}{tag}")
+
+    def _cycle_window_size(self, increase):
+        if not self._winsize_presets:
+            return
+        n = len(self._winsize_presets)
+        self._winsize_index = (self._winsize_index + (1 if increase else -1)) % n
+        runtime_globals.game_sound.play("menu")
+        self._update_window_size_label()
+
+    def _apply_window_size(self):
+        if not self._winsize_presets:
+            return
+        from utils import display_utils
+        w, h = self._winsize_presets[self._winsize_index]
+        runtime_globals.game_sound.play("menu")
+        display_utils.apply_window_size(w, h)
+        # Return to the Display section.  If the internal resolution changed,
+        # update() rebuilds the whole UI at the new scale on the next frame.
+        if len(self.nav_stack) > 1:
+            self.nav_stack.pop()
+        self._build_section_view()
+
+    def _rebuild_ui(self):
+        """Recreate the UI manager and current view at the current render
+        resolution.  Called after a live resolution change so every component
+        is rebuilt at the new UI scale."""
+        self.window_background = WindowBackground(False)
+        self.ui_manager = UIManager(theme="GRAY")
+        self.ui_manager.set_input_manager(runtime_globals.game_input)
+
+        self.ui_background = Background(BASE_RESOLUTION, BASE_RESOLUTION)
+        self.ui_background.set_regions([(0, BASE_RESOLUTION, "black")])
+        self.ui_manager.add_component(self.ui_background)
+
+        self.title_scene = TitleScene(0, 9, "SETTINGS")
+        self.ui_manager.add_component(self.title_scene)
+
+        self._dynamic_components = []
+        self._option_rows = []
+        self._build_section_view()
 
     # ------------------------------------------------------------------
     # Navigation helpers
@@ -678,6 +753,12 @@ class SceneSettingsMenu:
         if key == "unlockables":
             self._navigate_to("unlockables")
             return
+        if key == "window_size":
+            # Locked in fullscreen (the window equals the screen there).
+            if game_globals.configuration.fullscreen:
+                return
+            self._navigate_to("window_size")
+            return
 
         # Actions that leave the scene
         if key == "game_mode":
@@ -705,17 +786,9 @@ class SceneSettingsMenu:
             game_globals.show_tutorial = True
             change_scene("tutorial")
             return
-        if key == "service_retry":
-            runtime_globals.game_sound.play("menu")
-            from services import android_background_service as _bg
-            _bg.start_service()
-            # The cycle row pulls its value from get_status_label() on
-            # next paint — force a redraw so the new state shows up.
-            self._refresh_option_texts()
-            return
-        if key == "service_help":
-            runtime_globals.game_sound.play("menu")
-            self._navigate_to("service_help")
+        if key == "notification_settings":
+            from services import android_progress
+            android_progress.open_notification_settings()
             return
 
     # ------------------------------------------------------------------
@@ -723,6 +796,13 @@ class SceneSettingsMenu:
     # ------------------------------------------------------------------
 
     def update(self) -> None:
+        # A live Render Res / Window Size change alters the internal render
+        # resolution; rebuild the UI so every component picks up the new scale.
+        cur = (runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT)
+        if self.ui_manager.screen_size != cur:
+            runtime_globals.game_console.log(
+                "[SceneSettingsMenu] Render resolution changed; rebuilding UI")
+            self._rebuild_ui()
         self.ui_manager.update()
 
     def draw(self, surface: pygame.Surface) -> None:
@@ -748,10 +828,26 @@ class SceneSettingsMenu:
                     self._toggle_highres()
                     return
 
+        # ---- Window size dialog ----
+        elif section == "window_size":
+            if event_type == "B":
+                self._go_back()
+                return
+            if event_type == "START":
+                self._apply_window_size()
+                return
+            if not self._mouse_enabled() and event_type in ("LEFT", "RIGHT"):
+                self._cycle_window_size(event_type == "RIGHT")
+                return
+
         # ---- Unlockables mode ----
         elif section == "unlockables":
             if event_type == "B":
                 self._go_back()
+                return
+            if event_type == "SCROLL" and event_data:
+                # The mouse wheel scrolls the list, as UP/DOWN do.
+                self._scroll_unlockables(-1 if event_data.get("direction") == "UP" else 1)
                 return
             if not self._mouse_enabled():
                 n = len(self.unlockables_data)
@@ -770,14 +866,10 @@ class SceneSettingsMenu:
                 if n and self.unlockables_data[self.current_unlock_module_index]["unlocked"]:
                     unlocked = self.unlockables_data[self.current_unlock_module_index]["unlocked"]
                     if event_type == "UP":
-                        self.current_unlock_item_index = (self.current_unlock_item_index - 1) % len(unlocked)
-                        runtime_globals.game_sound.play("menu")
-                        self._update_unlockables_labels()
+                        self._scroll_unlockables(-1)
                         return
                     if event_type == "DOWN":
-                        self.current_unlock_item_index = (self.current_unlock_item_index + 1) % len(unlocked)
-                        runtime_globals.game_sound.play("menu")
-                        self._update_unlockables_labels()
+                        self._scroll_unlockables(1)
                         return
 
         # ---- Normal section: B goes back ----

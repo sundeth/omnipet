@@ -17,6 +17,26 @@ from ui.components.pet_selector import PetSelector
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals, game_globals
 from utils.pet_utils import get_battle_targets
+from utils import currency_utils
+
+
+def no_money():
+    """The iC's "No Money": the player cannot pay an area's entry fee."""
+    runtime_globals.game_sound.play("fail")
+    runtime_globals.game_message.add_slide(
+        "No Money", (255, 80, 80), 56 * runtime_globals.UI_SCALE,
+        runtime_globals.FONT_SIZE_SMALL)
+
+
+def pay_entry_or_refuse(module, area, round_num) -> bool:
+    """Charge the entry fee when a battle enters *area* (round 1). False,
+    with "No Money", when the balance does not cover it."""
+    if int(round_num or 1) != 1:
+        return True
+    if currency_utils.pay_entry(module, area, get_battle_targets()):
+        return True
+    no_money()
+    return False
 
 
 class AdventureAreaSelectionView:
@@ -31,6 +51,10 @@ class AdventureAreaSelectionView:
         self.available_round = available_round
         self.area_round_limits = area_round_limits if area_round_limits is not None else {}
         self.adventure_style = getattr(module, 'adventure_style', 'Area Selection')
+
+        # Areas the module gates behind an unlock stay out of the picker until
+        # that unlock is earned, so they cannot be selected or advanced into.
+        self.area_round_limits = self._drop_locked_areas(self.area_round_limits)
         
         # UI Components
         self.background = None
@@ -46,6 +70,19 @@ class AdventureAreaSelectionView:
         
         self._setup_ui()
         
+    def _drop_locked_areas(self, limits):
+        """Remove areas still locked for every pet heading into the battle."""
+        if not limits or not hasattr(self.module, "is_area_unlocked"):
+            return limits
+        if not self.module.get_area_locks():
+            return limits
+        versions = {getattr(pet, "version", None) for pet in get_battle_targets()}
+        versions.discard(None)
+        if not versions:
+            versions = {None}
+        return {area: rounds for area, rounds in limits.items()
+                if any(self.module.is_area_unlocked(area, v) for v in versions)}
+
     def _setup_ui(self):
         """Setup the UI components."""
         ui_width = ui_height = BASE_RESOLUTION
@@ -102,6 +139,14 @@ class AdventureAreaSelectionView:
         
         runtime_globals.game_console.log(f"[AdventureAreaSelectionView] UI setup complete for {self.module.name} (style: {self.adventure_style})")
     
+    def _entry_price(self, area):
+        """An area's entry fee as shown ("100P"), or "" when it is free."""
+        currency, cost = currency_utils.entry_cost(self.module, area, get_battle_targets())
+        if cost <= 0:
+            return ""
+        unit = currency_utils.currency_unit(self.module.name, currency)
+        return f"{cost}{unit}" if unit else f"{cost} {currency}"
+
     def _setup_area_selection_ui(self):
         """Setup UI for 'Area Selection' style (default): full area/round picker + FIGHT button."""
         self.area_selection = AreaSelection(
@@ -112,6 +157,9 @@ class AdventureAreaSelectionView:
             available_round=self.available_round,
             area_round_limits=self.area_round_limits
         )
+        self.area_selection.set_entry_prices(
+            {area: price for area in self.area_round_limits
+             if (price := self._entry_price(area))})
         self.ui_manager.add_component(self.area_selection)
         
         # Fight button
@@ -136,9 +184,13 @@ class AdventureAreaSelectionView:
         area_y = 100  # Where area selection would normally be
         spacing = 4
         
+        # The next battle's entry fee, when it enters an area that charges.
+        area = game_globals.battle_area.get(self.module.name, 1)
+        price = (self._entry_price(area)
+                 if game_globals.battle_round.get(self.module.name, 1) == 1 else "")
         self.next_button = Button(
             button_x, area_y, button_width, button_height,
-            "NEXT", self._on_next,
+            f"NEXT  {price}" if price else "NEXT", self._on_next,
             cut_corners={'tl': False, 'tr': False, 'bl': True, 'br': False}
         )
         self.ui_manager.add_component(self.next_button)
@@ -205,7 +257,10 @@ class AdventureAreaSelectionView:
         runtime_globals.game_console.log(f"[AdventureAreaSelectionView] Reset progress for {self.module.name} to Area 1, Round 1")
     
     def _start_battle(self, area, round_num):
-        """Common method to start a battle."""
+        """Common method to start a battle. Entering an area that charges
+        pays its fee first, or is refused with "No Money"."""
+        if not pay_entry_or_refuse(self.module, area, round_num):
+            return
         game_globals.last_adventure_module = self.module.name
         game_globals.save()
         

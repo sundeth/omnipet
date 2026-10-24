@@ -1,11 +1,11 @@
 """
 ArenaHistoryView - Battle history for a team.
 
-Shows a scrollable list of past battles for the team with score change
-and outcome.  The focused entry's Watch button fetches the full battle
-record and would hand it off to SceneBattle for replay (replay handoff
-is currently a stub — the row selection logic and data fetch are in
-place so the SceneBattle integration can land in a follow-up).
+Shows a scrollable list of the team's battles -- attacks it made (A) and
+defences it fought while the player was away (D) -- with outcome (W, L or
+D for a draw) and score change; the selected battle's opponent team is
+shown under the list. WATCH fetches the selected battle and replays it in
+the battle scene from the player's side, which returns here afterwards.
 """
 import threading
 from datetime import datetime
@@ -39,6 +39,7 @@ class ArenaHistoryView:
         self._selected_index = 0
         self._row_labels = []
         self._loading = False
+        self._load_error = None
 
         self._build_ui()
         if team_id:
@@ -85,6 +86,12 @@ class ArenaHistoryView:
         # Selection arrow / pointer label (we just prefix the selected row
         # with ">" rather than adding a separate cursor).
 
+        # The selected battle's opponent team, under the list.
+        self.detail_label = self._add(Label(
+            w // 2, list_top + self.MAX_VISIBLE_ROWS * self.ROW_HEIGHT + 4, "",
+            color_override=(160, 200, 255), center=True,
+            word_wrap=True, max_width=w - 20))
+
         # Footer buttons
         btn_w, btn_h = 80, 24
         gap = 12
@@ -95,7 +102,7 @@ class ArenaHistoryView:
             x0, y0, btn_w, btn_h, "WATCH", self._on_watch))
         self.back_button = self._add(Button(
             x0 + btn_w + gap, y0, btn_w, btn_h, "BACK", self._on_back))
-        self.watch_button.enabled = False
+        self.watch_button.set_enabled(False)
 
     # ------------------------------------------------------------------
     # Data fetch
@@ -105,6 +112,7 @@ class ArenaHistoryView:
         from services.omninet_service import omninet_service
 
         self._loading = True
+        self._load_error = None
         self.status_label.set_text("Loading battles...")
 
         def _worker():
@@ -115,8 +123,8 @@ class ArenaHistoryView:
                 self._battles = data
             else:
                 self._battles = []
-                err = data if isinstance(data, str) else "Failed to load history"
-                self.status_label.set_text(err)
+                # kept so the empty list is not read as "no battles"
+                self._load_error = data if isinstance(data, str) else "Failed to load history"
             self._loading = False
             self._render_rows()
 
@@ -125,12 +133,16 @@ class ArenaHistoryView:
     def _render_rows(self):
         """Refresh the row labels from current battle list + selection."""
         if not self._battles:
-            self.status_label.set_text(
-                "No battles yet" if not self._loading else "Loading battles...")
+            if self._loading:
+                status = "Loading battles..."
+            else:
+                status = self._load_error or "No battles yet"
+            self.status_label.set_text(status)
             for lbl in self._row_labels:
                 lbl.visible = False
                 lbl.set_text("")
-            self.watch_button.enabled = False
+            self.detail_label.set_text("")
+            self.watch_button.set_enabled(False)
             return
 
         self.status_label.set_text("")
@@ -155,13 +167,26 @@ class ArenaHistoryView:
                 (255, 255, 120) if idx == self._selected_index else (220, 220, 220)
             )
             lbl.visible = True
-        self.watch_button.enabled = True
+        self.detail_label.set_text(self._detail_line(self._battles[self._selected_index]))
+        self.watch_button.set_enabled(True)
+
+    @staticmethod
+    def _detail_line(battle: dict) -> str:
+        pets = battle.get('opponent_pets') or []
+        role = "You attacked" if battle.get('role', 'attack') == 'attack' else "Attacked by"
+        team = ", ".join(pets) if pets else battle.get('opponent_nickname', '?')
+        return f"{role}: {team}"
 
     def _format_battle_line(self, battle: dict) -> str:
         opponent = battle.get('opponent_nickname', '?')
-        won = battle.get('won', False)
         delta = battle.get('score_change', 0)
-        outcome = "W" if won else "L"
+        if battle.get('is_draw'):
+            outcome = "D"
+        else:
+            outcome = "W" if battle.get('won', False) else "L"
+        # A = this team attacked, D = it was attacked while away.
+        role = "A" if battle.get('role', 'attack') == 'attack' else "D"
+        outcome = f"{role}:{outcome}"
         sign = "+" if delta >= 0 else ""
         date_str = battle.get('fought_at', '')
         # Truncate ISO datetime to YYYY-MM-DD
@@ -204,8 +229,13 @@ class ArenaHistoryView:
         def _worker():
             ok, data = omninet_service.get_battle(battle_id)
             if ok and isinstance(data, dict):
-                # TODO: pass `data` (with battle_log) to SceneBattle for replay.
-                self.status_label.set_text("Replay coming soon")
+                from utils.arena_replay import start_replay
+                problem = start_replay(
+                    data, self._team_id, return_view="arena_history",
+                    return_kwargs={"team_id": self._team_id,
+                                   "team_name": self._team_name})
+                if problem:
+                    self.status_label.set_text(problem)
             else:
                 err = data if isinstance(data, str) else "Failed to load battle"
                 self.status_label.set_text(err)

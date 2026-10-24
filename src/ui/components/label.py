@@ -7,7 +7,7 @@ from core import runtime_globals
 from utils.pygame_utils import blit_with_cache, blit_with_shadow
 
 class Label(UIComponent):
-    def __init__(self, x, y, text, is_title=False, color_override=None, align_right=False, fixed_width=None, tooltip_text=None, scroll_text=False, shadow_mode="disabled", custom_size=None, word_wrap=False, max_width=None, center=False):
+    def __init__(self, x, y, text, is_title=False, color_override=None, align_right=False, fixed_width=None, tooltip_text=None, scroll_text=False, shadow_mode="disabled", custom_size=None, word_wrap=False, max_width=None, center=False, center_lines=False):
         super().__init__(x, y, 1, 1)  # Width/height will be set after rendering
         self.text = text
         self.is_title = is_title
@@ -23,7 +23,12 @@ class Label(UIComponent):
         self.word_wrap = word_wrap
         self.max_width = max_width
         self.center = center  # If True, x position will be treated as center point
+        # Centre each wrapped line inside the wrap width.  Opt-in and off by
+        # default: `center` on its own centres the wrapped BLOCK, whose width
+        # is always max_width, and existing callers are laid out around that.
+        self.center_lines = center_lines
         self._center_adjusted = False  # Track if center adjustment has been applied
+        self._center_origin = None  # Remembered centre point (base x) for re-centering
         
         # Scrolling animation variables
         self.scroll_offset = 0
@@ -35,22 +40,29 @@ class Label(UIComponent):
         
     def on_manager_set(self):
         """Called when component is added to a UIManager"""
-        if self.center and not self._center_adjusted:
-            # Need to render first to get text width
-            temp_surface = self.render()
-            if temp_surface and self.base_rect:
-                # Calculate the actual text width in base coordinates
-                text_width = temp_surface.get_width()
-                if self.manager:
-                    # Convert scaled width back to base coordinates
-                    base_text_width = text_width // self.manager.ui_scale
-                    # Adjust base_rect.x to center the text
-                    self.base_rect.x = self.base_rect.x - base_text_width // 2
-                    # Rescale the rect
-                    self.rect = self.manager.scale_rect(self.base_rect)
-                    self._center_adjusted = True
-                    self.needs_redraw = True
-        
+        if self.center and self.base_rect is not None:
+            # Remember the centre point (the original base x) so the label can
+            # be re-centred whenever its text changes.
+            if self._center_origin is None:
+                self._center_origin = self.base_rect.x
+            self._apply_center()
+
+    def _apply_center(self):
+        """Re-position base_rect.x so the rendered text is centred on the
+        remembered centre point.  Safe to call repeatedly (e.g. after
+        set_text changes the text width)."""
+        if not (self.center and self.manager and self.base_rect is not None):
+            return
+        temp_surface = self.render()
+        if not temp_surface:
+            return
+        base_text_width = temp_surface.get_width() // self.manager.ui_scale
+        origin = self._center_origin if self._center_origin is not None else self.base_rect.x
+        self.base_rect.x = origin - base_text_width // 2
+        self.rect = self.manager.scale_rect(self.base_rect)
+        self._center_adjusted = True
+        self.needs_redraw = True
+
     def set_text(self, text):
         """Update the label text"""
         if self.text != text:
@@ -60,6 +72,9 @@ class Label(UIComponent):
             self.scroll_offset = 0
             self.scroll_direction = 1
             self.scroll_pause_timer = 0
+            # Keep centred labels centred when the text width changes.
+            if self.center and self.manager:
+                self._apply_center()
     
     def set_tooltip(self, tooltip_text):
         """Set or update the tooltip text"""
@@ -154,7 +169,7 @@ class Label(UIComponent):
         else:
             colors = self.get_colors()
             color = colors["fg"]
-        
+
         # Handle word wrapping
         if self.word_wrap and (self.max_width or self.fixed_width):
             wrap_width = self.max_width or self.fixed_width
@@ -192,11 +207,14 @@ class Label(UIComponent):
             for i, line in enumerate(lines):
                 line_surface = font.render(line, True, color)
                 y_pos = i * line_height
+                x_pos = 0
+                if self.center_lines:
+                    x_pos = (scaled_width - line_surface.get_width()) // 2
                 
                 if self.manager and self.manager.should_render_shadow(self, "text"):
-                    blit_with_shadow(wrapped_surface, line_surface, (0, y_pos))
+                    blit_with_shadow(wrapped_surface, line_surface, (x_pos, y_pos))
                 else:
-                    blit_with_cache(wrapped_surface, line_surface, (0, y_pos))
+                    blit_with_cache(wrapped_surface, line_surface, (x_pos, y_pos))
             
             # Update component screen size
             self.rect.width = scaled_width
@@ -205,7 +223,7 @@ class Label(UIComponent):
             
         # Render text at proper scale
         text_surface = font.render(self.text, True, color)
-        
+
         # Auto-shrink: if max_width is set and text overflows (no word_wrap, no scroll),
         # reduce font size until the text fits.
         if self.max_width and not self.word_wrap and not self.scroll_text:
@@ -339,21 +357,13 @@ class Label(UIComponent):
             # Draw highlight if focused and has tooltip
             # Skip in touch mode - focus highlights are for keyboard/mouse navigation only
             if self.focused and self.tooltip_text and runtime_globals.INPUT_MODE != runtime_globals.TOUCH_MODE:
-                # Create a new surface to include the highlight border
-                highlight_surface = pygame.Surface((text_surface.get_width() + 4, text_surface.get_height() + 4), pygame.SRCALPHA)
+                # Draw the border on a same-size surface (like the scroll and
+                # align branches do): enlarging the surface and blitting the
+                # text at (2, 2) visibly nudged the label whenever hovered.
+                highlight_surface = text_surface.copy()
                 colors = self.get_colors()
                 highlight_color = colors.get("highlight", colors["fg"])  # Safe fallback
-                
-                # Draw highlight border
                 pygame.draw.rect(highlight_surface, highlight_color, highlight_surface.get_rect(), 2)
-                
-                # Blit text centered in the highlight surface with tracked blit
-                blit_with_cache(highlight_surface, text_surface, (2, 2))
-                
-                # Update component screen size
-                self.rect.width = highlight_surface.get_width()
-                self.rect.height = highlight_surface.get_height()
-                
                 return highlight_surface
             
             return text_surface

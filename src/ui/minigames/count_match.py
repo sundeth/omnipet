@@ -2,6 +2,7 @@ import pygame
 from ui.ui_manager import UIManager
 import core.constants as constants
 from core import runtime_globals
+from utils import pengz_count_match
 
 
 class ShakeDetector:
@@ -105,6 +106,10 @@ class CountMatch:
     Count Match minigame - displays ready and count sprites based on pet attribute.
     Handles the visual display and input for the counting phase.
     """
+
+    #: This minigame draws the alert phase itself, showing an attribute
+    #: specific ready sprite, instead of leaving it to the animated sprite.
+    HAS_READY_PHASE = True
     
     def __init__(self, ui_manager: UIManager, pet=None, animated_sprite=None):
         """Initialize the count match minigame."""
@@ -113,6 +118,10 @@ class CountMatch:
             raise ValueError("UIManager cannot be None")
             
         self.pet = pet
+        #: The PENGZ variant (utils.pengz_count_match): its colours arrive at
+        #: 3 / 7 / 11 shakes and READY asks for the one the pet's attribute
+        #: and G-Cells pay a Megahit for.
+        self.pengz = pengz_count_match.applies(pet)
         self.phase = "ready"  # ready, count
         self.press_counter = 0
         self.rotation_index = 3
@@ -125,21 +134,60 @@ class CountMatch:
 
         self.set_phase("ready")
 
+    #: Shakes needed to reach each colour, and the colour it reaches.
+    #: "The order of appearance for the colors is Blue, then Yellow, then
+    #: Red", and the manual's own chart names the counts: Blue at 2, Yellow
+    #: at 7, Red at 12. Colours are 1=Red 2=Yellow 3=Blue, which is why the
+    #: progression counts DOWN.
+    #:
+    #: Two rows of that chart record 6 for Yellow and 11 for Red rather than
+    #: 7 and 12; the other three say 7 and 12, so the odd ones are read as
+    #: the boundary being seen a shake early rather than as a per-attribute
+    #: threshold -- the attribute changes which colour pays what, not when
+    #: the colours arrive.
+    COLOR_THRESHOLDS = ((12, 1), (7, 2), (2, 3))
+
+    #: Shown before the first colour is reached. "If you do not shake at
+    #: least two times, you will only get 0 or 1 Super Hits" -- so under two
+    #: shakes there is no colour on screen at all, which is what this frame
+    #: is for.
+    NO_COLOR = 4
+
+    @classmethod
+    def color_for_shakes(cls, shakes):
+        """The colour *shakes* has reached, or NO_COLOR below the first.
+
+        **One pass, and it does not wrap.** This used to step one colour
+        every three shakes and then cycle 3->2->1->3->2->1, so a player who
+        kept shaking rolled past the colour they had earned and back round to
+        it -- and the counts never lined up with the device's anyway. The
+        device runs Blue, then Yellow, then Red and stops on Red.
+        """
+        for needed, color in cls.COLOR_THRESHOLDS:
+            if shakes >= needed:
+                return color
+        return cls.NO_COLOR
+
     def get_pet_attribute_ready_frame(self):
-        """Get the ready frame index (0-3) based on pet's attribute to match Ready0-Ready3 sprites."""
+        """Ready frame for the pet's target color.
+
+        Ready0 is the generic sprite; Ready1/2/3 are the colored ones that
+        match the Count1/2/3 colors the player must land on:
+        Free/Vaccine -> Ready1 (red), Data -> Ready2 (yellow),
+        Virus -> Ready3 (green).
+        """
         if not self.pet:
-            return 0
-            
+            return 1
+        if self.pengz:
+            return pengz_count_match.target_colour(self.pet)
+
         attr = getattr(self.pet, "attribute", "")
-        
-        if attr in ["", "Va"]:
-            return 0  # Default/Vaccine -> Ready0
-        elif attr == "Da":
-            return 1  # Data -> Ready1
+
+        if attr == "Da":
+            return 2  # Data -> Ready2 (yellow)
         elif attr == "Vi":
-            return 2  # Virus -> Ready2
-        else:
-            return 0
+            return 3  # Virus -> Ready3 (green)
+        return 1      # ""/Va (Free/Vaccine) -> Ready1 (red)
 
     def set_phase(self, phase):
         """Set the current phase (ready or count)."""
@@ -169,20 +217,13 @@ class CountMatch:
         
         if self.phase == "count" and event_type in ("Y", "SHAKE"):
             self.press_counter += 1
-            if self.press_counter % 2 == 0:
-                # First press (counter=2): move from Count4 to Count3
-                # After that, cycle through 3->2->1->3->2->1...
-                if self.rotation_index == 4:
-                    self.rotation_index = 3
-                else:
-                    self.rotation_index -= 1
-                    if self.rotation_index < 1:
-                        self.rotation_index = 3  # Cycle back to 3, never 4
-            
+            self.rotation_index = (pengz_count_match.colour(self.press_counter) if self.pengz
+                                   else self.color_for_shakes(self.press_counter))
+
             # Update animated sprite frame based on rotation_index
             if self.animated_sprite:
                 # Map rotation_index to frame index:
-                # rotation_index 4 -> frame 3 (Count4) - only at start
+                # rotation_index 4 -> frame 3 (Count4) - before any colour
                 # rotation_index 1-3 -> frame 0-2 (Count1-Count3)
                 if self.rotation_index == 4:
                     self.animated_sprite.current_frame = 3  # Count4

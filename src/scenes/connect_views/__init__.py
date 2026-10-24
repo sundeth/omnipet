@@ -6,8 +6,10 @@ Each view represents a distinct UI state in the connect scene.
 from .main_menu_view import MainMenuView
 from .pet_selection_view import PetSelectionView
 from .wifi_hosting_view import WifiHostingView
-from .wifi_discovery_view import WifiDiscoveryView
 from .dcom_view import DComView
+from .wificom_warning_view import WiFiComWarningView
+from .wificom_view import WiFiComView
+from .xros_view import XrosView
 from .discord_view import DiscordView
 from .link_dialog_view import LinkDialogView
 from .omninet_link_view import OmninetLinkView
@@ -23,13 +25,16 @@ from .arena_rules_view import ArenaRulesView
 from .arena_history_view import ArenaHistoryView
 from .arena_team_creation_view import ArenaTeamCreationView
 from .arena_reclaim_view import ArenaReclaimView
+from .arena_standings_view import ArenaStandingsView
 
 __all__ = [
     'MainMenuView',
     'PetSelectionView',
     'WifiHostingView',
-    'WifiDiscoveryView',
     'DComView',
+    'WiFiComWarningView',
+    'WiFiComView',
+    'XrosView',
     'DiscordView',
     'LinkDialogView',
     'OmninetLinkView',
@@ -43,4 +48,7 @@ __all__ = [
     'ArenaView',
     'ArenaRulesView',
     'ArenaHistoryView',
+    'ArenaTeamCreationView',
+    'ArenaReclaimView',
+    'ArenaStandingsView',
 ]

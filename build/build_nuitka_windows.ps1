@@ -3,8 +3,18 @@
 # Windows testing/production version
 
 param(
-    [string]$Version = "0.9.8"
+    [string]$Version = ""
 )
+
+# The release version is src/core/version.py's unless -Version is given
+if (-not $Version) {
+    if ((Get-Content (Join-Path $PSScriptRoot "..\src\core\version.py") -Raw) -match 'VERSION\s*=\s*"([^"]+)"') {
+        $Version = $matches[1]
+    } else {
+        Write-Host "[ERROR] No VERSION in src/core/version.py" -ForegroundColor Red
+        exit 1
+    }
+}
 
 # Use absolute paths to avoid confusion
 $SCRIPT_DIR = $PSScriptRoot
@@ -84,7 +94,10 @@ try {
     Write-Status "Temporarily setting PYTHONPATH for Nuitka: $env:PYTHONPATH"
 
     # Nuitka build command for Windows
+    # --standalone: the build carries its own Python (python310.dll and the
+    # libraries); without it omnipet.exe needed an installed Python 3.10.
     python -m nuitka `
+        --standalone `
         --output-dir="$TEMP_DIR" `
         --output-filename="omnipet" `
         --include-package="src" `
@@ -103,9 +116,11 @@ try {
         --include-package="src.data" `
         --include-package="src.utils" `
         --include-package="src.scenes" `
+        --include-package="src.wificom" `
         --include-package-data="src" `
         --include-module="json" `
         --include-module="psutil" `
+        --include-module="paho.mqtt.client" `
         --include-module="platform" `
         --include-module="os" `
         --include-module="sys" `
@@ -136,8 +151,10 @@ try {
     
     Write-Success "Nuitka compilation completed successfully"
     
-    # Check if the compiled Windows binary exists
-    $binaryPath = "$PROJECT_ROOT\omnipet.exe"
+    # Check if the compiled Windows binary exists (standalone: in the .dist folder)
+    $distDir = "$TEMP_DIR\main_nuitka.dist"
+    $binaryPath = "$distDir\omnipet.exe"
+    if (-not (Test-Path $binaryPath)) { $binaryPath = "$PROJECT_ROOT\omnipet.exe" }
     if (-not (Test-Path $binaryPath)) {
         # Try alternative locations
         $binaryPath = "$PROJECT_ROOT\main_nuitka.exe" 
@@ -172,57 +189,52 @@ New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME" -Force | Out-Null
 # Copy the compiled Nuitka distribution
 Write-Status "Copying compiled binary and dependencies..."
 
-# Copy the main Windows executable
-Copy-Item $binaryPath "$TEMP_DIR\$BUILD_NAME\omnipet.exe" -Force
-Write-Status "Copied main executable from: $binaryPath"
+if (Test-Path $distDir) {
+    # Standalone: the whole distribution, Python's own DLLs included
+    Copy-Item "$distDir\*" "$TEMP_DIR\$BUILD_NAME\" -Recurse -Force
+    Write-Status "Copied the standalone distribution from: $distDir"
+} else {
+    # Copy the main Windows executable
+    Copy-Item $binaryPath "$TEMP_DIR\$BUILD_NAME\omnipet.exe" -Force
+    Write-Status "Copied main executable from: $binaryPath"
 
-# Copy any .pyd files (compiled modules) from temp dir
-if (Test-Path "$TEMP_DIR\*.pyd") {
-    Copy-Item "$TEMP_DIR\*.pyd" "$TEMP_DIR\$BUILD_NAME\" -Force
-    Write-Status "Copied compiled module files (.pyd) from temp directory"
-}
-
-# Copy any .pyd files from project root
-if (Test-Path "$PROJECT_ROOT\*.pyd") {
-    Copy-Item "$PROJECT_ROOT\*.pyd" "$TEMP_DIR\$BUILD_NAME\" -Force
-    Write-Status "Copied compiled module files (.pyd) from project root"
-}
-
-# Copy any additional compiled files and dependencies from temp dir
-Get-ChildItem "$TEMP_DIR" -Include "*.dll", "*.pyd", "*.so" -Recurse | ForEach-Object {
-    $relativePath = $_.FullName.Replace("$TEMP_DIR\", "")
-    $destPath = Join-Path "$TEMP_DIR\$BUILD_NAME" $relativePath
-    $destDir = Split-Path $destPath -Parent
-    if (-not (Test-Path $destDir)) {
-        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+    # Copy any .pyd files (compiled modules) from temp dir
+    if (Test-Path "$TEMP_DIR\*.pyd") {
+        Copy-Item "$TEMP_DIR\*.pyd" "$TEMP_DIR\$BUILD_NAME\" -Force
+        Write-Status "Copied compiled module files (.pyd) from temp directory"
     }
-    Copy-Item $_.FullName $destPath -Force
-}
 
-# Copy any additional compiled files from project root
-Get-ChildItem "$PROJECT_ROOT" -Include "*.dll", "*.pyd", "*.so" | ForEach-Object {
-    Copy-Item $_.FullName "$TEMP_DIR\$BUILD_NAME\" -Force
-}
+    # Copy any .pyd files from project root
+    if (Test-Path "$PROJECT_ROOT\*.pyd") {
+        Copy-Item "$PROJECT_ROOT\*.pyd" "$TEMP_DIR\$BUILD_NAME\" -Force
+        Write-Status "Copied compiled module files (.pyd) from project root"
+    }
 
-Write-Status "Copied all compiled dependencies"
+    # Copy any additional compiled files and dependencies from temp dir
+    Get-ChildItem "$TEMP_DIR" -Include "*.dll", "*.pyd", "*.so" -Recurse | ForEach-Object {
+        $relativePath = $_.FullName.Replace("$TEMP_DIR\", "")
+        $destPath = Join-Path "$TEMP_DIR\$BUILD_NAME" $relativePath
+        $destDir = Split-Path $destPath -Parent
+        if (-not (Test-Path $destDir)) {
+            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+        }
+        Copy-Item $_.FullName $destPath -Force
+    }
+
+    # Copy any additional compiled files from project root
+    Get-ChildItem "$PROJECT_ROOT" -Include "*.dll", "*.pyd", "*.so" | ForEach-Object {
+        Copy-Item $_.FullName "$TEMP_DIR\$BUILD_NAME\" -Force
+    }
+
+    Write-Status "Copied all compiled dependencies"
+}
 
 # Copy additional assets and files
 Write-Status "Copying additional assets..."
 Copy-Item (Join-Path $PROJECT_ROOT "assets") "$TEMP_DIR\$BUILD_NAME\" -Recurse
 
-# Copy Windows configuration files with correct names
-Write-Status "Copying Windows configuration files..."
-try {
-    $configDestDir = Join-Path $TEMP_DIR\$BUILD_NAME "config"
-    if (-not (Test-Path $configDestDir)) {
-        New-Item -ItemType Directory -Path $configDestDir | Out-Null
-    }
-    Copy-Item (Join-Path $PROJECT_ROOT "config\config_windows.json") (Join-Path $configDestDir "config.json")
-    Copy-Item (Join-Path $PROJECT_ROOT "config\input_config_windows.json") (Join-Path $configDestDir "input_config.json")
-} catch {
-    Write-Error-Message "Failed to copy configuration files: $_"
-    exit 1
-}
+# Settings live in the save (GameConfiguration): the config/ folder
+# these builds used to copy was removed in 1.0 (e09369e8).
 
 # Copy documentation
 Write-Status "Copying documentation..."
@@ -236,7 +248,15 @@ New-Item -ItemType Directory -Force -Path "$TEMP_DIR\$BUILD_NAME\modules" | Out-
 
 # Copy Module Editor (without Source folder)
 Write-Status "Copying Module Editor..."
+# The editor's own repository's Release build (beside this one); an older
+# checkout kept a copy in "Module Editor" here.
 $moduleEditorSrc = Join-Path $PROJECT_ROOT "Module Editor"
+if (-not (Test-Path $moduleEditorSrc)) {
+    $moduleEditorSrc = Join-Path (Split-Path $PROJECT_ROOT -Parent) "Omnipet Module Editor\OmnipetModuleEditor\bin\Release"
+}
+if (-not (Test-Path $moduleEditorSrc)) {
+    Write-Host "[WARNING] No Module Editor build found (build it in Release first); shipping without it" -ForegroundColor Yellow
+}
 $moduleEditorDest = Join-Path "$TEMP_DIR\$BUILD_NAME" "Module Editor"
 if (Test-Path $moduleEditorSrc) {
     # Copy Module Editor directory but exclude Source folder
@@ -287,7 +307,11 @@ try {
     Add-Type -AssemblyName "System.IO.Compression.FileSystem"
     $sourcePath = (Resolve-Path "$TEMP_DIR\$BUILD_NAME").Path
     $zipPath = (Resolve-Path $RELEASE_DIR).Path + "\$BUILD_NAME.zip"
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($sourcePath, $zipPath)
+    # Forward slashes and Unix permissions (scripts executable, folders
+    # writable): .NET's ZipFile wrote backslashes and no modes, which Linux
+    # unzip and Python's zipfile mis-extract (build/make_zip.py).
+    python (Join-Path $PSScriptRoot "make_zip.py") $sourcePath $zipPath
+    if ($LASTEXITCODE -ne 0) { throw "make_zip.py failed with exit code $LASTEXITCODE" }
 } catch {
     Write-Error-Message "Failed to create ZIP file: $_"
     exit 1

@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Online Play - Omnipet Documentation</title>
+  <link rel="stylesheet" href="../assets/main.css">
+</head>
+
+<body>
+  <div class="page-content">
+    <div class="page-header" data-theme="connect">
+      <div class="page-header-text">
+        <h1 class="page-title">Online Play</h1>
+        <p class="page-subtitle">Omninet accounts, Progress and Free Mode, the Shop, Arena seasons, Discord battles and local WiFi battles.</p>
+      </div>
+    </div>
+
+    <nav class="page-toc">
+      <a href="#connect">Connect menu</a>
+      <a href="#omninet">Omninet</a>
+      <a href="#modes">Progress and Free Mode</a>
+      <a href="#shop">Shop</a>
+      <a href="#arena">Arena</a>
+      <a href="#discord">Discord battles</a>
+      <a href="#wifi">WiFi battles</a>
+      <a href="#contribution">Contribution points</a>
+    </nav>
+
+    <!-- ============================================================ CONNECT -->
+    <div class="content-section" id="connect" data-theme="connect">
+      <h2 class="section-title">Connect menu</h2>
+      <div class="section-content">
+        <div class="screen-row">
+          <img class="shot" src="../assets/manual/connect_menu.png" alt="Connect menu">
+          <div>
+            <p>Online play starts in <strong>Connect</strong>, opened from the game's menu. A button that is not available cannot be selected.</p>
+            <table class="data-table">
+              <thead>
+                <tr><th>Button</th><th>Opens</th><th>Available when</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Arena</td><td>The Arena hub</td><td>Progress Mode, with at least one Digimon in the party</td></tr>
+                <tr><td>Local Battle</td><td>DCom battles with a real device, and WiFi battles</td><td>At least one Digimon in the party</td></tr>
+                <tr><td>Shop</td><td>The Omninet shop</td><td>Omninet can be reached</td></tr>
+                <tr><td>CONFIG</td><td>The Omninet and Discord accounts</td><td>Always</td></tr>
+                <tr><td>DISCORD</td><td>Discord battles</td><td>A Discord account is linked and the Discord service answers</td></tr>
+                <tr><td>EXIT</td><td>Back to the game</td><td>At least one module is installed</td></tr>
+              </tbody>
+            </table>
+            <p>The Shop button, and the DCom and WiFi buttons inside Local Battle, show a loading mark while the game checks them and an offline mark when the check fails.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ OMNINET -->
+    <div class="content-section" id="omninet" data-theme="connect">
+      <h2 class="section-title">Omninet</h2>
+      <div class="section-content">
+        <p>Omninet is Omnipet's online service. It keeps your account, coins and purchases, and runs the Shop and the Arena. An account is needed for Progress Mode only: Free Mode, WiFi battles and Discord battles work without one.</p>
+
+        <h3>Signing in</h3>
+        <div class="screen-row first">
+          <img class="shot" src="../assets/manual/login.png" alt="Omninet login screen">
+          <div>
+            <p>The <strong>OMNINET ACCOUNT</strong> screen opens when you choose Progress Mode, when Progress Mode starts without a signed-in account, and after <strong>DISCONNECT</strong> in Connect &gt; CONFIG.</p>
+            <p>In Progress Mode signing in is required. The screen has no Back button; <strong>Change to Free Play</strong> switches to Free Mode instead. Without a connection the screen says "No internet connection found."</p>
+          </div>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr><th>Option</th><th>You enter</th><th>Then</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Create Account</td><td>Nickname (3 or more characters), email and password (6 or more characters)</td><td>A 6-digit code is sent to the email. Enter it on VERIFY EMAIL.</td></tr>
+            <tr><td>Login</td><td>Email and password</td><td>A 6-digit code is sent to the email. Enter it on VERIFY LOGIN.</td></tr>
+            <tr><td>Link Device</td><td>A 4-character code made in the Module Editor</td><td>The game joins the account that made the code. No email step.</td></tr>
+          </tbody>
+        </table>
+
+        <p>An emailed code expires after 5 minutes; the screen counts down. <strong>Resend</strong> unlocks only once the code has expired ("Code expired - tap Resend"). Logging in to an account that was never activated sends a new code and opens VERIFY EMAIL ("Account not activated. New code sent.").</p>
+
+        <h4>Getting a Link Device code</h4>
+        <ol class="steps">
+          <li>In the Module Editor, open <strong>Omninet &gt; Account</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd>) and log in.</li>
+          <li>Press <strong>Link Game Device</strong>, then <strong>Generate Code</strong>. The editor shows the code and how long it stays valid.</li>
+          <li>In the game, choose <strong>Link Device</strong>, enter the code and press <strong>Confirm</strong>.</li>
+        </ol>
+
+        <h3>After signing in</h3>
+        <ul>
+          <li>The device stays signed in. Each start in Progress Mode checks it with Omninet. If Omninet cannot be reached, an error screen offers <strong>Retry</strong> or <strong>Free Mode</strong>.</li>
+          <li>Each account has its own save on the device.</li>
+          <li>The coin balance comes from Omninet. Modules the account owns but the device lacks are downloaded.</li>
+        </ul>
+
+        <h3>Connect &gt; CONFIG</h3>
+        <div class="screen-row first">
+          <img class="shot" src="../assets/manual/connect_config.png" alt="Connect CONFIG screen with the Omninet and Discord sections">
+          <div>
+            <table class="data-table">
+              <thead>
+                <tr><th>Item</th><th>Shows or does</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Omninet Status</td><td>Checking..., Connected, Available (Omninet answers, no account signed in) or Offline</td></tr>
+                <tr><td>Omninet Account</td><td>Your nickname, or None</td></tr>
+                <tr><td>DISCONNECT</td><td>Signs this device out of Omninet and opens the sign-in screen</td></tr>
+                <tr><td>SWITCH MODE</td><td>Free Mode only: the account line reads "Free Mode" and this button opens the mode choice</td></tr>
+                <tr><td>Discord Status</td><td>Linked or Not linked; Account shows the Discord user name</td></tr>
+                <tr><td>LINK / UNLINK</td><td>Links a Discord account (see <a href="#discord">Discord battles</a>) or removes the link from this game</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ MODES -->
+    <div class="content-section" id="modes" data-theme="connect">
+      <h2 class="section-title">Progress and Free Mode</h2>
+      <div class="section-content">
+        <p>The game asks for a mode at the first start. The selection screen calls Progress Mode "Progression Mode".</p>
+
+        <table class="data-table">
+          <thead>
+            <tr><th></th><th>Progress Mode</th><th>Free Mode</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Omninet account</td><td>Required; checked at every start</td><td>None</td></tr>
+            <tr><td>Internet</td><td>Needed at start, for the Shop and the Arena</td><td>Needed only for the Shop</td></tr>
+            <tr><td>Modules</td><td>Those you own. The account's first module is free; later ones are bought with coins.</td><td>Every installed module</td></tr>
+            <tr><td>Shop</td><td>All sections, priced in coins</td><td>MODULES only, free downloads</td></tr>
+            <tr><td>Coins</td><td>Earned in play, kept on Omninet</td><td>None</td></tr>
+            <tr><td>Training minigames</td><td>Dummy; the others are bought in the Shop's GAMEPLAY section</td><td>All</td></tr>
+            <tr><td>Arena</td><td>Yes</td><td>No</td></tr>
+            <tr><td>WiFi and Discord battles</td><td>Yes</td><td>Yes</td></tr>
+            <tr><td>Save</td><td>One per Omninet account</td><td>One on the device</td></tr>
+          </tbody>
+        </table>
+
+        <p>In Progress Mode the egg selection offers only modules you own. With none, the game opens the Shop's MODULES section.</p>
+
+        <h3>Coins</h3>
+        <p>In Progress Mode these events earn coins. Omninet sets the amounts.</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>Event</th><th>Paid</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Unlocking a module item ("... unlocked!")</td><td>First time only</td></tr>
+            <tr><td>Discovering a Digimon (a new Digidex entry)</td><td>First time per Digimon and version</td></tr>
+            <tr><td>Evolution, Jogress and Armor evolutions included</td><td>Every evolution</td></tr>
+            <tr><td>Beating an adventure area's boss</td><td>First clear of each area</td></tr>
+            <tr><td>Finishing a module's whole adventure</td><td>First time only</td></tr>
+            <tr><td>Arena battles and prizes</td><td>See <a href="#arena">Arena</a></td></tr>
+          </tbody>
+        </table>
+
+        <h3>Changing mode</h3>
+        <ul>
+          <li><strong>Settings &gt; GAMEPLAY &gt; Change Mode</strong> opens the mode choice.</li>
+          <li>In Free Mode, <strong>Connect &gt; CONFIG &gt; SWITCH MODE</strong> does the same.</li>
+          <li><strong>Change to Free Play</strong> on the sign-in screen switches to Free Mode at once.</li>
+        </ul>
+        <p>When the device already has a signed-in account, choosing Progress Mode offers "Use &lt;name&gt;" or "Another account".</p>
+        <div class="note"><strong>Each mode keeps its own save.</strong> Changing mode loads the other save. Digimon do not move between the Free Mode save and an account's save.</div>
+      </div>
+    </div>
+
+    <!-- ============================================================ SHOP -->
+    <div class="content-section" id="shop" data-theme="connect">
+      <h2 class="section-title">Shop</h2>
+      <div class="section-content">
+        <div class="screen-row">
+          <img class="shot" src="../assets/manual/shop.png" alt="Omninet shop">
+          <div>
+            <p>The Shop lists what Omninet offers. Your coins show at the top right ("FREE" in Free Mode).</p>
+            <p>In Free Mode only <strong>MODULES</strong> opens, and every module downloads for free.</p>
+          </div>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr><th>Section</th><th>Contents</th><th>Bought</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>MODULES</td><td>Modules published on Omninet</td><td>Once. The account's first module is free; later ones cost the price shown.</td></tr>
+            <tr><td>ITEMS</td><td>Items that go to the inventory</td><td>Again, whenever you have the coins</td></tr>
+            <tr><td>GAMEPLAY</td><td>Training minigames</td><td>Once</td></tr>
+            <tr><td>COSMETICS</td><td>Backgrounds</td><td>Once</td></tr>
+            <tr><td>SPECIALS</td><td>Special unlocks, priced in coins or <a href="#contribution">contribution points</a></td><td>Once</td></tr>
+          </tbody>
+        </table>
+
+        <p>A module's page shows its author, contributors, last update, description and price. Its button reads <strong>Purchase</strong>, <strong>Download</strong>, <strong>Update</strong> (a newer version is published) or <strong>Updated</strong> (installed and current). The price line shows "Free", "Price:" with the coins, "Already Owned" or, in Free Mode, "Installed"; during a download it shows the progress.</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ ARENA -->
+    <div class="content-section" id="arena" data-theme="connect">
+      <h2 class="section-title">Arena</h2>
+      <div class="section-content">
+        <p>The Arena is a season-long competition on Omninet. You register a team; Omninet fights its battles, those you start and those other players start against it, and the game plays each one back. The Arena needs Progress Mode and at least one Digimon in the party.</p>
+
+        <h3>Seasons</h3>
+        <table class="data-table">
+          <thead>
+            <tr><th>Rule</th><th>Default</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Season</td><td>One week. One season runs at a time.</td></tr>
+            <tr><td>Team</td><td>1 to 3 Digimon. One team per player per season.</td></tr>
+            <tr><td>Modules</td><td>Only modules published on Omninet</td></tr>
+            <tr><td>Attacks</td><td>10 a day. The day starts at 00:00 UTC.</td></tr>
+            <tr><td>Charge</td><td>2, for every Digimon. There is no charge minigame.</td></tr>
+            <tr><td>Score</td><td>Win +25, loss −12 (never below 0), draw +5</td></tr>
+            <tr><td>Coins</td><td>1 per battle, attack or defence, any result</td></tr>
+            <tr><td>Prizes</td><td>50, 25 and 10 coins for the three best teams that fought</td></tr>
+          </tbody>
+        </table>
+        <p>A season may change these values and limit the Evolution Stages, Attributes or modules allowed. <strong>RULES</strong> shows the current season's values.</p>
+
+        <h3>The hub</h3>
+        <div class="screen-row first">
+          <img class="shot" src="../assets/manual/arena_hub.png" alt="Arena hub">
+          <div>
+            <p>The hub shows your team, its <strong>RANK</strong> (place / teams), <strong>SCORE</strong> and record (wins-losses-draws), the time left in the season and <strong>FIND BATTLE</strong> with the attacks left today.</p>
+            <p>Below it are the last result ("WIN vs &lt;nickname&gt; +25") and one information line. <strong>RULES</strong>, <strong>RANKS</strong>, <strong>HISTORY</strong> and <strong>BACK</strong> sit at the bottom.</p>
+            <p>Without a team the hub shows <strong>CREATE TEAM</strong>, or <strong>SEASON NOT STARTED</strong> when no season runs.</p>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr><th>Information line</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>"Attacked 3x while away! See HISTORY."</td><td>Other players attacked your team since you last opened HISTORY.</td></tr>
+            <tr><td>"Defended 4x, won 2."</td><td>Your team's defences this season.</td></tr>
+            <tr><td>"Not attacked yet."</td><td>No one has attacked your team.</td></tr>
+            <tr><td>"No attacks left. New ones in 2h 10m."</td><td>Today's attacks are used up.</td></tr>
+            <tr><td>"Register a team to battle."</td><td>A season runs and you have no team in it.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Registering a team</h3>
+        <div class="screen-row first">
+          <img class="shot" src="../assets/manual/arena_team.png" alt="Arena team creation">
+          <div>
+            <ol class="steps">
+              <li>Press <strong>CREATE TEAM</strong>.</li>
+              <li>Pick Digimon from your party. The status line gives the count ("Pick 1-3 pets.") and any season filter.</li>
+              <li>Press <strong>CONFIRM</strong>. The game says how long the team will be locked ("Locks them in the freezer until OCT 20 14:00. Press again.") and the button reads <strong>SURE?</strong>.</li>
+              <li>Press it again. The hub says "Team registered! Locked until ...".</li>
+            </ol>
+          </div>
+        </div>
+        <p>A Digimon that cannot join is disabled; selecting it shows why.</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>Message</th><th>Reason</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>"Edited pets aren't allowed"</td><td>The Digimon was changed in the debug menu.</td></tr>
+            <tr><td>"Pet is dead"</td><td>The Digimon has died.</td></tr>
+            <tr><td>"Pet cannot battle"</td><td>It has no power or no attack.</td></tr>
+            <tr><td>"Module not in this arena season"</td><td>Its module is not published on Omninet.</td></tr>
+            <tr><td>"Fought last season: evolve it first"</td><td>It already fought a season in its current form.</td></tr>
+            <tr><td>"Wrong stage / attribute / module for this season"</td><td>The season's filter excludes it.</td></tr>
+          </tbody>
+        </table>
+
+        <h4>The Freezer lock</h4>
+        <p>The team's Digimon stay in your save. They move to the Freezer, locked until the season's end time: their Freezer entry reads "Arena" with the time left instead of Add. Once that time has passed they can leave the Freezer. A Digimon fights one season per form; after a season it must evolve before it can join another.</p>
+
+        <h3>Battles</h3>
+        <ul>
+          <li><strong>FIND BATTLE</strong> spends one attack. Omninet picks the opponent and fights the battle; the game plays it back and returns to the hub with the result.</li>
+          <li>The opponent is the team you have met least today, then least this season. Every team is met once before any team is met twice in a day.</li>
+          <li>Other players attack your team while you are away. Defences cost no attacks and move both teams' scores.</li>
+          <li>Omninet works out each Digimon's power and HP from its species and its current status. Item bonuses do not count.</li>
+          <li>A battle can end in a draw.</li>
+          <li>Arena battles never injure a Digimon.</li>
+        </ul>
+
+        <h3>Ranks, rules and history</h3>
+        <div class="screen-row first">
+          <img class="shot" src="../assets/manual/arena_standings.png" alt="Arena standings">
+          <div>
+            <p><strong>RANKS</strong> lists the season's teams: rank, nickname, score and record. Your row is green and selected. The selected team's Digimon show under the list, the season's prizes at the top.</p>
+            <p>Teams that have fought rank above teams that have not; then score, wins and the earlier team decide.</p>
+          </div>
+        </div>
+        <div class="screen-row">
+          <img class="shot" src="../assets/manual/arena_rules.png" alt="Arena rules">
+          <div>
+            <p><strong>RULES</strong> shows the season's name, start and end (local time), attacks per day, charge ("random" when each battle draws one), team size, prizes and filters, or "No restrictions - all pets eligible".</p>
+            <p>Filters list stages by number: 1 Baby I, 2 Baby II, 3 Child, 4 Adult, 5 Perfect, 6 Ultimate.</p>
+          </div>
+        </div>
+        <div class="screen-row">
+          <img class="shot" src="../assets/manual/arena_history.png" alt="Arena battle history">
+          <div>
+            <p><strong>HISTORY</strong> lists the team's battles. Each row gives the side (<strong>A</strong> you attacked, <strong>D</strong> you were attacked), the result (W, L or D), the score change, the opponent and the date.</p>
+            <p>The selected battle's opposing team shows under the list. <strong>WATCH</strong> replays it from your side.</p>
+          </div>
+        </div>
+
+        <h3>Season end</h3>
+        <ol class="steps">
+          <li>When the season ends, the hub says "&lt;season&gt; has ended.", shows the coins waiting and replaces FIND BATTLE with <strong>SEASON RESULTS</strong>.</li>
+          <li><strong>RESULTS</strong> shows the final rank (CHAMPION! for first, PODIUM! for second and third), score, record, coins and "Each pet: +N battles, W won".</li>
+          <li>Press any key or tap. The coins are added; the hub says "+N coins claimed!".</li>
+        </ol>
+        <p>Each Digimon of the team adds the team's season record to its own battle and win counts, which evolution conditions that count battles use. You must open the results before registering a team in the next season.</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ DISCORD -->
+    <div class="content-section" id="discord" data-theme="connect">
+      <h2 class="section-title">Discord battles</h2>
+      <div class="section-content">
+        <p>Discord battles connect two players over the internet through Omninet's Discord service. They work in both modes and need no Omninet account.</p>
+
+        <h3>Linking your Discord account</h3>
+        <ol class="steps">
+          <li>In Discord, send the bot the command <code>!link</code>. It sends you a direct message: "Your Pairing Code: XXXX". If it cannot message you, it posts the code in the channel, hidden as a spoiler.</li>
+          <li>In Omnipet, open <strong>Connect &gt; CONFIG</strong> and press <strong>LINK</strong> under Discord.</li>
+          <li>Enter the 4 characters and press <strong>Confirm</strong>. CONFIG then shows "Status: Linked" and your Discord user name.</li>
+        </ol>
+        <div class="screen-row">
+          <img class="shot" src="../assets/manual/link_dialog.png" alt="Discord pairing code entry">
+          <div>
+            <table class="data-table">
+              <thead>
+                <tr><th>Message</th><th>Meaning</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>"Please enter a 4-character code"</td><td>Fewer than 4 characters were entered.</td></tr>
+                <tr><td>"Invalid or expired code"</td><td>The service does not know the code: it was mistyped, or a newer <code>!link</code> replaced it.</td></tr>
+                <tr><td>"Discord is offline"</td><td>The Discord service cannot be reached, or the server runs without it.</td></tr>
+              </tbody>
+            </table>
+            <p><strong>UNLINK</strong> in CONFIG removes the link from this game. <code>!unlink</code> in Discord removes it on the bot's side.</p>
+          </div>
+        </div>
+
+        <h3>Battling</h3>
+        <div class="screen-row first">
+          <div class="screen-stack">
+            <img class="shot" src="../assets/manual/discord_rooms.png" alt="Discord battle: Host Room and Browse Rooms">
+            <img class="shot" src="../assets/manual/discord_browse.png" alt="Discord battle: list of open rooms">
+          </div>
+          <div>
+            <ol class="steps">
+              <li>Open <strong>Connect &gt; DISCORD</strong>. The button works only when an account is linked and the service answers.</li>
+              <li>Choose up to four Digimon and press <strong>CONFIRM</strong>.</li>
+              <li>One player chooses <strong>Host Room</strong> and waits: "Room Created! Waiting for opponent...".</li>
+              <li>The other chooses <strong>Browse Rooms</strong>. Rooms are listed by the host's Discord name; <strong>Refresh</strong> searches again. Pick the room.</li>
+              <li>On the confirmation screen (ONLINE BATTLE) both players press <strong>START</strong>.</li>
+            </ol>
+          </div>
+        </div>
+        <p>A Discord battle follows the <a href="#wifi">WiFi battle</a> rules and counts the same way. The versus screen shows both players' names.</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ WIFI -->
+    <div class="content-section" id="wifi" data-theme="connect">
+      <h2 class="section-title">WiFi battles</h2>
+      <div class="section-content">
+        <p>Two Omnipets on the same local network can battle. No internet connection or Omninet account is needed.</p>
+
+        <div class="screen-row">
+          <div class="screen-stack">
+            <img class="shot" src="../assets/manual/wifi_select.png" alt="WiFi battle: choosing the Digimon">
+            <img class="shot" src="../assets/manual/wifi_menu.png" alt="WiFi battle: Host Battle or Join Battle">
+          </div>
+          <div>
+        <ol class="steps">
+          <li>Open <strong>Connect &gt; Local Battle</strong> and press the WiFi button. It turns on when the device has a local network address.</li>
+          <li>Choose up to four Digimon and press <strong>CONFIRM</strong>. The list holds the party Digimon that can battle; when Digimon are selected on the main screen, only those.</li>
+          <li>One player chooses <strong>Host Battle</strong>.</li>
+          <li>The other chooses <strong>Join Battle</strong> and picks the host's code from the list.</li>
+          <li>Both players press <strong>START</strong> on the confirmation screen.</li>
+        </ol>
+          </div>
+        </div>
+
+        <div class="screen-row">
+          <img class="shot" src="../assets/manual/wifi_host.png" alt="Hosting a WiFi battle">
+          <div>
+            <p><strong>Host Battle</strong> shows a 4-character code, the device's IP address and "Waiting for opponent...". <strong>CANCEL</strong> stops hosting.</p>
+          </div>
+        </div>
+        <div class="screen-row">
+          <img class="shot" src="../assets/manual/wifi_browse.png" alt="List of WiFi hosts">
+          <div>
+            <p><strong>Join Battle</strong> searches the network for about three seconds and lists the hosts by code, with the host's Omninet nickname when it is signed in. <strong>Search again</strong> repeats the search.</p>
+          </div>
+        </div>
+        <div class="screen-row">
+          <img class="shot" src="../assets/manual/battle_confirm.png" alt="Battle confirmation">
+          <div>
+            <p>The confirmation screen (WIFI BATTLE, or ONLINE BATTLE for Discord) names the opponent and both teams. The status reads "Connecting...", then "Press START to battle", then "Waiting for opponent..." until the other player presses START too. <strong>CANCEL</strong> leaves.</p>
+          </div>
+        </div>
+
+        <h3>Rules</h3>
+        <ul>
+          <li>The battle uses the Arena's rules: no charge minigame, every Digimon at the same charge, and a battle can end in a draw.</li>
+          <li>The host's game fights the battle and sends it to the other game. Each game plays it from its own side.</li>
+          <li>The opponent's module does not have to be installed.</li>
+          <li>Your own Digimon fight, so the battle counts like any other connection battle: battle and win counts, the battle cost, Connect Points on modules that have them, and injuries.</li>
+        </ul>
+
+        <h3>Messages</h3>
+        <table class="data-table">
+          <thead>
+            <tr><th>Message</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>"No host found"</td><td>No host answered the search.</td></tr>
+            <tr><td>"Could not connect"</td><td>The host was found, but the connection failed.</td></tr>
+            <tr><td>"Cannot host on this network"</td><td>This device could not open a connection.</td></tr>
+            <tr><td>"Others cannot find this game"</td><td>Another program holds the search port, UDP 47555.</td></tr>
+            <tr><td>"Different game version"</td><td>The two games use different battle links. Use the same Omnipet release on both.</td></tr>
+            <tr><td>"Their team cannot battle"</td><td>The opponent's team was refused.</td></tr>
+            <tr><td>"The opponent left"</td><td>The other player cancelled, or the connection dropped.</td></tr>
+            <tr><td>"Battle could not be read" / "Battle could not be shown"</td><td>The battle the host sent could not be played.</td></tr>
+          </tbody>
+        </table>
+        <div class="tip"><strong>A game on another computer is not found?</strong> Allow Omnipet through that computer's firewall. Hosts answer searches on UDP port 47555; the battle itself uses a TCP port the system picks. More in <a href="troubleshooting.html">Troubleshooting</a>.</div>
+        <div class="note">The WiFi Com button in Local Battle stays off in 1.0. Battles with real devices use a DCom adapter: see Connect in the <a href="manual.html#connect">Manual</a>.</div>
+      </div>
+    </div>
+
+    <!-- ============================================================ CONTRIBUTION POINTS -->
+    <div class="content-section" id="contribution" data-theme="connect">
+      <h2 class="section-title">Contribution points</h2>
+      <div class="section-content">
+        <div class="screen-row">
+          <img class="shot" src="../assets/manual/shop_specials.png" alt="Shop Specials section">
+          <div>
+            <p>Contribution points are a second balance, kept apart from coins and shown with a diamond icon.</p>
+            <p>They are earned by contributing to the Digimon Database: each contribution gives 1 point, 2 for an entry flagged as needing data. Omninet credits the points to the account whose email matches the one sent with the contribution. Points for an email that has no account yet are kept until an account with that email exists.</p>
+            <p>They are spent in the Shop's <strong>SPECIALS</strong> section, which shows the balance at the top right and reads it again each time it opens. Each Special is priced in coins (coin icon) or in contribution points (diamond) and is bought once. A background Special is downloaded with the other bought backgrounds and chosen in Settings &gt; Backgrounds. SPECIALS needs Progress Mode.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

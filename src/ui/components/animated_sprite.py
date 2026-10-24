@@ -46,9 +46,6 @@ class AnimatedSprite(UIComponent):
         self._surface_cache = {}  # Cache for rendered surfaces
         self._overlay_cache = {}  # Cache for blurred overlays
         self._last_screen_size = (0, 0)
-        # Reusable full-screen render target to avoid per-frame allocations
-        self._render_target = None
-        self._render_target_size = (0, 0)
         # Predefined colors (use shared UI constants)
         # NOTE: we store them as attributes for backwards compatibility with
         # existing code that accessed self.COMBAT_BLUE/self.BLACK/self.YELLOW
@@ -219,12 +216,12 @@ class AnimatedSprite(UIComponent):
         if surface is not None:
             return surface
             
-        # Ensure reusable render target exists and matches current size
+        # Each cached frame needs its own surface: rendering every frame into a
+        # shared target makes all cache keys alias whatever rendered last, which
+        # froze two-frame animations (battle/impact flashes) on a single frame.
+        # Rendered once per key, so there is no per-frame allocation cost.
         target_size = (runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT)
-        if self._render_target is None or self._render_target_size != target_size:
-            self._render_target = pygame.Surface(target_size)
-            self._render_target_size = target_size
-        surface = self._render_target
+        surface = pygame.Surface(target_size)
         
         # Fill with background color
         surface.fill(bg_color)
@@ -242,7 +239,6 @@ class AnimatedSprite(UIComponent):
             from utils.pygame_utils import blit_with_cache
             blit_with_cache(surface, sprite, sprite_rect.topleft)
         
-        # Cache the surface reference (render target is reused)
         self._surface_cache[cache_key] = surface
         return surface
     
@@ -301,6 +297,36 @@ class AnimatedSprite(UIComponent):
     def _load_combat_sprites(self, *names):
         """Load multiple combat sprites."""
         return [self._load_combat_sprite(name) for name in names]
+
+    # The Digivice iC minigames' own screens (utilities/IC/ui_screens.py):
+    # the LCD's 32 x 32 dots in the middle of the screen, where the minigame
+    # draws its LCD, on their own paper -- which also fills what is left of
+    # a screen they do not cover.
+    def _play_screens(self, names, duration_seconds, frame_rate=2):
+        sprites = self._load_combat_sprites(*names)
+        paper = tuple(sprites[0].get_at((0, 0)))[:3] if sprites and sprites[0] else (0, 0, 0)
+        self.set_animation_data(sprites, [paper] * len(sprites), frame_rate=frame_rate)
+        self.play(duration_seconds)
+
+    def play_ic20_ready(self, duration_seconds=1.0):
+        """The iC 20X's READY (Combat_IC20Ready)."""
+        self._play_screens(["IC20Ready"], duration_seconds)
+
+    def play_ic20_start(self, duration_seconds=1.0):
+        """The iC 20X's START (Combat_IC20Start)."""
+        self._play_screens(["IC20Start"], duration_seconds)
+
+    def play_ic20_clear(self, duration_seconds=1.0):
+        """The iC 20X's CLEAR!, a stage of its minigame cleared (Combat_IC20Clear)."""
+        self._play_screens(["IC20Clear"], duration_seconds)
+
+    def play_shuffle_title(self, duration_seconds=1.0):
+        """The iC 10X Shuffle's SHUFFLE, its two frames twice a second."""
+        self._play_screens(["ShuffleTitle1", "ShuffleTitle2"], duration_seconds)
+
+    def play_shuffle_select(self, duration_seconds=1.0):
+        """The iC 10X Shuffle's SELECT!, its two frames twice a second."""
+        self._play_screens(["ShuffleSelect1", "ShuffleSelect2"], duration_seconds)
     
     # Predefined combat animations
     def play_battle(self, duration_seconds=1.0):

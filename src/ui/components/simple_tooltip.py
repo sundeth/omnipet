@@ -12,7 +12,9 @@ class Tooltip:
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.text = text
-        self.base_font_size = 12  # Base font size that will be scaled
+        # Matches the ordinary text size (ui_constants.TEXT_FONT_SIZES); a
+        # tooltip exists to be read, so it never goes below it.
+        self.base_font_size = 16  # Base font size that will be scaled
         self.base_padding = 10    # Base padding that will be scaled
         self.base_line_spacing = 2  # Base line spacing that will be scaled
         self.base_max_width = 200   # Base max width that will be scaled

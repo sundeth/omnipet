@@ -81,23 +81,21 @@ class DigidexList(UIComponent):
                         # Load actual sprite for known pets
                         try:
                             module = get_module(pet.module)
-                            module_path = f"modules/{module.name}"
                             sprites_dict = load_pet_sprites(
                                 pet.name,
-                                module_path,
+                                module.folder_path,
                                 module.name_format,
-                                module_high_definition_sprites=module.high_definition_sprites,
                                 size=(self.sprite_size, self.sprite_size),
+                                primary_sprite_format=getattr(module, 'primary_sprite_format', 'Color'),
+                                secondary_sprite_format=getattr(module, 'secondary_sprite_format', 'HD'),
                             )
-                            if "0" in sprites_dict:
-                                pet.sprite = sprites_dict["0"]
-                            else:
-                                pet.sprite = self.unknown_sprite
+                            # Frame keys are ints (see load_sprites_from_directory)
+                            frame0 = sprites_dict.get(0) or sprites_dict.get("0")
+                            pet.sprite = frame0 if frame0 is not None else self.unknown_sprite
                         except Exception as e:
                             runtime_globals.game_console.log(f"[DigidexList] Failed to load sprite {pet.name}: {e}")
                     else:
                         # Unknown pet - set unknown sprite
-                        pet.sprite = self.unknown_sprite
                         pet.sprite = self.unknown_sprite
 
     def update(self):
@@ -266,6 +264,12 @@ class DigidexList(UIComponent):
                 self.on_selection_callback(selected)
                 runtime_globals.game_sound.play("menu")
             return True
+        elif event_type == "SCROLL":
+            # Handle wheel directly instead of relying on the manager's
+            # focused/hover fallback chain.
+            return self.handle_scroll(event)
+        elif event_type in ("DRAG_START", "DRAG_MOTION", "DRAG_END"):
+            return self.handle_drag(event)
         return False
     
     def handle_mouse_click(self, mouse_pos, action):
@@ -318,19 +322,32 @@ class DigidexList(UIComponent):
         return False
     
     def handle_scroll(self, action):
-        """Handle scroll wheel events for list navigation"""
+        """Handle scroll wheel events for list navigation.
+
+        The UI manager passes the full ("SCROLL", {"direction": "UP"/"DOWN"})
+        event tuple; legacy "SCROLL_UP"/"SCROLL_DOWN" strings are still
+        accepted for safety.
+        """
         if not (runtime_globals.INPUT_MODE in [runtime_globals.MOUSE_MODE, runtime_globals.TOUCH_MODE]):
             return False
-        
-        if action == "SCROLL_UP":
+
+        direction = None
+        if isinstance(action, tuple) and len(action) == 2 and action[0] == "SCROLL":
+            direction = (action[1] or {}).get("direction")
+        elif action == "SCROLL_UP":
+            direction = "UP"
+        elif action == "SCROLL_DOWN":
+            direction = "DOWN"
+
+        if direction == "UP":
             self.navigate_up()
             runtime_globals.game_sound.play("menu")
             return True
-        elif action == "SCROLL_DOWN":
+        elif direction == "DOWN":
             self.navigate_down()
             runtime_globals.game_sound.play("menu")
             return True
-        
+
         return False
     
     def handle_drag(self, event):
@@ -446,10 +463,12 @@ class DigidexList(UIComponent):
         elif self.selected_index >= self.scroll_offset + max_visible:
             self.scroll_offset = self.selected_index - max_visible + 1
         
-        # Get theme colors and fonts (scaled)
+        # Get theme colors and fonts (scaled).  Use the UI system's default
+        # text size for both lines -- the previous 14/10 custom sizes were
+        # too small to read comfortably.
         colors = self.get_colors()
-        font = self.get_font("text", custom_size=int(14 * ui_scale))
-        small_font = self.get_font("text", custom_size=int(10 * ui_scale))
+        font = self.get_font("text")
+        small_font = self.get_font("text")
         
         # Draw visible items
         for idx in range(self.scroll_offset, min(self.scroll_offset + max_visible, len(self.pets))):
@@ -465,19 +484,25 @@ class DigidexList(UIComponent):
             name_text = font.render(pet.name[:15], True, colors["fg"])
             blit_with_shadow(surface, name_text, (list_x + left_padding + icon_size + int(5 * ui_scale), y_pos + int(8 * ui_scale)))
             
-            info_text = small_font.render(f"{pet.attribute if pet.attribute != '' else 'Free'} | Stage {constants.STAGES[pet.stage]}", True, (200, 200, 200))
+            info_text = small_font.render(f"{pet.attribute if pet.attribute != '' else 'Free'} | Stage {constants.stage_name(pet.stage)}", True, (200, 200, 200))
             blit_with_shadow(surface, info_text, (list_x + left_padding + icon_size + int(5 * ui_scale), y_pos + int(28 * ui_scale)))
+
+            # Friend pets carry a small tag in the top-right of the row
+            if getattr(pet, 'availability', 'Normal') == 'Friend':
+                tag_text = small_font.render("Friend", True, (120, 220, 120))
+                blit_with_shadow(surface, tag_text,
+                                 (list_x + list_width - tag_text.get_width() - int(6 * ui_scale),
+                                  y_pos + int(4 * ui_scale)))
             
             # Highlight selected or hovered item
             is_hovered = (idx == self.hover_index)
             is_selected = (idx == self.selected_index)
             
-            if is_selected or (is_hovered and self.focused):
-                # Use highlight color if hovered and focused, or line color if just selected
-                # Fallback to line color if highlight not available
-                # Skip focus highlighting in touch mode - it's for keyboard/mouse navigation only
+            # The selected row keeps its border; the hover/focus one is not
+            # drawn in touch mode (focus_visible).
+            show_focus = is_hovered and self.focus_visible()
+            if is_selected or show_focus:
                 highlight_color = colors.get("highlight", colors["line"])
-                show_focus = (is_hovered and self.focused) and runtime_globals.INPUT_MODE != runtime_globals.TOUCH_MODE
                 border_color = highlight_color if show_focus else colors["line"]
                 border_width = max(1, int(2 * ui_scale))
                 pygame.draw.rect(surface, border_color, (list_x, y_pos, list_width, item_height), border_width)

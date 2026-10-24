@@ -90,12 +90,18 @@ class DiscordView:
     def _setup_host_join_menu(self):
         """Setup the host/join selection menu."""
         self.host_join_menu = Menu(width=BASE_RESOLUTION - 40, height=100)
+        self._open_host_join_menu()
+        self.ui_manager.add_component(self.host_join_menu)
+
+    def _open_host_join_menu(self):
+        """(Re)populate the host/join menu: Menu.close() runs after every
+        selection and clears its options, so coming back to this phase
+        (Cancel, Back) showed an empty box."""
         self.host_join_menu.open(
             options=["Host Room", "Browse Rooms", "Back"],
             on_select=self._on_host_join_select,
             auto_center=True
         )
-        self.ui_manager.add_component(self.host_join_menu)
     
     def _setup_browser_ui(self):
         """Setup room browser UI."""
@@ -156,7 +162,8 @@ class DiscordView:
         self.phase = phase
         
         if phase == "host_join":
-            self.host_join_menu.visible = True
+            self._open_host_join_menu()
+            self.ui_manager.set_focused_component(self.host_join_menu)
         elif phase == "browsing":
             self.browser_title.visible = True
             self.browser_status.visible = True
@@ -246,7 +253,9 @@ class DiscordView:
                 runtime_globals.game_console.log(f"[DiscordView] Joined room {self.current_room_id}")
                 self._start_polling()
                 self.change_view("battle_confirm",
+                                 connection_mode="discord",
                                  is_host=False,
+                                 enemy_name=room.get('host', ''),
                                  selected_pets=self.selected_pets,
                                  is_online_mode=True,
                                  discord_room_id=self.current_room_id)
@@ -272,6 +281,7 @@ class DiscordView:
                     if data:
                         # Check for opponent
                         if data.get('opponent') or data.get('player2'):
+                            self._opponent_name = data.get('opponent') or data.get('player2')
                             self._discord_opponent_found = True
             except Exception as e:
                 runtime_globals.game_console.log(f"[DiscordView] Poll error: {e}")
@@ -325,7 +335,9 @@ class DiscordView:
         if getattr(self, '_discord_opponent_found', False):
             self._discord_opponent_found = False
             self.change_view("battle_confirm",
+                             connection_mode="discord",
                              is_host=self.is_host,
+                             enemy_name=getattr(self, '_opponent_name', '') or '',
                              selected_pets=self.selected_pets,
                              is_online_mode=True,
                              discord_room_id=self.current_room_id)

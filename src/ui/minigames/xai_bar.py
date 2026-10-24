@@ -1,300 +1,290 @@
+"""
+XAI Bar minigame (DMX ruleset)
+==============================
+
+Sprite-based implementation. The bar art is picked from the pet:
+
+    assets/XaiBar_<type>_<level>.png   (96x30 source art)
+
+    type:  pet attribute — Va -> 1, ""(Free)/Da -> 2, Vi -> 3
+    level: pets whose module shows Level as a stat take the band their
+           STAGE and LEVEL put them in, read off the DMX attack table
+           (battle_utils.dmx_tier_index); everyone else uses EFFORT:
+               EFFORT 0-8 -> 1,  9-15 -> 2,  16+ -> 3
+
+           The bar widens where the attacks change row, and both were read
+           off the same device: a stage 6 pet steps at levels 5 and 10, but a
+           stage 3 pet steps at 3 and 4, and a Baby II at 2 and 3. A flat
+           `0-5 / 6-9 / 10` was stage 6's banding applied to every stage, so
+           every pet below Ultimate got the wrong bar for most of its life.
+
+The bar is integer-scaled (pixel perfect) to roughly the old widget's
+footprint (148px wide at 240x240). XaiArrow travels left-to-right above
+the bar, bouncing inside the bar's bounds minus a 2px (source) margin,
+at the classic speed (faster for lower XAI numbers). A/LCLICK stops it;
+the color of the bar under the middle of the arrow decides the result
+and recolors the arrow, and the minigame reports finished half a second
+later so the player sees where they landed.
+
+The color is the charge quality the protocols carry as Bad (0), Good (1),
+Great (2), Excellent (3):
+
+    red     -> 3  Excellent      the smallest zone, and the hardest to hit
+    yellow  -> 2  Great
+    blue    -> 1  Good           the widest colored zone
+    grey    -> 0  Bad
+
+Red and blue used to be the other way round, which inverted the whole
+minigame: a level 1 bar carries 24px of blue against 6px of red, so
+stopping on the hardest zone scored Good and the easiest scored
+Excellent. Every consumer reads this one number -- the DMX wire's Attack
+field and Excite Training's ``selected_strength == 3`` alike -- so the
+sprite table below is keyed by it rather than by the color name.
+
+Result mapping: red=1, yellow=2, blue=3, anything else 0.
+"""
+
 import pygame
 
-import core.constants as constants
-from utils.pygame_utils import blit_with_shadow, sprite_load_percent
 from core import runtime_globals
+from utils.asset_utils import image_load
+from utils.pygame_utils import blit_with_cache
+
+BAR_SRC_W = 96
+BAR_SRC_H = 30
+BAR_MARGIN_SRC = 2       # px margin inside the bar (source scale)
+REFERENCE_WIDTH = 148    # old widget width at 240x240 — sizing reference
+STOP_HOLD_MS = 500       # linger after stopping so the result is readable
+
+#: What each result value is called on the wire, for the log.
+QUALITY = ("Bad", "Good", "Great", "Excellent")
+
+#: Keyed by result value, not by color name (see above).
+ARROW_SPRITES = {
+    None: "assets/XaiArrow.png",
+    3: "assets/XaiArrow_Red.png",
+    2: "assets/XaiArrow_Yellow.png",
+    1: "assets/XaiArrow_Blue.png",
+}
 
 
-XAIARROW_ICON_PATH = "assets/XaiArrow.png"  # Update this path as needed
+def _classify_color(pixel):
+    """Map a bar pixel to its result value: red 3, yellow 2, blue 1, None."""
+    if len(pixel) > 3 and pixel[3] < 200:
+        return None
+    r, g, b = pixel[0], pixel[1], pixel[2]
+    if r > 180 and g > 140 and b < 100:
+        return 2  # yellow -> Great
+    if r > 180 and g < 110 and b < 110:
+        return 3  # red    -> Excellent
+    if b > 180 and r < 110:
+        return 1  # blue   -> Good
+    return None
+
 
 class XaiBar:
-    """XAI bar minigame for DMX ruleset"""
-    
-    @property
-    def WIDTH(self):
-        return int(152 * runtime_globals.UI_SCALE)
-    
-    @property
-    def HEIGHT(self):
-        return int(72 * runtime_globals.UI_SCALE)
-    
-    @property
-    def INNER_WIDTH(self):
-        return int(148 * runtime_globals.UI_SCALE)
-    
-    @property
-    def INNER_HEIGHT(self):
-        return int(68 * runtime_globals.UI_SCALE)
+    """XAI bar minigame for the DMX ruleset."""
 
     def __init__(self, x, y, xai_number, pet):
-        self.x = x
-        self.y = y
+        # x is kept for API compatibility; the widget centers itself so the
+        # pixel-perfect scaled bar always sits nicely regardless of caller.
         self.xai_number = xai_number
         self.pet = pet
 
-        ext_height = 30 * runtime_globals.UI_SCALE
-        self.arrow_height = int(ext_height * 0.8)
-        self.arrow_sprite = sprite_load_percent(
-            XAIARROW_ICON_PATH,
-            percent=(self.arrow_height / runtime_globals.SCREEN_HEIGHT) * 100,
-            keep_proportion=True,
-            base_on="height"
-        )
-        self.arrow_width = self.arrow_sprite.get_width()
+        # Integer scale approximating the old 148/240 footprint
+        target_w = runtime_globals.SCREEN_WIDTH * (REFERENCE_WIDTH / 240.0)
+        self.scale = max(1, round(target_w / BAR_SRC_W))
+
+        bar_type = self._bar_type(pet)
+        bar_level = self._bar_level(pet)
+        self.bar_name = f"XaiBar_{bar_type}_{bar_level}"
+        self._last_src_x = None
+        self.bar_source = image_load(
+            f"assets/{self.bar_name}.png").convert_alpha()
+
+        k = self.scale
+        self.width = BAR_SRC_W * k
+        self.height = BAR_SRC_H * k
+        self.bar_sprite = pygame.transform.scale(self.bar_source,
+                                                 (self.width, self.height))
+
+        self.x = (runtime_globals.SCREEN_WIDTH - self.width) // 2
+        self.y = y
+
+        # Arrow sprites at the same integer scale as the bar
+        self.arrow_sprites = {}
+        for key, path in ARROW_SPRITES.items():
+            try:
+                sprite = image_load(path).convert_alpha()
+                self.arrow_sprites[key] = pygame.transform.scale(
+                    sprite, (sprite.get_width() * k, sprite.get_height() * k))
+            except Exception as exc:
+                runtime_globals.game_console.log(f"[XaiBar] arrow load failed {path}: {exc}")
+        self.arrow_sprite = self.arrow_sprites.get(None)
+        arrow_h = self.arrow_sprite.get_height() if self.arrow_sprite else 8 * k
+
+        # Arrow rides just above the bar (outside it)
+        self.arrow_y = self.y - arrow_h - 2 * k
+
+        # The arrow CENTER travels within the bar minus the 2px source margin
+        margin = BAR_MARGIN_SRC * k
+        self.arrow_min_cx = self.x + margin
+        self.arrow_max_cx = self.x + self.width - margin
+
+        self.arrow_cx = float(self.arrow_min_cx)
+        self.arrow_dir = 1
         self.arrow_animating = False
-        self.arrow_anim_dir = 1
-        self.arrow_anim_x = 0
-        self.arrow_anim_min = self.x + 2 - self.arrow_width // 2
-        self.arrow_anim_max = self.x + 2 + self.INNER_WIDTH - self.arrow_width // 2
+        self.stopped = False
         self.selected_strength = None
+        self.result_color = None
+        self._stop_tick = None
+        self._last_update_ms = None
+        self._drawn_cx = None
 
-        # Responsiveness helpers
-        self._last_update_ms = None   # For real delta-time movement
-        self._drawn_x = None          # Last position actually rendered (used by stop())
+    # ------------------------------------------------------------------
+    # Bar selection
+    # ------------------------------------------------------------------
 
-        # Caches
-        self._bar_structures_cache = None
-        self._bar_surfaces_cache = None
-        self._cache_key = None
-        self._static_surfaces = None  # (border_surf, inner_surf, ext_surf)
+    @staticmethod
+    def _bar_type(pet):
+        """The column pattern, which is the attribute.
 
-        self._update_cache()
+        Free shares Data's rather than Vaccine's -- read off the device on a
+        Free Yarmon and a Data Herissmon, both type 2, against a Vaccine
+        Varudurumon's 1 and a Virus Agumon X's 3.
+        """
+        attr = getattr(pet, "attribute", "") if pet else ""
+        if attr == "Va":
+            return 1
+        if attr == "Vi":
+            return 3
+        return 2  # Da, and "" (Free) with it
 
-    def _update_cache(self):
-        # Use pet name, level, stage, and window size as cache key
-        key = (self.pet.name, self.pet.level, self.pet.stage, runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT)
-        if key != self._cache_key:
-            self._bar_structures_cache = self._compute_bar_structures()
-            self._bar_surfaces_cache = self._compute_bar_surfaces()
-            self._static_surfaces = self._compute_static_surfaces()
-            self._cache_key = key
+    @staticmethod
+    def _bar_level(pet):
+        """Which of the three bar arts this pet plays.
+
+        Devices that level their Digimon scale the bar off the level and the
+        rest off effort, and `battle_utils.pet_tier_index` is where that
+        decision lives -- Count Match Z widens on the same ladder, so a copy
+        here would be a second place for the two to disagree.
+        """
+        from battle.sim.battle_utils import pet_tier_index
+        return pet_tier_index(pet)
+
+    # ------------------------------------------------------------------
+    # Game flow
+    # ------------------------------------------------------------------
 
     def start(self):
         self.arrow_animating = True
-        self.arrow_anim_dir = 1
-        self.arrow_anim_x = self.arrow_anim_min
+        self.stopped = False
+        self.arrow_dir = 1
+        self.arrow_cx = float(self.arrow_min_cx)
         self.selected_strength = None
+        self.result_color = None
+        self.arrow_sprite = self.arrow_sprites.get(None)
+        self._stop_tick = None
         self._last_update_ms = None
-        self._drawn_x = None
+        self._drawn_cx = None
 
     def stop(self):
+        """Freeze the arrow, read the color under it, recolor the arrow."""
+        if self.stopped:
+            return
         self.arrow_animating = False
+        self.stopped = True
+        self._stop_tick = pygame.time.get_ticks()
         self._last_update_ms = None
-        # Use the last-rendered position so the recorded result always matches
-        # exactly what the player saw, regardless of update/draw ordering.
-        if self._drawn_x is not None:
-            self.arrow_anim_x = self._drawn_x
-        self.selected_strength = self._get_strength_from_arrow()
+        # Use the last-rendered position so the result matches what the
+        # player actually saw, regardless of update/draw ordering.
+        if self._drawn_cx is not None:
+            self.arrow_cx = self._drawn_cx
+
+        self.result_color = self._sample_color_at(self.arrow_cx)
+        self.selected_strength = self.result_color or 0
+        colored = self.arrow_sprites.get(self.result_color)
+        if colored is not None:
+            self.arrow_sprite = colored
+
+        runtime_globals.game_console.log(
+            f"[XaiBar] stopped on {QUALITY[self.selected_strength]} "
+            f"({self.selected_strength}) -- bar {self.bar_name}, "
+            f"arrow at {self.arrow_cx:.1f}, source px {self._last_src_x}")
+
+    def is_finished(self):
+        """True once the post-stop hold (0.5s) has elapsed."""
+        return (self.stopped and self._stop_tick is not None
+                and pygame.time.get_ticks() - self._stop_tick >= STOP_HOLD_MS)
+
+    def _sample_color_at(self, center_x):
+        """Classify the bar color under the arrow center.
+
+        Samples the SOURCE sprite column (pixel-perfect scaling makes the
+        mapping exact), scanning bottom-up so bottom-anchored color zones
+        are found even when they don't span the full bar height.
+        """
+        src_x = int((center_x - self.x) / self.scale)
+        src_x = max(0, min(BAR_SRC_W - 1, src_x))
+        self._last_src_x = src_x
+        for src_y in range(BAR_SRC_H - 1 - BAR_MARGIN_SRC, BAR_MARGIN_SRC - 1, -1):
+            value = _classify_color(self.bar_source.get_at((src_x, src_y)))
+            if value is not None:
+                return value
+        return None
 
     def update(self):
-        if self.arrow_animating:
-            # Real delta-time movement: the arrow travels at a consistent pixel/sec
-            # speed regardless of whether frames are long or short.
-            now = pygame.time.get_ticks()
-            if self._last_update_ms is None:
-                self._last_update_ms = now
-            dt_ms = min(100, max(1, now - self._last_update_ms))
+        if not self.arrow_animating:
+            return
+        # Real delta-time movement, same speed rule as the old bar:
+        # lower XAI numbers move faster.
+        now = pygame.time.get_ticks()
+        if self._last_update_ms is None:
             self._last_update_ms = now
+        dt_ms = min(100, max(1, now - self._last_update_ms))
+        self._last_update_ms = now
 
-            speed_pps = max(1, 8 - self.xai_number) * 30 * runtime_globals.UI_SCALE
-            delta = speed_pps * dt_ms / 1000.0
+        # Expressed as how long the arrow takes to cross the bar rather than a
+        # pixel rate, so it plays the same at any resolution. A low XAI is the
+        # hard roll and still sweeps fastest; the old rate left the easy end
+        # taking about five seconds per pass, which just felt stalled.
+        travel = max(1.0, float(self.arrow_max_cx - self.arrow_min_cx))
+        crossing_s = 0.55 + (max(1, min(7, self.xai_number)) - 1) * 0.15
+        speed_pps = travel / crossing_s
+        self.arrow_cx += self.arrow_dir * speed_pps * dt_ms / 1000.0
 
-            self.arrow_anim_x += self.arrow_anim_dir * delta
-            if self.arrow_anim_x <= self.arrow_anim_min:
-                self.arrow_anim_x = self.arrow_anim_min
-                self.arrow_anim_dir = 1
-            elif self.arrow_anim_x >= self.arrow_anim_max:
-                self.arrow_anim_x = self.arrow_anim_max
-                self.arrow_anim_dir = -1
-
-    def _compute_bar_structures(self):
-        yellow_width, orange_width, orange_height, red_width, red_height = self.getBars()
-        name_seed = sum(ord(c) for c in self.pet.name)
-        base_y = self.y + int(2 * runtime_globals.UI_SCALE)
-        bar_left = self.x + int(2 * runtime_globals.UI_SCALE)
-        bar_right = self.x + int(2 * runtime_globals.UI_SCALE) + self.INNER_WIDTH
-
-        rects = []
-
-        if self.pet.stage < 5:
-            total_width = red_width + orange_width + yellow_width + orange_width + red_width
-            max_x = bar_right - total_width
-            min_x = bar_left
-            offset = (name_seed % (max_x - min_x + 1)) if (max_x - min_x) > 0 else 0
-            group_x = min_x + offset
-
-            red_left_rect = pygame.Rect(group_x, base_y + self.INNER_HEIGHT - red_height, red_width, red_height)
-            orange_left_rect = pygame.Rect(red_left_rect.right, base_y + self.INNER_HEIGHT - orange_height, orange_width, orange_height)
-            yellow_rect = pygame.Rect(orange_left_rect.right, base_y, yellow_width, self.INNER_HEIGHT)
-            orange_right_rect = pygame.Rect(yellow_rect.right, base_y + self.INNER_HEIGHT - orange_height, orange_width, orange_height)
-            red_right_rect = pygame.Rect(orange_right_rect.right, base_y + self.INNER_HEIGHT - red_height, red_width, red_height)
-
-            if red_left_rect.left < bar_left:
-                clip = bar_left - red_left_rect.left
-                red_left_rect.width -= clip
-                red_left_rect.left = bar_left
-            if red_left_rect.width > 0:
-                rects.append((red_left_rect, 1))
-
-            rects.append((orange_left_rect, 2))
-            rects.append((yellow_rect, 3))
-            rects.append((orange_right_rect, 2))
-
-            if red_right_rect.right > bar_right:
-                red_right_rect.width -= (red_right_rect.right - bar_right)
-            if red_right_rect.width > 0:
-                rects.append((red_right_rect, 1))
-        else:
-            side = "left" if (name_seed % 2 == 0) else "right"
-            order = "small_first" if (name_seed % 4 < 2) else "big_first"
-
-            struct1 = {
-                "yellow": yellow_width,
-                "orange": orange_width,
-                "red": red_width
-            }
-            struct2 = {
-                "yellow": yellow_width,
-                "orange": orange_width,
-                "red": 0
-            }
-            if order == "big_first":
-                struct1, struct2 = struct2, struct1
-
-            gap = int(8 * runtime_globals.UI_SCALE)
-            total_width = (
-                struct1["yellow"] + struct1["orange"] + struct1["red"] +
-                struct2["yellow"] + struct2["orange"] + struct2["red"] +
-                gap
-            )
-            max_x = bar_right - total_width
-            min_x = bar_left
-            offset = (name_seed % (max_x - min_x + 1)) if (max_x - min_x) > 0 else 0
-            group_x = min_x + offset
-
-            if side == "left":
-                red1 = pygame.Rect(group_x, base_y + self.INNER_HEIGHT - red_height, struct1["red"], red_height)
-                orange1 = pygame.Rect(red1.right, base_y + self.INNER_HEIGHT - orange_height, struct1["orange"], orange_height)
-                yellow1 = pygame.Rect(orange1.right, base_y, struct1["yellow"], self.INNER_HEIGHT)
-            else:
-                yellow1 = pygame.Rect(group_x, base_y, struct1["yellow"], self.INNER_HEIGHT)
-                orange1 = pygame.Rect(yellow1.right, base_y + self.INNER_HEIGHT - orange_height, struct1["orange"], orange_height)
-                red1 = pygame.Rect(orange1.right, base_y + self.INNER_HEIGHT - red_height, struct1["red"], red_height)
-
-            group_x2 = (group_x + struct1["red"] + struct1["orange"] + struct1["yellow"] + gap
-                        if side == "left"
-                        else group_x + struct1["yellow"] + struct1["orange"] + struct1["red"] + gap)
-
-            if side == "left":
-                red2 = pygame.Rect(group_x2, base_y + self.INNER_HEIGHT - red_height, struct2["red"], red_height)
-                orange2 = pygame.Rect(red2.right, base_y + self.INNER_HEIGHT - orange_height, struct2["orange"], orange_height)
-                yellow2 = pygame.Rect(orange2.right, base_y, struct2["yellow"], self.INNER_HEIGHT)
-            else:
-                yellow2 = pygame.Rect(group_x2, base_y, struct2["yellow"], self.INNER_HEIGHT)
-                orange2 = pygame.Rect(yellow2.right, base_y + self.INNER_HEIGHT - orange_height, struct2["orange"], orange_height)
-                red2 = pygame.Rect(orange2.right, base_y + self.INNER_HEIGHT - red_height, struct2["red"], red_height)
-
-            if side == "left":
-                if red1.width > 0: rects.append((red1, 1))
-                if orange1.width > 0: rects.append((orange1, 2))
-                if yellow1.width > 0: rects.append((yellow1, 3))
-                if orange2.width > 0: rects.append((orange2, 2))
-                if yellow2.width > 0: rects.append((yellow2, 3))
-            else:
-                if yellow1.width > 0: rects.append((yellow1, 3))
-                if orange1.width > 0: rects.append((orange1, 2))
-                if red1.width > 0: rects.append((red1, 1))
-                if yellow2.width > 0: rects.append((yellow2, 3))
-                if orange2.width > 0: rects.append((orange2, 2))
-                if struct2["red"] > 1 and red2.width > 0:
-                    rects.append((red2, 1))
-        return rects
-
-    def _compute_bar_surfaces(self):
-        # Pre-render colored bar surfaces for each rect
-        color_map = {1: (255, 0, 0), 2: (255, 165, 0), 3: (255, 255, 0)}
-        surfaces = []
-        for rect, val in self._bar_structures_cache:
-            if rect.width > 0 and rect.height > 0:
-                surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-                pygame.draw.rect(surf, color_map[val], (0, 0, rect.width, rect.height), 0)
-                surfaces.append((surf, rect.x, rect.y))
-        return surfaces
-
-    @property
-    def structures(self):
-        self._update_cache()
-        return self._bar_structures_cache
-
-    @property
-    def bar_surfaces(self):
-        self._update_cache()
-        return self._bar_surfaces_cache
-
-    def _get_strength_from_arrow(self):
-        arrow_mid = self.arrow_anim_x + self.arrow_width // 2
-        for rect, val in self.structures:
-            if rect.left <= arrow_mid <= rect.right:
-                return val
-        return 0
+        if self.arrow_cx <= self.arrow_min_cx:
+            self.arrow_cx = float(self.arrow_min_cx)
+            self.arrow_dir = 1
+        elif self.arrow_cx >= self.arrow_max_cx:
+            self.arrow_cx = float(self.arrow_max_cx)
+            self.arrow_dir = -1
 
     def get_result(self):
-        """Get the strength result from the minigame (0-3)"""
+        """Result value (0-3): red=3, yellow=2, blue=1, no color=0."""
         return self.selected_strength if self.selected_strength is not None else 0
 
     def handle_event(self, event):
-        """Handle input events for the XAI bar minigame"""
         if not isinstance(event, tuple) or len(event) != 2:
             return False
-        
-        event_type, event_data = event
-        
-        if event_type in ("A", "LCLICK"):
-            if self.arrow_animating:
-                self.stop()
-                return True
+        event_type, _ = event
+        if event_type in ("A", "LCLICK") and self.arrow_animating:
+            self.stop()
+            return True
         return False
 
+    # ------------------------------------------------------------------
+    # Drawing
+    # ------------------------------------------------------------------
+
     def draw(self, surface):
-        # Use cached static surfaces to avoid per-frame allocations
-        border_surf, inner_surf, ext_surf, ext_height = self._static_surfaces
-        ext_y = self.y - ext_height
-        blit_with_shadow(surface, border_surf, (self.x, self.y))
-        blit_with_shadow(surface, inner_surf, (self.x + int(2 * runtime_globals.UI_SCALE), self.y + int(2 * runtime_globals.UI_SCALE)))
-        blit_with_shadow(surface, ext_surf, (self.x, ext_y))
+        blit_with_cache(surface, self.bar_sprite, (self.x, self.y))
 
-        # Draw arrow sprite at the top, centered or animating, with shadow
-        if self.arrow_animating or self.selected_strength is not None:
-            arrow_x = int(self.arrow_anim_x)
-            self._drawn_x = self.arrow_anim_x  # Snapshot: what we actually rendered this frame
-        else:
-            arrow_x = self.x + (self.WIDTH - self.arrow_width) // 2
-        arrow_y = ext_y + (ext_height - self.arrow_height) // 2
-        blit_with_shadow(surface, self.arrow_sprite, (arrow_x, arrow_y))
-
-        # Draw cached bar surfaces
-        for surf, x, y in self.bar_surfaces:
-            blit_with_shadow(surface, surf, (x, y))
-
-    def getBars(self):
-        yellow_width = int((7 + (self.pet.level / 4)) * runtime_globals.UI_SCALE)
-        orange_width = int((20 + (self.pet.level / 3)) * runtime_globals.UI_SCALE)
-        orange_height = int((self.INNER_HEIGHT * 2 / 3))
-        red_width = int((26 + (self.pet.level / 4)) * runtime_globals.UI_SCALE)
-        red_height = int((self.INNER_HEIGHT / 3))
-        return yellow_width, orange_width, orange_height, red_width, red_height
-
-    def _compute_static_surfaces(self):
-        # Pre-render static surfaces used every frame
-        border_surf = pygame.Surface((self.WIDTH, self.HEIGHT), pygame.SRCALPHA)
-        pygame.draw.rect(border_surf, (0, 0, 0), (0, 0, self.WIDTH, self.HEIGHT), 0)
-
-        inner_surf = pygame.Surface((self.INNER_WIDTH, self.INNER_HEIGHT), pygame.SRCALPHA)
-        pygame.draw.rect(inner_surf, (255, 255, 255, 200), (0, 0, self.INNER_WIDTH, self.INNER_HEIGHT), 0)
-
-        ext_height = int(30 * runtime_globals.UI_SCALE)
-        ext_surf = pygame.Surface((self.WIDTH, ext_height), pygame.SRCALPHA)
-        pygame.draw.rect(ext_surf, (0, 0, 0), (0, 0, self.WIDTH, ext_height), 0)
-        pygame.draw.rect(ext_surf, (255, 255, 255, 200), (int(2 * runtime_globals.UI_SCALE), int(2 * runtime_globals.UI_SCALE), self.INNER_WIDTH, ext_height - int(4 * runtime_globals.UI_SCALE)), 0)
-
-        return border_surf, inner_surf, ext_surf, ext_height
+        if self.arrow_sprite:
+            if self.arrow_animating or self.stopped:
+                cx = self.arrow_cx
+                self._drawn_cx = self.arrow_cx
+            else:
+                cx = (self.arrow_min_cx + self.arrow_max_cx) / 2
+            arrow_x = int(cx) - self.arrow_sprite.get_width() // 2
+            blit_with_cache(surface, self.arrow_sprite, (arrow_x, self.arrow_y))

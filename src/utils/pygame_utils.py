@@ -32,10 +32,38 @@ def get_shadow(sprite, shadow_color=(0, 0, 0, 100)):
     cached = shadow_cache.get(key)
     if cached is not None and cached.get_size() == sprite.get_size():
         return cached
-    shadow = sprite.copy()
+    if sprite.get_flags() & pygame.SRCALPHA:
+        shadow = sprite.copy()
+    else:
+        # Text from the pixel font is an 8-bit surface whose background is a
+        # colour key. Multiplying a copy of it mapped the background to the
+        # text's palette entry, so the "shadow" was a solid box drawn under
+        # the text (every shadowed label showed as a block). Taken onto an
+        # alpha surface first, the key stays transparent.
+        shadow = pygame.Surface(sprite.get_size(), pygame.SRCALPHA)
+        shadow.blit(sprite, (0, 0))
     shadow.fill(shadow_color, special_flags=pygame.BLEND_RGBA_MULT)
     shadow_cache[key] = shadow
     return shadow
+
+flip_cache = {}  # {id(surface): flipped_surface} — validated by size on retrieval
+
+def get_flipped_sprite(sprite):
+    """Return sprite mirrored horizontally, cached by object identity.
+
+    Sprites drawn facing both directions (pets on the main scene) used to be
+    re-flipped every frame; the source frames are long-lived so identity
+    caching works. Same id()-reuse guard as get_shadow: a size mismatch means
+    the cached entry belonged to a freed surface — regenerate.
+    """
+    key = id(sprite)
+    cached = flip_cache.get(key)
+    if cached is not None and cached.get_size() == sprite.get_size():
+        return cached
+    flipped = pygame.transform.flip(sprite, True, False)
+    flip_cache[key] = flipped
+    return flipped
+
 
 def blit_with_shadow(surface, sprite, pos, offset=(2, 2), shadow_color=(0, 0, 0, 100)):
     """Blit a sprite with a drop-shadow using two direct blits.
@@ -113,70 +141,106 @@ def sprite_load_percent_wh(path, percent_w=100, percent_h=100, keep_proportion=T
         new_h = target_h
     return pygame.transform.scale(img, (new_w, new_h))
 
+class LazySpriteFolder:
+    """Dict-like attack-sprite folder that loads sprites on first access.
+
+    Folders like assets/atk hold hundreds of sprites but an encounter only
+    ever uses a handful of attack ids, so eagerly loading + scaling whole
+    folders made every training/battle start pay seconds of disk work. The
+    folder is listed once; each sprite is loaded and scaled the first time
+    its id is requested and kept for subsequent lookups.
+
+    Exposes the dict surface callers actually use: .get() and truthiness.
+    """
+
+    def __init__(self, folder, target_height):
+        self._folder = folder
+        self._target_height = int(target_height)
+        self._sprites = {}
+        self._files = {}
+        # resolve_path handles Android's APP_ROOT; identity on desktop and
+        # for already-absolute module folders.
+        resolved = resolve_path(folder)
+        if os.path.isdir(resolved):
+            try:
+                for filename in os.listdir(resolved):
+                    if filename.endswith(".png"):
+                        self._files[filename[:-4]] = filename
+            except OSError as e:
+                runtime_globals.game_console.log(
+                    f"[!] Error listing sprites in {folder}: {e}")
+
+    def __bool__(self):
+        return bool(self._files)
+
+    def get(self, key, default=None):
+        key = str(key)
+        sprite = self._sprites.get(key)
+        if sprite is not None:
+            return sprite
+        filename = self._files.get(key)
+        if filename is None:
+            return default
+        try:
+            # image_load re-resolves against APP_ROOT, so pass the
+            # unresolved path to stay portable.
+            sprite = image_load(os.path.join(self._folder, filename)).convert_alpha()
+            orig_w, orig_h = sprite.get_size()
+            if orig_h > 0 and orig_h != self._target_height:
+                target_width = int(orig_w * (self._target_height / orig_h))
+                sprite = pygame.transform.scale(sprite, (target_width, self._target_height))
+        except Exception as e:
+            runtime_globals.game_console.log(
+                f"[!] Error loading sprite {filename} from {self._folder}: {e}")
+            return default
+        self._sprites[key] = sprite
+        return sprite
+
+
+# Lazy folders cached per (folder, target size); the size is part of the key
+# so a render-scale change naturally builds fresh entries.
+_sprite_folder_cache = {}
+
+
+def _lazy_sprite_folder(folder, target_height):
+    key = (folder, int(target_height))
+    inst = _sprite_folder_cache.get(key)
+    if inst is None:
+        inst = LazySpriteFolder(folder, target_height)
+        _sprite_folder_cache[key] = inst
+    return inst
+
+
+def clear_sprite_folder_cache():
+    """Drop cached attack-sprite folders (call when the render scale changes)."""
+    _sprite_folder_cache.clear()
+
+
 def load_attack_sprites():
-    attack_sprites = {}
-    # Scale to half pet height, maintaining aspect ratio
-    target_height = 24 * runtime_globals.UI_SCALE
-    # Resolve ATK_FOLDER through APP_ROOT so the listdir works on Android.
-    atk_folder = resolve_path(constants.ATK_FOLDER)
-    if not os.path.isdir(atk_folder):
-        runtime_globals.game_console.log(
-            f"[load_attack_sprites] folder missing: {atk_folder}")
-        return attack_sprites
-    for filename in os.listdir(atk_folder):
-        if filename.endswith(".png"):
-            # image_load() takes the relative path and re-resolves it
-            # against APP_ROOT, so use the unresolved path here.
-            path = os.path.join(constants.ATK_FOLDER, filename)
-            sprite = image_load(path).convert_alpha()
-            # Calculate proportional width based on target height
-            original_width = sprite.get_width()
-            original_height = sprite.get_height()
-            if original_height > 0:
-                target_width = int(original_width * (target_height / original_height))
-                sprite = pygame.transform.scale(sprite, (target_width, target_height))
-            atk_id = filename.split(".")[0]
-            attack_sprites[atk_id] = sprite
-    return attack_sprites
+    """Attack sprites from the global assets/atk folder (lazy, cached).
+
+    Half pet height, proportional width.
+    """
+    return _lazy_sprite_folder(constants.ATK_FOLDER, 24 * runtime_globals.UI_SCALE)
 
 
 def load_crit_attack_sprites():
-    """Load all sprites from the global assets/atk_crit folder.
+    """Critical-attack sprites from assets/atk_crit (lazy, cached).
 
-    Returns a dict keyed by filename stem (e.g. '30', '30_dot').
-    Callers should use _dot-aware lookup just like get_attack_sprite does:
+    Keyed by filename stem (e.g. '30', '30_dot'), displayed at 2x the normal
+    attack sprite size. Callers should use _dot-aware lookup just like
+    get_attack_sprite does:
       - Dot-format module: try f'{id}_dot' first, then f'{id}'
       - Other formats:     look up str(id) directly
     """
-    crit_sprites = {}
-    # Resolve through APP_ROOT for Android; on desktop this is a no-op.
-    folder = resolve_path(constants.ATK_CRIT_FOLDER)
-    if not os.path.isdir(folder):
-        return crit_sprites
-    target_height = 48 * runtime_globals.UI_SCALE  # 2× normal attack sprite size
-    for filename in os.listdir(folder):
-        if filename.endswith(".png"):
-            # image_load re-resolves against APP_ROOT, so feed it the
-            # relative form to stay portable.
-            path = os.path.join(constants.ATK_CRIT_FOLDER, filename)
-            try:
-                sprite = image_load(path).convert_alpha()
-                orig_w, orig_h = sprite.get_width(), sprite.get_height()
-                if orig_h > 0:
-                    target_width = int(orig_w * (target_height / orig_h))
-                    sprite = pygame.transform.scale(sprite, (target_width, target_height))
-                atk_id = filename.split(".")[0]
-                crit_sprites[atk_id] = sprite
-            except Exception as e:
-                runtime_globals.game_console.log(f"[!] Error loading crit sprite {filename}: {e}")
-    return crit_sprites
+    return _lazy_sprite_folder(constants.ATK_CRIT_FOLDER, 48 * runtime_globals.UI_SCALE)
 
 def _load_module_sprites_from_folder(module, folder_name):
     """
-    Shared loader: returns a dict of attack sprites from `<module_folder>/<folder_name>/`.
-    Loads ALL png files (both normal and _dot variants) under their exact filename stem.
-    Dot vs. non-dot selection happens at lookup time based on the pet's current sprite type.
-    Returns an empty dict if the module or folder doesn't exist.
+    Shared loader: dict-like attack sprites from `<module_folder>/<folder_name>/`
+    (lazy, cached). Keys are exact filename stems (normal and _dot variants);
+    dot vs. non-dot selection happens at lookup time based on the pet's
+    current sprite type. Falsy when the module or folder doesn't exist.
     """
     mod = get_module(module)
     if not mod:
@@ -184,36 +248,9 @@ def _load_module_sprites_from_folder(module, folder_name):
         return {}
 
     folder = os.path.join(mod.folder_path, folder_name)
-    if not os.path.exists(folder):
-        return {}
-
     # atk_crit sprites are displayed at 2× the normal attack size
     target_height = runtime_globals.PET_HEIGHT if folder_name == "atk_crit" else runtime_globals.PET_HEIGHT // 2
-
-    def _load_and_scale(path):
-        sprite = image_load(path).convert_alpha()
-        orig_w, orig_h = sprite.get_width(), sprite.get_height()
-        if orig_h > 0:
-            sprite = pygame.transform.scale(sprite, (int(orig_w * (target_height / orig_h)), target_height))
-        return sprite
-
-    result = {}
-    try:
-        for filename in os.listdir(folder):
-            if not filename.endswith(".png"):
-                continue
-            stem = filename[:-4]
-            path = os.path.join(folder, filename)
-            try:
-                result[stem] = _load_and_scale(path)
-            except Exception as e:
-                game_console.log(f"[!] Error loading sprite {filename} from {folder}: {e}")
-
-    except OSError as e:
-        game_console.log(f"[!] Error loading sprites from {folder}: {e}")
-        return {}
-
-    return result
+    return _lazy_sprite_folder(folder, target_height)
 
 
 def module_attack_sprites(module):
@@ -231,13 +268,17 @@ def module_crit_attack_sprites(module):
 def load_misc_sprites():
     global misc_sprites
     sprite_files = [
-        "Cheer.png", "Cheer_dot.png",
+        "Cheer.png", "Cheer_dot.png", "Cheer_hd.png",
         "Mad1.png", "Mad2.png",
+        "Mad1_hd.png", "Mad2_hd.png",
         "Sick1.png", "Sick2.png",
         "Sick1_dot.png", "Sick2_dot.png",
+        "Sick1_hd.png", "Sick2_hd.png",
         "Sleep1.png", "Sleep2.png",
+        "Sleep1_hd.png", "Sleep2_hd.png",
         "Poop1.png", "Poop2.png",
         "Poop1_dot.png", "Poop2_dot.png",
+        "Poop1_hd.png", "Poop2_hd.png",
         "JumboPoop1.png", "JumboPoop2.png",
         "JumboPoop1_dot.png", "JumboPoop2_dot.png",
         "Wash.png", "CallSignInverted.png", "SickInverted.png", "PoopInverted.png",
@@ -265,6 +306,24 @@ _blit_cache_calls = 0
 _last_cache_log_time = time.time()
 
 blit_cache = {}
+
+def rle_accelerate(surface):
+    """Run-length encode a large alpha surface drawn far more often than it
+    changes (a cached overlay, a border). Blitting it then skips transparent
+    runs and copies opaque ones instead of blending every pixel; the picture
+    is the same (half-transparent pixels may round one level apart). On the
+    Pi Zero 2W, whose pygame has no NEON blitters, blending one 240x240
+    overlay cost 17 ms a frame. Once blitted, the surface is encoded: fill()
+    and blits into it still work, but pygame.draw into it is an access
+    violation (pygame 2.6.1), so turn RLE off first (`set_alpha(255)`) and
+    call this again after drawing (UIManager._rebuild_master_ui_surface)."""
+    if surface is not None:
+        try:
+            surface.set_alpha(255, pygame.RLEACCEL)
+        except pygame.error:
+            pass
+    return surface
+
 
 def blit_with_cache(surface, sprite, pos):
     """

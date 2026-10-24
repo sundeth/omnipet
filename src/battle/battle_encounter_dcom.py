@@ -14,7 +14,8 @@ from battle.dcom.dcom_dialog import DComDialog
 from battle.dcom.dcom_controller import DComController
 from battle.dcom.dcom_protocol import ProtocolType
 from battle.sim.models import Digimon, BattleResult
-from battle.sim.dcom_battle_simulator import DComBattleSimulator
+from battle.sim.dcom_battle_simulator import DComBattleSimulator, pet_to_digimon
+from battle.sim import protocol_constants
 from core import runtime_globals
 
 
@@ -74,39 +75,111 @@ class BattleEncounterDCom(BattleEncounter):
     
     def _setup_simulator(self):
         """Initialize the DCom battle simulator."""
-        # Try to get controller and protocol from runtime_globals if not provided
-        if not self.dcom_controller and hasattr(runtime_globals, 'pvp_battle_data'):
-            pvp_data = runtime_globals.pvp_battle_data
-            if pvp_data and isinstance(pvp_data, dict):
+        # The connection view normally finishes the exchange before this scene
+        # opens; it leaves the battle format (and the controller, if it is
+        # still connected) in pvp_battle_data.
+        pvp_data = getattr(runtime_globals, 'pvp_battle_data', None) or {}
+        if isinstance(pvp_data, dict):
+            if not self.dcom_controller:
                 self.dcom_controller = pvp_data.get('dcom_controller')
                 self.dcom_protocol = pvp_data.get('dcom_protocol')
-                runtime_globals.game_console.log("[BattleEncounterDCom] Retrieved controller and protocol from pvp_battle_data")
-        
-        if self.dcom_controller and self.dcom_protocol:
-            self.dcom_simulator = DComBattleSimulator(self.dcom_controller, self.dcom_protocol)
-            runtime_globals.game_console.log("[BattleEncounterDCom] DCom simulator initialized")
+            self.battle_format = pvp_data.get('battle_format')
         else:
-            runtime_globals.game_console.log("[BattleEncounterDCom] WARNING: No controller/protocol available for simulator")
-    
+            self.battle_format = None
+
+        if self.dcom_controller:
+            self.dcom_simulator = DComBattleSimulator(
+                self.dcom_controller, self.dcom_protocol, self.battle_format)
+            runtime_globals.game_console.log(
+                f"[BattleEncounterDCom] Simulator ready for {self.dcom_simulator.battle_format}")
+        else:
+            runtime_globals.game_console.log(
+                "[BattleEncounterDCom] No live connection; replaying the exchange "
+                "the connection view already made")
+
+    def adopt_battle_result(self, result):
+        """Take a battle the connection view already fought.
+
+        The result is kept exactly as the exchange produced it -- device1 the
+        opponent, device2 us, the order the packets went in. The animation
+        already reads it that way: ``draw_pets`` and ``draw_enemies`` pick
+        their device label off ``is_dcom_mode``, which the scene sets before
+        calling this. Remapping here as well swapped the sides twice and put
+        every hit on the wrong pet.
+
+        (The live-controller path in calculate_combat_for_pairs does remap,
+        because nothing sets is_dcom_mode there.)
+        """
+        self.dcom_battle_result = result
+        self.global_battle_log = result
+        # A replayed exchange animates every round it holds. Five is as many as
+        # most wires ever fight, but a PenX battle repeats its five rounds
+        # until someone is out, and a real one went to round 8.
+        self.turn_limit = max(self.turn_limit, len(result.battle_log))
+        self.victory_status = "Victory" if result.winner == "device2" else "Defeat"
+        runtime_globals.game_console.log(
+            f"[BattleEncounterDCom] Adopted the exchange: {self.victory_status}, "
+            f"{len(self.global_battle_log.battle_log)} turn(s)")
+        return self.global_battle_log
+
+    def apply_exchange_hp(self, player_hp, enemy_hp):
+        """Force the HP the exchange agreed on.
+
+        A DCom battle's HP belongs to the protocol -- 5 on the DM20 and PEN20
+        wires, and whatever the two devices announced in their packets on the
+        DMX one. GameBattle otherwise fills it in from the pet's module, and
+        ``battle_global_hit_points`` is an adventure-battle setting: a DMC pet
+        was arriving with 4 HP for a fight both sides had agreed was 10, so
+        the first hit ended it.
+        """
+        if not self.battle_player:
+            return
+        player_hp = max(1, int(player_hp or 1))
+        enemy_hp = max(1, int(enemy_hp or 1))
+
+        for i in range(len(self.battle_player.team1_hp)):
+            self.battle_player.team1_hp[i] = player_hp
+            self.battle_player.team1_max_hp[i] = player_hp
+        for i in range(len(self.battle_player.team2_hp)):
+            self.battle_player.team2_hp[i] = enemy_hp
+            self.battle_player.team2_max_hp[i] = enemy_hp
+
+        self.battle_player.team1_total_hp = player_hp * len(self.battle_player.team1_hp)
+        self.battle_player.team1_max_total_hp = self.battle_player.team1_total_hp
+        self.battle_player.team2_total_hp = enemy_hp * len(self.battle_player.team2_hp)
+        self.battle_player.team2_max_total_hp = self.battle_player.team2_total_hp
+
+        if getattr(self, 'hp_bar', None):
+            self.hp_bar.set_totals(self.battle_player.team2_total_hp,
+                                   self.battle_player.team1_total_hp)
+            self.hp_bar.set_values(self.battle_player.team2_total_hp,
+                                   self.battle_player.team1_total_hp)
+
+        runtime_globals.game_console.log(
+            f"[BattleEncounterDCom] HP from the exchange: player {player_hp}, "
+            f"opponent {enemy_hp}")
+
     def calculate_combat_for_pairs(self):
         """
-        Override to run DCom battle simulation instead of standard combat.
-        This is called when battle starts (from update_charge or similar).
-        For DCom, we need to:
-        1. Get player's Digimon data
-        2. Communicate with physical device
-        3. Get opponent's Digimon data from device
-        4. Set up battle teams
-        5. Run simulation
-        6. Process results
+        Run the DCom exchange, or replay the one already made.
+
+        The connection view does the exchange itself so the serial wait does
+        not block the game loop, and hands the finished log to this scene; in
+        that case there is nothing left to do here. A live controller (the
+        in-battle DCom dialog) still runs the exchange from here.
         """
-        runtime_globals.game_console.log("[BattleEncounterDCom] === calculate_combat_for_pairs CALLED ===")
+        if self.global_battle_log is not None:
+            runtime_globals.game_console.log(
+                "[BattleEncounterDCom] Using the battle log from the exchange")
+            return
+
         runtime_globals.game_console.log("[BattleEncounterDCom] Starting DCom battle...")
-        
+
         if not self.dcom_simulator:
             runtime_globals.game_console.log("[BattleEncounterDCom] ERROR: No simulator available")
+            self.victory_status = "Error"
             return
-        
+
         # Get player's Digimon data
         player_digimon = self._get_player_digimon()
         if not player_digimon:
@@ -169,7 +242,10 @@ class BattleEncounterDCom(BattleEncounter):
                     attacker=attack.attacker,
                     defender=attack.defender,
                     hit=attack.hit,
-                    damage=attack.damage
+                    damage=attack.damage,
+                    # AttackLog.critical has no default: leaving it off here
+                    # raised a TypeError the moment a DCom battle was remapped.
+                    critical=attack.critical,
                 ))
             
             remapped_turn = TurnLog(
@@ -196,105 +272,20 @@ class BattleEncounterDCom(BattleEncounter):
         return remapped_result
 
     def _get_player_digimon(self) -> Optional[Digimon]:
+        """The packet payload for the pet fighting this battle.
+
+        Built by the shared ``pet_to_digimon``, so this path and the
+        connection view send a real device identical bytes for the same pet.
         """
-        Convert current player battle state to Digimon object for simulator.
-        Follows the same pattern as BattleEncounterVersus.
-        
-        OEM/Compatibility mode: If the pet's module battle_protocol matches the
-        device we're fighting (dcom_battle_format), send real index and version.
-        Otherwise send 0 for both (compatibility mode).
-        """
-        # Use first pet as representative
         if not self.battle_player or not self.battle_player.teams[1]:
             runtime_globals.game_console.log("[BattleEncounterDCom] No player team available")
             return None
-        
+
         first_pet = self.battle_player.teams[1][0]
-        
-        # Map attribute strings to integers
-        attr_map = {"Va": 0, "Vaccine": 0, "Da": 1, "Data": 1, "Vi": 2, "Virus": 2, "Fr": 3, "Free": 3}
-        pet_attr = getattr(first_pet, 'attribute', 'Va')
-        attribute = attr_map.get(pet_attr, 0)
-        
-        # OEM/Compatibility mode for index and version
-        index = 0
-        version = 0
-        pet_module_name = getattr(first_pet, 'module', None)
-        dcom_format = self.dcom_simulator.battle_format if self.dcom_simulator else None
-        if pet_module_name and dcom_format:
-            try:
-                from utils.module_utils import get_module
-                pet_module = get_module(pet_module_name)
-                if pet_module and getattr(pet_module, 'battle_protocol', '') == dcom_format:
-                    index = getattr(first_pet, 'index', 0)
-                    version = getattr(first_pet, 'version', 0)
-                    # Clamp version to the valid range for each protocol; out-of-range = special, send 0
-                    _version_ranges = {
-                        'DM': (1, 5), 'DM20': (1, 5), 'DMX': (1, 6), 'DMC': (1, 5),
-                        'PEN': (0, 5), 'PEN20': (1, 4), 'PENZ': (0, 5), 'PENC': (0, 7),
-                    }
-                    v_min, v_max = _version_ranges.get(dcom_format, (1, 5))
-                    if version < v_min or version > v_max:
-                        version = 0
-            except Exception:
-                pass
-        
-        # Determine OEM mode (index/version were set above; if non-zero, it's OEM)
-        oem_mode = index != 0 or version != 0
-        
-        # Omnipet uses 1-based attack sprite IDs (0=no sprite),
-        # real devices use 0-based IDs, so subtract 1 before sending.
-        # DMX/PENZ use 3 shots: atk_main=weak, atk_alt=strong, atk_alt_2=mega
-        if dcom_format in ('DMX', 'PENZ'):
-            if oem_mode:
-                shot_w = max(0, getattr(first_pet, 'atk_main', 1) - 1)
-                shot_s = max(0, getattr(first_pet, 'atk_alt', 1) - 1)
-                shot_m = max(0, getattr(first_pet, 'atk_alt_2', 1) - 1)
-            else:
-                raw_w = getattr(first_pet, 'atk_main', 0)
-                raw_s = getattr(first_pet, 'atk_alt', 0)
-                raw_m = getattr(first_pet, 'atk_alt_2', 0)
-                shot_w = max(0, raw_w - 1) if raw_w > 0 else 0
-                shot_s = max(0, raw_s - 1) if raw_s > 0 else 0
-                shot_m = max(0, raw_m - 1) if raw_m > 0 else 0
-            shot1 = shot_s  # shot1 = strong
-            shot2 = shot_w  # shot2 = weak
-        else:
-            shot1 = max(0, getattr(first_pet, 'atk_main', 1) - 1)
-            shot2 = max(0, getattr(first_pet, 'atk_alt', 1) - 1)
-            shot_m = 0
-        
-        # Create Digimon object from pet data
-        # Note: Shot values will be capped by the simulator based on protocol (DM20 uses 6-bit = 0-63)
-        digimon = Digimon(
-            name=getattr(first_pet, 'name', 'Player'),
-            order=0,
-            traited=1 if getattr(first_pet, 'traited', False) else 0,
-            egg_shake=1 if getattr(first_pet, 'shook', False) else 0,
-            index=index,
-            hp=getattr(first_pet, 'hp', 100),
-            attribute=attribute,
-            power=getattr(first_pet, 'power', 50) if hasattr(first_pet, 'power') else 50,
-            handicap=0,
-            buff=0,
-            mini_game=3,  # Strength bonus
-            level=getattr(first_pet, 'level', 1),
-            stage=getattr(first_pet, 'stage', 3),
-            sick=1 if getattr(first_pet, 'sick', False) else 0,
-            shot1=shot1,
-            shot2=shot2,
-            tag_meter=2
-        )
-        
-        # Set version for packet generators (DM20Device/DMXDevice read this)
-        digimon.version = version
-        # Store medium shot for DMX/PENZ protocol
-        digimon.dmx_shot_m = shot_m
-        
-        runtime_globals.game_console.log(f"[BattleEncounterDCom] Player Digimon: {digimon.name}, HP={digimon.hp}, Power={digimon.power}, index={index}, version={version}")
-        
-        return digimon
-    
+        battle_format = self.dcom_simulator.battle_format if self.dcom_simulator else 'DM20'
+        return pet_to_digimon(first_pet, battle_format,
+                              self.get_minigame_strength())
+
     def _setup_teams_from_battle_result(self):
         """
         Set up battle teams after getting opponent data from device.
@@ -320,18 +311,26 @@ class BattleEncounterDCom(BattleEncounter):
         attr_int_to_str = {0: "Va", 1: "Da", 2: "Vi", 3: "Fr"}
         opp_attribute = attr_int_to_str.get(opp.attribute, "Va") if opp else "Va"
         
-        # Create enemy object from opponent data
-        # Opponent shot values from device are 0-based, convert to 1-based for Omnipet
+        # Create enemy object from opponent data. **The sprite ids and the
+        # module both come from `pvp_payload`**, which is the other place an
+        # opponent is built and was the only one getting them right: this
+        # had `atk_main`/`atk_alt` the wrong way round, so a device's
+        # strongest shot drew its ordinary sprite, and it handed the enemy
+        # the PLAYER's module instead of the one reproducing the device.
+        from battle.dcom.pvp_payload import (opponent_attack_sprites,
+                                             opponent_module)
+        atk_main, atk_alt, atk_alt_2 = (
+            opponent_attack_sprites(opp, self.battle_format) if opp else (1, 1, 0))
         enemy = GameEnemy(
             name=opponent_status.name,
-            power=opp.power if opp else opponent_status.power,
+            power=opp.power if opp else 1,
             attribute=opp_attribute,
             area=0,
             round=0,
             version=opp.version if opp and hasattr(opp, 'version') else 1,
-            atk_main=(opp.shot1 + 1) if opp else 1,
-            atk_alt=(opp.shot2 + 1) if opp else 1,
-            atk_alt_2=0,
+            atk_main=atk_main,
+            atk_alt=atk_alt,
+            atk_alt_2=atk_alt_2,
             handicap=0,
             id=opp.index if opp else 0,
             stage=opp.stage if opp else 3,
@@ -346,7 +345,15 @@ class BattleEncounterDCom(BattleEncounter):
         enemy.sick = opp.sick if opp else 0
         enemy.traited = bool(opp.traited) if opp else False
         enemy.shook = bool(opp.egg_shake) if opp else False
-        enemy.module = self.module.name
+        # The device's module, not the player's -- and the roster that named
+        # it, where one did, so a crossover edition draws its own shots.
+        enemy.module = opponent_module(opp, self.battle_format,
+                                       self.module.name) if opp else self.module.name
+        enemy.attack_sprite_module = getattr(opp, "source_module", None) if opp else None
+        # An iC side's own Max Reliability flag, None elsewhere.
+        enemy.ic_max_reliability = getattr(opp, "ic_max_reliability", None) if opp else None
+        enemy.ic_weapon = getattr(opp, "ic_weapon", None) if opp else None
+        enemy.digisoul = getattr(opp, "digisoul", None) if opp else None
 
         # Load sprite for the enemy
         enemy.load_sprite(enemy.module, boss=False)
@@ -356,10 +363,11 @@ class BattleEncounterDCom(BattleEncounter):
         self.battle_player = GameBattle(my_pets, [enemy], 0, 0, self.module)
         self.enemies = [enemy]
         
-        # Override HP values with fixed HP from protocol (DM20 uses 5 HP)
-        # The GameBattle constructor computes HP from pet objects, but for DCom
-        # we need to use the protocol's fixed HP value
-        fixed_hp = self.dcom_simulator.get_initial_hp() if self.dcom_simulator else 5
+        # Override HP with the wire's. GameBattle computes it from the pet
+        # objects, but a connection battle is fought with the HP the two
+        # devices agreed on -- see DComBattleSimulator.get_initial_hp.
+        fixed_hp = (self.dcom_simulator.get_initial_hp()
+                    if self.dcom_simulator else protocol_constants.DM20.FIXED_HP)
         for i in range(len(self.battle_player.team1_hp)):
             self.battle_player.team1_hp[i] = fixed_hp
             self.battle_player.team1_max_hp[i] = fixed_hp
@@ -406,19 +414,39 @@ class BattleEncounterDCom(BattleEncounter):
         runtime_globals.game_sound.play("happy" if self.victory_status == "Victory" else "fail")
         
         # Update PvP counters (same as parent)
+        connection_results = []
         for i, pet in enumerate(self.battle_player.team1):
             try:
-                pet.pvp_battles += 1
                 if hasattr(self.battle_player, 'winners') and i < len(self.battle_player.winners):
                     winner = self.battle_player.winners[i]
                     local_won = (winner == 'team1') or (self.victory_status == 'Victory')
                 else:
                     local_won = (self.victory_status == 'Victory')
-                if local_won:
-                    pet.pvp_wins += 1
+                # A battle with a device counts like any other: the battle
+                # and win counts, the cost (the override once skipped it,
+                # making DCom free), Reliability, defeat tags, G-Cells and
+                # injury (GamePet.finish_versus), plus the PvP counts.
+                team2 = getattr(self.battle_player, 'team2', None) or []
+                pet.finish_versus(local_won, opponent=team2[i] if i < len(team2) else None,
+                                  connection=True)
+                connection_results.append((pet, local_won))
                 runtime_globals.game_console.log(f"[PvP] Pet {getattr(pet,'name',i)} pvp_battles={pet.pvp_battles} pvp_wins={pet.pvp_wins}")
             except Exception as e:
                 runtime_globals.game_console.log(f"[PvP] Error updating pet PvP counters: {e}")
+
+        # Connect Points and the modules' "connection" events, with the
+        # device the other side announced.
+        try:
+            from utils.event_utils import after_connection
+            pvp_data = getattr(runtime_globals, 'pvp_battle_data', None) or {}
+            opponent = getattr(self.dcom_simulator, 'opponent_device_version', None)
+            if opponent is None:
+                opponent = pvp_data.get('opponent_device_version')
+            battle_format = (getattr(self.dcom_simulator, 'battle_format', None)
+                             or getattr(self, 'battle_format', None) or pvp_data.get('battle_format'))
+            after_connection(connection_results, opponent, battle_format=battle_format)
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[Events] connection trigger failed: {exc}")
         
         # PvP-type unlocks (same as parent)
         try:
@@ -441,21 +469,30 @@ class BattleEncounterDCom(BattleEncounter):
             try:
                 module_unlocks = getattr(self.module, 'unlocks', []) or []
                 
-                # Versus-type unlocks: triggered by any OEM DCom battle
-                for unlock in module_unlocks:
-                    if unlock.get('type') == 'versus':
-                        name = unlock.get('name')
-                        if name:
-                            ver_req = unlock.get('version', None)
-                            if ver_req is not None:
-                                pet_version = getattr(self.battle_player.team1[0], 'version', 0) if self.battle_player.team1 else 0
-                                if pet_version == ver_req:
-                                    unlock_item(self.module.name, 'versus', name)
-                                    runtime_globals.game_console.log(f"[DCom OEM] Unlocked versus: {name}")
-                            else:
-                                unlock_item(self.module.name, 'versus', name)
-                                runtime_globals.game_console.log(f"[DCom OEM] Unlocked versus: {name}")
-                
+                # Versus-type unlocks: triggered by any OEM DCom battle,
+                # counted where a record asks for several (utils_unlocks).
+                pet = self.battle_player.team1[0] if self.battle_player.team1 else None
+                pet_version = getattr(pet, 'version', 0) if pet else 0
+                # The hardware the pet was hatched on, and what the other
+                # device announced in its battle packets. The connection view
+                # runs the exchange, so the version the toy announced arrives
+                # with the battle data rather than off a live simulator.
+                own = {"device_version": getattr(pet, 'device_version', pet_version) if pet else 0,
+                       "version": pet_version, "name": getattr(pet, 'name', None)}
+                # The opponent as the packets named it (a roster index the
+                # module resolves; a toy's own species otherwise unknown).
+                foe = next((e for e in (self.battle_player.team2 or []) if e), None)
+                opp = getattr(self.dcom_simulator, 'opponent_device_version', None)
+                if opp is None:
+                    pvp_data = getattr(runtime_globals, 'pvp_battle_data', None) or {}
+                    opp = pvp_data.get('opponent_device_version')
+                from utils.utils_unlocks import record_connection_battle
+                record_connection_battle(
+                    self.module.name,
+                    [(own, {"device_version": opp, "version": None, "name": getattr(foe, 'name', None)},
+                      self.victory_status == "Victory")],
+                    self.battle_format)
+
                 # Battle-type unlocks: triggered by OEM DCom victories
                 if self.victory_status == "Victory":
                     if self.module.name not in game_globals.total_victories:
@@ -512,6 +549,11 @@ class BattleEncounterDCom(BattleEncounter):
         """
         Override event handling to add DCom-specific interactions.
         """
+        # DCom-specific controls run before the base handler, so lock them here
+        # as well to keep READY/alert non-skippable.
+        if self.phase == "alert":
+            return
+
         # Handle DCom dialog events if active
         if self.dcom_dialog and hasattr(self.dcom_dialog, 'handle_event'):
             if self.dcom_dialog.handle_event(event):
@@ -535,8 +577,11 @@ class BattleEncounterDCom(BattleEncounter):
         """
         Clean up DCom resources.
         """
-        if self.dcom_controller:
+        # Reached during interpreter teardown too, where the attribute may
+        # never have been set.
+        controller = getattr(self, 'dcom_controller', None)
+        if controller:
             try:
-                self.dcom_controller.disconnect()
-            except:
+                controller.disconnect()
+            except Exception:
                 pass

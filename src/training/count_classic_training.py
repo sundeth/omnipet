@@ -12,15 +12,18 @@ from ui.ui_manager import UIManager
 from battle import combat_constants
 import core.constants as constants
 from models.game_module import sprite_load
-from utils.pygame_utils import blit_with_shadow
+from utils.pygame_utils import blit_with_cache
 from ui.minigames.count_match_classic import CountMatchClassic
-from utils.scene_utils import change_scene
+from ui.minigames.minigame_session import minigame_result
 
 
 class CountMatchClassicTraining(Training):
     """
     Count Match Classic training mode where players build up strength by shaking.
-    Uses the CountMatchClassic minigame (shake to charge 0-14).
+    Uses the CountMatchClassic minigame (shake to charge 0-40), graded on
+    the battle charge's bands (`minigame_result`): one meter, one grading
+    (owner, 2026-10-17; training used the old 0-14 bands, so 20 shakes
+    were EXCELLENT here and BAD in a battle).
     """
 
     def __init__(self, ui_manager: UIManager) -> None:
@@ -108,20 +111,21 @@ class CountMatchClassicTraining(Training):
 
             self.attack_positions = new_positions
 
+    def grade(self):
+        """The charge's 0-3 grade, as a battle charge grades the same meter."""
+        if self.minigame:
+            self.strength = self.minigame.strength
+        return minigame_result("Count Match Classic", strength=self.strength)
+
     def check_victory(self):
         """Apply training results and return to game."""
-        if self.minigame:
-            self.strength = self.minigame.strength
-        return self.strength > 10
+        return self.grade() > 0
 
     def check_and_award_trophies(self):
-        """Award trophy if strength reaches maximum (14)"""
-        if self.minigame:
-            self.strength = self.minigame.strength
-
-        if self.strength == 14:
+        """Award a trophy for an Excellent charge (a full meter)."""
+        if self.grade() == 3:
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Count Match Classic training perfect score achieved! Trophy awarded.")
 
     def draw_charge(self, surface):
@@ -133,13 +137,16 @@ class CountMatchClassicTraining(Training):
     def handle_event(self, event):
         """Forward input events to the minigame."""
         event_type, event_data = event
+
+        if self.phase == "alert":
+            return
         
         if self.phase == "charge" and self.minigame and self.minigame.handle_event(event):
             return
-        
-        if event_type == "B" and self.phase == "alert":
-            runtime_globals.game_sound.play("cancel")
-            change_scene("game")
+
+        if self.phase == "charge" and event_type == "B":
+            # B (and the EXIT button, which sends it) leaves, as in Dummy.
+            self.quit_charge()
         elif self.phase in ["wait_attack", "attack_move", "impact"] and event_type in ["B", "START"]:
             # Skip to result phase
             runtime_globals.game_sound.play("cancel")
@@ -160,44 +167,36 @@ class CountMatchClassicTraining(Training):
             else:
                 self.draw_pets(surface, PetFrame.ATK1)
         else:
-            blit_with_shadow(surface, self.bag1, (int(50 * runtime_globals.UI_SCALE), runtime_globals.SCREEN_HEIGHT // 2 - self.bag1.get_height() // 2))
+            blit_with_cache(surface, self.bag1, (int(50 * runtime_globals.UI_SCALE), runtime_globals.SCREEN_HEIGHT // 2 - self.bag1.get_height() // 2))
 
         for sprite, (x, y) in self.attack_positions:
-            blit_with_shadow(surface, sprite, (int(x), int(y)))
+            blit_with_cache(surface, sprite, (int(x), int(y)))
 
     def draw_result(self, surface):
-        if self.minigame:
-            self.strength = self.minigame.strength
+        grade = self.grade()
 
         result_img = None
-        if 10 <= self.strength < 14:
+        if grade in (1, 2):
             result_img = self.bag2
-        elif self.strength < 10:
+        elif grade == 0:
             result_img = self.bag1
 
         if self.frame_counter < 30:
             if result_img:
                 x = int(50 * runtime_globals.UI_SCALE)
                 y = runtime_globals.SCREEN_HEIGHT // 2 - result_img.get_height() // 2
-                blit_with_shadow(surface, result_img, (x, y))
+                blit_with_cache(surface, result_img, (x, y))
         else:
             # Use AnimatedSprite component with predefined result animations
             if not self.animated_sprite.is_animation_playing():
-                duration = combat_constants.RESULT_SCREEN_FRAMES / constants.FRAME_RATE
-                
-                # Choose which result animation to play
-                if self.strength < 10:
-                    self.animated_sprite.play_bad(duration)
-                elif self.strength < 14:
-                    self.animated_sprite.play_great(duration)
-                else:
-                    self.animated_sprite.play_excellent(duration)
+                # The banner of the grade paid (grade 1 used to read GREAT).
+                self.play_grade_banner(grade)
             
             # Draw the animated sprite
             self.animated_sprite.draw(surface)
 
             # Trophy notification on max (draw on top of animated sprite)
-            if self.strength >= 14:
+            if grade == 3:
                 self.draw_trophy_notification(surface)
 
     def prepare_attacks(self):
@@ -233,12 +232,5 @@ class CountMatchClassicTraining(Training):
                 self.attack_positions.append((scaled_sprite, (x, center_y - scaled_sprite.get_height() // 2)))
 
     def get_attack_count(self):
-        """Returns the number of attacks based on strength."""
-        if self.minigame:
-            self.strength = self.minigame.strength
-        if self.strength < 10:
-            return 1
-        elif self.strength < 14:
-            return 2
-        else:
-            return 3
+        """The number of attacks: the charge's grade."""
+        return self.grade()

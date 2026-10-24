@@ -262,10 +262,17 @@ class Grid(UIComponent):
             surface.fill(self.background_color)
             
         current_items = self.get_current_page_items()
-        
+
         # Get UI scale factor
         ui_scale = self.manager.ui_scale if self.manager else 1.0
-        
+
+        # Item captions (egg names, device names) use the ordinary text size —
+        # they were drawn two thirds of that and were barely legible. The
+        # sprite area reserves the font's real height so the taller text does
+        # not clip against the bottom of the cell.
+        caption_font = self.get_font("text") if self.manager else None
+        caption_height = caption_font.get_height() if caption_font else int(16 * ui_scale)
+
         # Draw grid cells
         for row in range(self.rows):
             for col in range(self.columns):
@@ -310,7 +317,7 @@ class Grid(UIComponent):
                         # Reserve space for text if it exists (in scaled pixels)
                         available_height = int(self.cell_height * ui_scale)
                         if item.text:
-                            available_height -= int(16 * ui_scale)  # Reserve space for text at bottom
+                            available_height -= caption_height  # Reserve space for text at bottom
                         
                         # Calculate scaling factors for width and height (scaled dimensions)
                         scale_x = (int((self.cell_width - 4) * ui_scale)) / original_width  # -4 for padding
@@ -341,9 +348,8 @@ class Grid(UIComponent):
                     
                     # Draw text if available (below sprite or centered if no sprite)
                     if item.text and self.manager:
-                        # Get font for text rendering (scaled)
-                        font = self.get_font("text", custom_size=int(12 * ui_scale))
-                        
+                        font = caption_font
+
                         # Calculate available text width (scaled)
                         available_text_width = int((self.cell_width - 4) * ui_scale)  # -4 for padding
                         

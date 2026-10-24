@@ -16,6 +16,7 @@ from ui.components.reward_popup_ui import RewardPopupUI
 from ui.ui_constants import BASE_RESOLUTION
 from ui.windows.window_background import WindowBackground
 from core import game_globals, runtime_globals
+import core.constants as constants
 from utils.scene_utils import change_scene
 from models.game_quest import QuestStatus
 
@@ -124,12 +125,22 @@ class SceneLibrary:
         )
         self.ui_manager.add_component(self.settings_button)
         
-        # EXIT button (text)
-        exit_x = settings_x + button_width + button_spacing
-        self.exit_button = Button(
-            exit_x, button_y, button_width, button_height,
-            "EXIT", self._on_exit
+        # Collection button (takes the old EXIT slot; B still exits, and the
+        # small back arrow next to the title covers touch users)
+        collection_x = settings_x + button_width + button_spacing
+        self.collection_button = Button(
+            collection_x, button_y, button_width, button_height,
+            "", self._on_collection,
+            decorators=["Library_Collection"]
         )
+        self.ui_manager.add_component(self.collection_button)
+
+        # EXIT button next to the title (same style/placement as the Digidex)
+        exit_button_width = 50
+        exit_button_height = 20
+        self.exit_button = Button(ui_width - exit_button_width - 5, 5,
+                                  exit_button_width, exit_button_height,
+                                  "EXIT", self._on_exit)
         self.ui_manager.add_component(self.exit_button)
         
         # Reward popup (centered, overlays everything)
@@ -157,6 +168,13 @@ class SceneLibrary:
     
     def update(self) -> None:
         """Updates the library scene."""
+        # The Library left open past midnight shows the new day's quests
+        # (checked once a second, as the main scene does).
+        self._frames = getattr(self, "_frames", 0) + 1
+        if self._frames % constants.FRAME_RATE == 0:
+            from utils.quest_event_utils import ensure_daily_quests, roll_over_day
+            if roll_over_day():
+                ensure_daily_quests()
         # Update quest panels if quests have changed
         self._update_quest_panels()
         
@@ -198,6 +216,11 @@ class SceneLibrary:
         """Handle Settings button press."""
         runtime_globals.game_sound.play("menu")
         change_scene("settings")
+
+    def _on_collection(self):
+        """Handle Collection (CARDS) button press."""
+        runtime_globals.game_sound.play("menu")
+        change_scene("collection")
     
     def _on_exit(self):
         """Handle EXIT button press."""

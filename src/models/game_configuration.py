@@ -70,8 +70,15 @@ class GameConfiguration:
         self.current_system = self._detect_system()
         
         # Display settings
+        # screen_width/height = the internal *render resolution* (the canvas the
+        # game draws to; drives UI scaling).  window_width/height = the size of
+        # the OS window the canvas is scaled into.  They are decoupled: in
+        # windowed mode the player can pick a window size different from the
+        # render resolution, and the canvas is scaled to fit.
         self.screen_width = 240
         self.screen_height = 240
+        self.window_width = 240
+        self.window_height = 240
         self.fullscreen = False
         self.base_resolution_width = 240
         self.base_resolution_height = 240
@@ -177,6 +184,11 @@ class GameConfiguration:
 
         self.base_resolution_width = self.screen_width
         self.base_resolution_height = self.screen_height
+
+        # Default the OS window to match the render resolution (1:1) until the
+        # player overrides it via the Window Size setting.
+        self.window_width = self.screen_width
+        self.window_height = self.screen_height
     
     def adjust_proportions(self):
         """
@@ -241,13 +253,61 @@ class GameConfiguration:
         # Update configuration
         self.screen_width = new_width
         self.screen_height = new_height
-    
+
+    def compute_base_resolution(self, window_w, window_h):
+        """Return the 1x internal render resolution for a given output window.
+
+        Keeps the window's aspect ratio with neither side below 240 so a
+        non-square window (e.g. 600x500) is not stretched from a square
+        240x240 canvas — instead it picks the closest proportional values to
+        240x240 that are not smaller than 240 on either axis.
+        """
+        BASE = 240
+        if not window_w or not window_h or window_w <= 0 or window_h <= 0:
+            return BASE, BASE
+        aspect = window_w / window_h
+        if aspect > 1:
+            # Landscape — fix height at the base, derive width.
+            h = BASE
+            w = int(round(h * aspect))
+            if w < BASE:
+                w = BASE
+                h = int(round(w / aspect))
+        elif aspect < 1:
+            # Portrait — fix width at the base, derive height.
+            w = BASE
+            h = int(round(w / aspect))
+            if h < BASE:
+                h = BASE
+                w = int(round(h * aspect))
+        else:
+            w = h = BASE
+        return w, h
+
+    def recompute_internal_resolution(self):
+        """Recompute the internal render resolution (screen_width/height) from
+        the current window size and the 1x-4x render multiplier.
+
+        The 1x base is proportional to the window (see compute_base_resolution)
+        and the multiplier scales it up.  Stored back into base_resolution_*
+        and screen_* so the rest of the engine keeps using the same fields.
+        """
+        bw, bh = self.compute_base_resolution(self.window_width, self.window_height)
+        self.base_resolution_width = bw
+        self.base_resolution_height = bh
+        mult = max(1, min(4, int(round(self.resolution_multiplyer or 1))))
+        self.resolution_multiplyer = mult
+        self.screen_width = bw * mult
+        self.screen_height = bh * mult
+
     def to_dict(self) -> dict:
         """Convert configuration to dictionary for saving."""
         return {
             "current_system": self.current_system,
             "screen_width": self.screen_width,
             "screen_height": self.screen_height,
+            "window_width": self.window_width,
+            "window_height": self.window_height,
             "fullscreen": self.fullscreen,
             "frame_rate": self.frame_rate,
             "max_pets": self.max_pets,
@@ -269,6 +329,7 @@ class GameConfiguration:
             "configured_input_type": self.configured_input_type,
             "base_resolution_width": self.base_resolution_width,
             "base_resolution_height": self.base_resolution_height,
+            "resolution_multiplyer": self.resolution_multiplyer,
             "resolution_multiplyer_max": self.resolution_multiplyer_max,
         }
     
@@ -287,7 +348,15 @@ class GameConfiguration:
                     self.joystick_map = {int(k): v for k, v in value.items()}
                 else:
                     setattr(self, key, value)
-    
+
+        # Backfill the window size for configs saved before the setting
+        # existed, or if it came through as an invalid value — default it to
+        # the render resolution (1:1).
+        if "window_width" not in data or not getattr(self, "window_width", 0):
+            self.window_width = self.screen_width
+        if "window_height" not in data or not getattr(self, "window_height", 0):
+            self.window_height = self.screen_height
+
     def get_keyboard_pygame_map(self) -> dict:
         """Get keyboard map with pygame key constants as keys.
         Returns: {pygame_key_constant: action_name}

@@ -15,16 +15,26 @@ from ui.windows.window_background import WindowBackground
 from ui.windows.window_clock import WindowClock
 from ui.windows.window_mainmenu import WindowMenu
 from core import game_globals, runtime_globals
+from utils import ailments
 import core.constants as constants
 from models.game_evolution_entity import GameEvolutionEntity
 from utils.pet_utils import all_pets_hatched, distribute_pets_evenly, draw_pet_outline, get_selected_pets
-from utils.pygame_utils import blit_with_cache, get_font
+from utils.pygame_utils import blit_with_cache, get_flipped_sprite, get_font
+from utils.sprite_utils import right_facing
 from utils.scene_utils import change_scene
 from utils.inventory_utils import add_to_inventory, get_item_by_name
 from utils.module_utils import get_module
-from utils.quest_event_utils import generate_daily_quests, get_hourly_random_event
+from utils.quest_event_utils import ensure_daily_quests, get_hourly_random_event, roll_over_day
 from utils.inventory_utils import add_to_inventory
 from utils.asset_utils import image_load
+from utils import accessory_utils
+from core import pet_stats
+
+#: The evolution cutscene (scenes.scene_evolution) was an experimental 0.9.x
+#: preview and is not wired in: an evolution plays its jingle and swaps the
+#: sprite in place, and nothing sets runtime_globals.evolution_pet. Kept off
+#: so start_evolution_sequence's hard-coded demo can never run.
+EVOLUTION_CUTSCENE = False
 
 #=====================================================================
 # SceneMainGame
@@ -33,6 +43,9 @@ class SceneMainGame:
     """
     Handles the main game scene, including pets, menu navigation, and interactions.
     """
+
+    #: Input that is no press: it answers no call (handle_event).
+    PASSIVE_INPUTS = frozenset(("MOUSE_MOTION", "DRAG_START", "DRAG_MOTION", "DRAG_END", "SCROLL"))
 
     def __init__(self) -> None:
         """
@@ -44,6 +57,8 @@ class SceneMainGame:
         self.fade_out_timer = 1800
         self.selection_mode = "menu"
         self.pet_selection_index = 0
+        # Pet under the mouse cursor (mouse mode only), for the hover outline.
+        self.hovered_pet_index = -1
         self.fade_alpha = 0
         self.lock_inputs = False
         self.lock_updates = False
@@ -60,13 +75,9 @@ class SceneMainGame:
         self._hearts_cache = {}
         self._fade_overlay_cache = None  # Cache fade overlay surface
 
-        today = datetime.date.today()
-        if game_globals.xai_date < today:
-            game_globals.xai = random.randint(1, 7)
-            game_globals.xai_date = today
-            # Reset daily quests when day changes
-            game_globals.quests = []
-            runtime_globals.game_console.log(f"[SceneMainGame] New day detected, XAI set to {game_globals.xai}, quests reset")
+        # A new day draws the XAI number again and drops yesterday's quests;
+        # also checked once a second in update().
+        roll_over_day()
 
         self.food_anims = {}  # {pet_index: [frames]} for animated food sprites
         self.load()
@@ -74,11 +85,7 @@ class SceneMainGame:
         self.frame_counter = 0  # Tracks frames for time updates
         # Ensure the global last-input frame is synced when the scene is created
         runtime_globals.last_input_frame = self.frame_counter
-        self._static_last_frame = 0
-        self.last_menu_index = -1
-        self.cached_static_surface = None
         self._screensaver_cache = None
-        self._screensaver_cache_last_frame = 0
         # Screensaver rendering caches (create fonts/sprites once)
         from utils.asset_utils import font_load
         try:
@@ -93,14 +100,17 @@ class SceneMainGame:
             self._ss_call_font = font_load(TEXT_FONT, int(28 * runtime_globals.UI_SCALE))
             self._ss_poop_font = font_load(TEXT_FONT, int(24 * runtime_globals.UI_SCALE))
 
-        # Cached sprites (pulled lazily from main menu / runtime globals)
-        self._ss_call_sprite = None
-        self._ss_poop_sprite = None
-        # Track state used in screensaver to allow immediate cache invalidation
-        self._ss_last_pet_alert = bool(getattr(runtime_globals, 'pet_alert', False))
-        self._ss_last_poop_count = len(game_globals.poop_list)
-        # Track sick state for cache invalidation (show sick icon if any pet is sick)
-        self._ss_last_sick_flag = any(p.sick > 0 for p in game_globals.pet_list)
+        # Latched screensaver alert flags. Alerts can only be cleared through
+        # the menus, which dismisses the screensaver — so once a flag latches
+        # True while the screensaver is up, we stop re-validating it. The
+        # flags reset on every screensaver entry and OFF→ON transitions are
+        # polled about once per second (not per frame).
+        self._ss_active = False
+        self._ss_show_alert = False
+        self._ss_show_poop = False
+        self._ss_show_sick = False
+        self._ss_last_check_frame = 0
+        self._ss_time_str = ""
 
         # Screensaver position randomizer: change position every minute (frame-based)
         self._ss_position = (0, 0)  # offset from center (x_offset, y_offset)
@@ -114,14 +124,19 @@ class SceneMainGame:
         self.event_gift_timer = 0  # Timer for gift animation phases
         self.event_sound_played = False  # Track if alert sound was played
 
+        # A Friend just won in a special encounter comes back to the main
+        # screen to show itself off. It is a throwaway pet drawn for a second,
+        # deliberately NOT part of the party.
+        self.friend_show = None
+        self.friend_show_frames = 0
+
         # Cached event sprites to avoid loading/scaling every frame
         self.event_sprites = {
             'alert': None,
             'gift': None
         }
 
-        if game_globals.quests is None or len(game_globals.quests) == 0:
-            game_globals.quests = generate_daily_quests()
+        ensure_daily_quests()
 
         # Initialize event timer if not set
         if game_globals.event_time is None:
@@ -137,6 +152,10 @@ class SceneMainGame:
 
         # Increment the frame counter
         self.frame_counter += 1
+        # A game left on this screen past midnight starts the new day here,
+        # not only when the scene is next rebuilt (once a second).
+        if self.frame_counter % constants.FRAME_RATE == 0 and roll_over_day():
+            ensure_daily_quests()
         # Ensure last_input_frame exists (use frames to avoid frequent time.time() calls)
         if not hasattr(runtime_globals, 'last_input_frame'):
             runtime_globals.last_input_frame = self.frame_counter
@@ -162,16 +181,29 @@ class SceneMainGame:
         # Update event system
         self.update_events()
 
+        # Show off a Friend just won in a special encounter
+        self.update_friend_celebration()
+
         # Check evolution start
         self.check_evolution_start()
+
+        # Track the pet under the mouse cursor for the hover outline
+        # (mouse mode only -- touch has no hover, GPIO/keyboard use the
+        # pet-selection highlight instead).
+        if runtime_globals.INPUT_MODE == runtime_globals.MOUSE_MODE:
+            self.hovered_pet_index = self.get_pet_index_at(
+                runtime_globals.game_input.get_mouse_position())
+        elif self.hovered_pet_index != -1:
+            self.hovered_pet_index = -1
 
         # Update background and game messages
         self.background.update()
         runtime_globals.game_message.update()
 
     def check_evolution_start(self):
-        """Begins evolution sequence when a pet is ready to evolve."""
-        if runtime_globals.evolution_pet:
+        """Begins evolution sequence when a pet is ready to evolve (never:
+        see EVOLUTION_CUTSCENE)."""
+        if EVOLUTION_CUTSCENE and runtime_globals.evolution_pet:
             # Update last input frame so screensaver will dismiss at next draw
             runtime_globals.last_input_frame = self.frame_counter
             self.start_evolution_sequence()
@@ -241,6 +273,11 @@ class SceneMainGame:
             self.cleaning_x = runtime_globals.SCREEN_WIDTH
             runtime_globals.game_sound.play("happy")
             for pet in game_globals.pet_list:
+                # The iC Reliability penalty is per pair accumulated since
+                # the last flush, so cleaning begins a new episode.
+                pet.unflushed_poops = 0
+                # Cleaned in time: no poop costs a care mistake now.
+                pet.poop_mistake_timers = []
                 module = get_module(pet.module)
                 if module.care_flush_disturbance_sleep:
                     pet.check_disturbed_sleep()
@@ -248,33 +285,64 @@ class SceneMainGame:
                     pet.set_state("happy2")
             runtime_globals.game_console.log("[SceneMainGame] Cleaning complete.")
 
+    def update_friend_celebration(self) -> None:
+        """Show a newly won Friend for a moment, then let it go.
+
+        The Friend is already recorded in the save by the time the battle
+        hands back; this is only the little celebration — two seconds of it.
+        It is built as a throwaway GamePet so it animates like any other pet,
+        and is never added to the party.
+        """
+        pending = getattr(runtime_globals, "friend_celebration", None)
+        if pending and self.friend_show is None:
+            runtime_globals.friend_celebration = None
+            try:
+                from utils.xros_utils import friend_record
+                from models.game_pet import GamePet
+                module = get_module(pending["module"])
+                entry = friend_record(module, pending["name"])
+                if entry:
+                    data = dict(entry)
+                    data["module"] = pending["module"]
+                    pet = GamePet(data)
+                    pet.x = (runtime_globals.SCREEN_WIDTH - runtime_globals.PET_WIDTH) // 2
+                    pet.set_state("happy2")
+                    self.friend_show = pet
+                    self.friend_show_frames = int(2 * game_globals.configuration.frame_rate)
+                    runtime_globals.game_sound.play("happy")
+            except Exception as exc:
+                runtime_globals.game_console.log(f"[Friend] celebration failed: {exc}")
+
+        if self.friend_show is not None:
+            self.friend_show.update()
+            self.friend_show_frames -= 1
+            if self.friend_show_frames <= 0:
+                # Drop the sprite cache entry with it — nothing else refers to
+                # this pet, and pet_sprites is keyed by the object.
+                runtime_globals.pet_sprites.pop(self.friend_show, None)
+                self.friend_show = None
+
     def update_events(self) -> None:
         """
         Updates the event system - checks for new events every hour based on XAI and pet awakeness.
         """
-        # Stage 1: Check for new events every hour (optimized using frame counter)
+        # One tick a minute drives both event systems.
+        minute_tick = self.frame_counter % (game_globals.configuration.frame_rate * 60) == 0
+
+        from models.event_clock import EventClock
         if game_globals.event is None:
-            if self.event_stage == 0:
-                # Count minutes using frame rate - every 60 seconds * frame rate = 1 minute
-                if self.frame_counter % (game_globals.configuration.frame_rate * 60) == 0:
-                    game_globals.event_time -= 1
-                    if game_globals.event_time <= 0:
-                        # Check if all pets are awake before triggering events
-                        all_pets_awake = all(pet.state != "nap" and pet.state != "sleep" for pet in game_globals.pet_list)
-                        
-                        if all_pets_awake:
-                            # Time to check for an event with XAI-based probability
-                            game_globals.event = get_hourly_random_event()
-                            runtime_globals.game_console.log(f"[Event] Event check with XAI {game_globals.xai} (all pets awake)")
-                        else:
-                            runtime_globals.game_console.log(f"[Event] Skipping event check - some pets are sleeping")
-                        
-                        game_globals.event_time = 60  # Reset timer for next hour
+            if minute_tick and self.event_stage == 0:
+                from utils.xros_utils import tick_friend_event
+                from utils.event_utils import scheduled_event
+                EventClock.tick(game_globals, get_hourly_random_event, tick_friend_event,
+                                choose_scheduled=lambda: scheduled_event(
+                                    game_globals.pet_list, runtime_globals.game_modules,
+                                    datetime.datetime.now()))
         elif game_globals.event is not None and self.event_stage == 0:
             if game_globals.event:
                 self.event_stage = 1  # Move to alert stage
-                self.event_sound_played = False
-                self.event_alert_timeout = 0
+                self.event_alert_timeout, self.event_sound_played = EventClock.initial_alert(
+                    game_globals.event, game_globals.configuration.frame_rate)
                 runtime_globals.game_console.log(f"[Event] New event: {game_globals.event.name}")
         
         # Stage 2: Alert stage - blink alert icon and wait for player input
@@ -289,7 +357,7 @@ class SceneMainGame:
             
             # 1-minute timeout: dismiss event if player doesn't respond
             self.event_alert_timeout += 1
-            if self.event_alert_timeout >= game_globals.configuration.frame_rate * 60:
+            if EventClock.expired(self.event_alert_timeout, game_globals.configuration.frame_rate):
                 runtime_globals.game_console.log(f"[Event] Event timed out after 1 minute: {game_globals.event.name}")
                 game_globals.event = None
                 self.event_stage = 0
@@ -306,11 +374,62 @@ class SceneMainGame:
                 # Change to battle scene
                 runtime_globals.game_console.log(f"[Event] Starting battle event: {game_globals.event.name}")
                 # Set battle parameters based on event
-                runtime_globals.special_encounter = [game_globals.event.module, game_globals.event.area, game_globals.event.round]
+                # The event names which enemy it is about (a Friend encounter picks
+                # a specific one), so carry it through rather than letting the
+                # battle re-resolve by area alone.
+                runtime_globals.special_encounter = [game_globals.event.module,
+                                                     game_globals.event.area,
+                                                     game_globals.event.round,
+                                                     game_globals.event.name]
                 change_scene("battle")
                 # Reset event
                 game_globals.event = None
                 self.event_stage = 0
+            elif game_globals.event.type == EventType.BATTLE_RUN:
+                # Every round of the area in turn; the battle pays the reward
+                # (battle.battle_encounter, `special_run`).
+                event = game_globals.event
+                runtime_globals.game_console.log(f"[Event] Starting battle run: {event.name}")
+                runtime_globals.special_run = {
+                    "name": event.name, "item": event.item,
+                    "item_quantity": event.item_quantity,
+                    "reward_round": getattr(event, "reward_round", 0)}
+                runtime_globals.special_encounter = [event.module, event.area, event.round, None]
+                change_scene("battle")
+                game_globals.event = None
+                self.event_stage = 0
+            elif game_globals.event.type == EventType.CARD_BATTLE:
+                # The opponent was drawn when the event fired; the battle
+                # fights that monster and pays the card's rewards.
+                event = game_globals.event
+                runtime_globals.game_console.log(f"[Event] Starting card battle: {event.name} vs {event.opponent}")
+                runtime_globals.card_battle = {
+                    "module": event.module, "event_id": event.id, "name": event.name,
+                    "opponent": getattr(event, "opponent", ""),
+                    "opponent_version": getattr(event, "opponent_version", 0)}
+                runtime_globals.special_encounter = [event.module, -1, 1, None]
+                change_scene("battle")
+                game_globals.event = None
+                self.event_stage = 0
+            elif game_globals.event.type == EventType.SHOP_ACCESS:
+                # A random or scheduled shop event opens the shop when
+                # accepted (a battle-triggered one opened it at once). A
+                # one-visit shop (the iC's DigiShops after a connection) is
+                # entered straight away and gone once left
+                # (ModuleShopView's `visit`).
+                from utils.event_utils import grant_shop_access, _announce, ONE_VISIT
+                event = game_globals.event
+                game_globals.event = None
+                self.event_stage = 0
+                if int(getattr(event, "access_minutes", 0) or 0) == ONE_VISIT:
+                    runtime_globals.game_sound.play("happy")
+                    runtime_globals.scene_battle_initial_view = (
+                        "module_shop", {"shop_key": (event.module, event.shop), "visit": True})
+                    change_scene("battle")
+                else:
+                    grant_shop_access(event.module, event.shop, getattr(event, "access_minutes", 0))
+                    _announce(f"{event.shop} opened!")
+                    runtime_globals.game_sound.play("happy")
 
     def update_gift_animation(self) -> None:
         """
@@ -371,7 +490,17 @@ class SceneMainGame:
         for pet in getattr(game_globals, "pet_list", []):
             if pet and pet not in runtime_globals.pet_sprites:
                 pet.load_sprite()
-        
+
+        # Keep poops seated on the pets' ground plane for the current
+        # resolution.  Their absolute Y can go stale after a resolution change
+        # (e.g. via the settings menu); this is idempotent and leaves pets
+        # untouched, so it's safe on every entry to the game scene.
+        try:
+            from utils.pet_utils import align_poops_to_ground
+            align_poops_to_ground()
+        except Exception:
+            pass
+
         # Prepare food animations for pets that are eating
         self.food_anims = {}
         for pet_index, food_info in getattr(runtime_globals, "game_pet_eating", {}).items():
@@ -379,46 +508,34 @@ class SceneMainGame:
             anim_frames = food_info.get("anim_frames")
             icon = food_info.get("sprite")
             if anim_frames and isinstance(anim_frames, list) and len(anim_frames) == 4:
-                self.food_anims[pet_index] = anim_frames
+                frames = anim_frames
             else:
                 # Fallback: use the icon itself as all frames
-                self.food_anims[pet_index] = [icon] * 4
+                frames = [icon] * 4
+            # Pre-scale the display frames once — draw_food_anims used to run
+            # pygame.transform.scale on every frame while a pet was eating.
+            # Draw at half the source size (// 8 instead of the old // 4;
+            # max_pets == 4 used to draw them unscaled).
+            scaled_frames = []
+            for f in frames:
+                food_size = f.get_height()
+                food_size = max(1, food_size * max(game_globals.configuration.max_pets, 2) // 8)
+                scaled_frames.append(pygame.transform.scale(f, (food_size, food_size)))
+            self.food_anims[pet_index] = scaled_frames
 
         # Also sync last-input-frame when the scene is (re)loaded so screensaver timing is correct
         runtime_globals.last_input_frame = getattr(self, 'frame_counter', 0)
 
-    def update_static_surface(self) -> None:
-        """
-        Updates the cached surface for the background, menu, and clock.
-        """
-        menu_index_changed = self.last_menu_index != runtime_globals.main_menu_index
-        clock_changed = (self.frame_counter - self._static_last_frame) > constants.FRAME_RATE  # Update once per second
-
-        if not self.cached_static_surface or menu_index_changed or clock_changed:
-            self._static_last_frame = self.frame_counter
-            self.cached_static_surface = pygame.Surface((runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT))
-            
-            # Draw background
-            self.background.draw(self.cached_static_surface)
-            
-            # Draw menu
-            self.menu.draw(self.cached_static_surface)
-            self.last_menu_index = runtime_globals.main_menu_index
-            
-            # Draw clock
-            if game_globals.showClock:
-                self.clock.draw(self.cached_static_surface)
-
     def _render_screensaver_surface(self):
-        """Render the full screensaver surface (clock + call sign + poop count)."""
-        # Create surface once per cache refresh
+        """Render the full screensaver surface (clock + latched alert icons).
+
+        Called only when the cached surface was invalidated (minute change,
+        position change, or an alert latching on) — never per frame.
+        """
         surf = pygame.Surface((runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT))
         surf.fill((0, 0, 0))
 
-        self.menu.check_alert()  # Ensure alert state is updated
-
-        now_dt = datetime.datetime.now()
-        time_str = now_dt.strftime("%H:%M")
+        time_str = self._ss_time_str or datetime.datetime.now().strftime("%H:%M")
         text = self._ss_time_font.render(time_str, True, constants.FONT_COLOR_DEFAULT)
 
         # Use randomized offset from center (set once per minute)
@@ -429,33 +546,22 @@ class SceneMainGame:
         y = center_y - (text.get_height() // 2)
         blit_with_cache(surf, text, (x, y))
 
-        # Call sign: only show when pet_alert is true
-        call_drawn = None
-        if runtime_globals.pet_alert:
-            call_drawn = True
-            call_sprite = runtime_globals.misc_sprites.get('CallSignInverted')
-
-        # Poop count with icon (always show count even if 0)
-        poop_count = len(game_globals.poop_list)
-
-        # Lazily grab poop and sick sprites from runtime globals
-        poop_sprite = runtime_globals.misc_sprites.get('PoopInverted')
-
-        sick_sprite = runtime_globals.misc_sprites.get('SickInverted')
-
-        # Determine if any pet is sick right now
-        sick_flag = any(p.sick > 0 for p in game_globals.pet_list)
-
-        # place group under clock
+        # Alert icons under the clock — driven by the latched flags.
         group_y = y + text.get_height()
-        if poop_count > 0:
-            blit_with_cache(surf, poop_sprite, (x, group_y))
+        if self._ss_show_poop:
+            poop_sprite = runtime_globals.misc_sprites.get('PoopInverted')
+            if poop_sprite:
+                blit_with_cache(surf, poop_sprite, (x, group_y))
 
-        if sick_flag:
-            blit_with_cache(surf, sick_sprite, (center_x - (sick_sprite.get_width() // 2), group_y))
+        if self._ss_show_sick:
+            sick_sprite = runtime_globals.misc_sprites.get('SickInverted')
+            if sick_sprite:
+                blit_with_cache(surf, sick_sprite, (center_x - (sick_sprite.get_width() // 2), group_y))
 
-        if call_drawn:
-            blit_with_cache(surf, call_sprite, (x + text.get_width() - call_sprite.get_width(), group_y))
+        if self._ss_show_alert:
+            call_sprite = runtime_globals.misc_sprites.get('CallSignInverted')
+            if call_sprite:
+                blit_with_cache(surf, call_sprite, (x + text.get_width() - call_sprite.get_width(), group_y))
 
         return surf
 
@@ -463,8 +569,12 @@ class SceneMainGame:
         """Update menu selection based on mouse hover and handle pet area clicks."""
         if not (runtime_globals.INPUT_MODE == runtime_globals.MOUSE_MODE) or self.lock_inputs:
             return
-        
+
         mouse_pos = runtime_globals.game_input.get_mouse_position()
+        # Menu hitboxes are static — skip the hit-test while the mouse is still.
+        if mouse_pos == getattr(self, '_last_menu_hover_pos', None):
+            return
+        self._last_menu_hover_pos = mouse_pos
         # Ask WindowMenu for the hovered index using its authoritative hitboxes
         hovered_index = self.menu.get_menu_index_at(mouse_pos)
         
@@ -475,6 +585,15 @@ class SceneMainGame:
         # Update menu index based on hover (-1 if not hovering any)
         if hovered_index != runtime_globals.main_menu_index:
             runtime_globals.main_menu_index = hovered_index
+
+    def get_pet_index_at(self, mouse_pos):
+        """Return the index of the pet whose sprite rect contains mouse_pos, or -1."""
+        for i, pet in enumerate(game_globals.pet_list):
+            rect = pygame.Rect(pet.x, pet.y,
+                               runtime_globals.PET_WIDTH, runtime_globals.PET_HEIGHT)
+            if rect.collidepoint(mouse_pos):
+                return i
+        return -1
 
     def is_mouse_in_pet_area(self, mouse_pos):
         """Check if mouse is in the pet area (from pet Y to pet Y + height across full screen width)."""
@@ -510,19 +629,39 @@ class SceneMainGame:
 
         if (timeout and timeout > 0 and elapsed_frames >= timeout_frames
                 and not getattr(self, '_screensaver_disabled', False)):
-            # Use cached screensaver surface and refresh every 5 seconds using the frame counter
-            # Invalidate cache immediately if relevant state changed
-            current_pet_alert = bool(getattr(runtime_globals, 'pet_alert', False))
-            current_poop_count = len(game_globals.poop_list)
-            current_sick_flag = any(p.sick > 0 for p in game_globals.pet_list)
-            if current_pet_alert != self._ss_last_pet_alert or current_poop_count != self._ss_last_poop_count:
+            # Entering the screensaver: reset latched alert flags and force an
+            # immediate condition check + render.
+            if not self._ss_active:
+                self._ss_active = True
+                self._ss_show_alert = False
+                self._ss_show_poop = False
+                self._ss_show_sick = False
+                self._ss_time_str = datetime.datetime.now().strftime("%H:%M")
+                self._ss_last_check_frame = self.frame_counter - constants.FRAME_RATE
                 self._screensaver_cache = None
-                self._ss_last_pet_alert = current_pet_alert
-                self._ss_last_poop_count = current_poop_count
-            # Invalidate if sick state changed
-            if current_sick_flag != self._ss_last_sick_flag:
-                self._screensaver_cache = None
-                self._ss_last_sick_flag = current_sick_flag
+
+            # Poll OFF→ON transitions about once per second. Latched flags are
+            # never re-validated: clearing them requires the menus, which
+            # dismisses the screensaver (and resets the flags on re-entry).
+            if (self.frame_counter - self._ss_last_check_frame) >= constants.FRAME_RATE:
+                self._ss_last_check_frame = self.frame_counter
+                changed = False
+                if not self._ss_show_alert and self.menu.check_alert():
+                    self._ss_show_alert = True
+                    changed = True
+                if not self._ss_show_poop and game_globals.poop_list:
+                    self._ss_show_poop = True
+                    changed = True
+                if not self._ss_show_sick and any(ailments.ailing(p) for p in game_globals.pet_list):
+                    self._ss_show_sick = True
+                    changed = True
+                # The screensaver clock has no seconds, so it changes 1/min.
+                time_str = datetime.datetime.now().strftime("%H:%M")
+                if time_str != self._ss_time_str:
+                    self._ss_time_str = time_str
+                    changed = True
+                if changed:
+                    self._screensaver_cache = None
 
             # Change screensaver position once per minute (frame-based). If position changes, invalidate cache.
             minute_frames = constants.FRAME_RATE * 60
@@ -536,8 +675,7 @@ class SceneMainGame:
                     self._screensaver_cache = None
                 self._ss_last_position_frame = self.frame_counter
 
-            refresh_frames = constants.FRAME_RATE * 5
-            if (not self._screensaver_cache) or (self.frame_counter - self._screensaver_cache_last_frame) >= refresh_frames:
+            if self._screensaver_cache is None:
                 try:
                     self._screensaver_cache = self._render_screensaver_surface()
                 except Exception:
@@ -545,18 +683,22 @@ class SceneMainGame:
                     s = pygame.Surface((runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT))
                     s.fill((0, 0, 0))
                     self._screensaver_cache = s
-                self._screensaver_cache_last_frame = self.frame_counter
 
-            from utils.pygame_utils import blit_with_cache
             blit_with_cache(surface, self._screensaver_cache, (0, 0))
             return
+        elif self._ss_active:
+            # Leaving the screensaver — latches re-arm on next entry.
+            self._ss_active = False
 
-        # Update the cached static surface if needed
-        self.update_static_surface()
-
-        # Blit the cached static surface
-        from utils.pygame_utils import blit_with_cache
-        blit_with_cache(surface, self.cached_static_surface, (0, 0))
+        # Draw the static layers directly: the background is one cached blit,
+        # the menu is two cached strips, the clock is one cached bar. Each
+        # keeps its own cache, so nothing full-screen is rebuilt per second
+        # (the old composite re-allocated a screen-sized surface every second
+        # just because the clock shows seconds).
+        self.background.draw(surface)
+        self.menu.draw(surface)
+        if game_globals.showClock:
+            self.clock.draw(surface)
 
         # Draw pets and their overlays
         pets = game_globals.pet_list
@@ -584,6 +726,13 @@ class SceneMainGame:
         # Draw food animation for eating pets
         self.draw_food_anims(surface)
 
+        # A newly won Friend, celebrating over the top of the party
+        if self.friend_show is not None:
+            self.friend_show.draw(surface)
+
+        # A C'mon Switch close-up, over everything
+        accessory_utils.draw_closeup(surface)
+
         # Draw event animations and alerts
         self.draw_events(surface)
 
@@ -596,16 +745,24 @@ class SceneMainGame:
         """
         pet.draw(surface)
 
-        frame_enum = pet.animation_frames[pet.frame_index]
-        frame = runtime_globals.pet_sprites[pet][frame_enum.value]
+        # Only fetch (and flip) the frame when an outline is actually drawn —
+        # the common case draws no outline and used to pay a flip per pet per
+        # frame anyway.
+        is_selected = pet in selected_pets
+        is_highlighted = (self.selection_mode == "pet" and index == self.pet_selection_index)
+        is_hovered = index == self.hovered_pet_index
+        if is_selected or is_highlighted or is_hovered:
+            frame_enum = pet.animation_frames[pet.frame_index]
+            frame = runtime_globals.pet_sprites[pet][frame_enum.value]
+            if pet.direction == 1:
+                frame = right_facing(frame, runtime_globals.pet_sprites_right.get(pet))
 
-        if pet.direction == 1:
-            frame = pygame.transform.flip(frame, True, False)
-
-        if pet in selected_pets:
-            draw_pet_outline(surface, frame, pet.x, pet.y, color=constants.FONT_COLOR_BLUE)  # blue outline
-        if self.selection_mode == "pet" and index == self.pet_selection_index:
-            draw_pet_outline(surface, frame, pet.x, pet.y, color=constants.FONT_COLOR_YELLOW)  # yellow highlight
+            if is_selected:
+                draw_pet_outline(surface, frame, pet.x, pet.y, color=constants.FONT_COLOR_BLUE)  # blue outline
+            if is_highlighted:
+                draw_pet_outline(surface, frame, pet.x, pet.y, color=constants.FONT_COLOR_YELLOW)  # yellow highlight
+            elif is_hovered:
+                draw_pet_outline(surface, frame, pet.x, pet.y, color=constants.FONT_COLOR_YELLOW)  # mouse hover
 
         if show_hearts and pet.stage > 0:
             module = get_module(pet.module)
@@ -622,7 +779,10 @@ class SceneMainGame:
             hearts_x = pet.x + runtime_globals.PET_WIDTH // 2 - hearts_width // 2
             hearts_y = pet.y + runtime_globals.PET_HEIGHT
             self.draw_hearts(surface, hearts_x, hearts_y, pet.hunger, total_hearts, factor)
-            self.draw_hearts(surface, hearts_x, hearts_y + int(6 * runtime_globals.UI_SCALE), pet.strength, total_hearts, factor)
+            # The Strength row only on a device that has the meter (not the
+            # iC or Digimon World, whose Strength is never filled).
+            if pet_stats.tracks_strength(getattr(module, "visible_stats", []) if module else ["Strength"]):
+                self.draw_hearts(surface, hearts_x, hearts_y + int(6 * runtime_globals.UI_SCALE), pet.strength, total_hearts, factor)
 
     def draw_cleaning(self, surface: pygame.Surface) -> None:
         """
@@ -637,12 +797,12 @@ class SceneMainGame:
         """
         Draws the fade overlay, caching the surface for efficiency.
         """
-        if not self._fade_overlay_cache or self._fade_overlay_cache.get_alpha() != self.fade_alpha:
+        if not self._fade_overlay_cache:
             fade_overlay = pygame.Surface((runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT))
             fade_overlay.fill((0, 0, 0))
-            fade_overlay.set_alpha(self.fade_alpha)
             self._fade_overlay_cache = fade_overlay
-        from utils.pygame_utils import blit_with_cache
+        if self._fade_overlay_cache.get_alpha() != self.fade_alpha:
+            self._fade_overlay_cache.set_alpha(self.fade_alpha)
         blit_with_cache(surface, self._fade_overlay_cache, (0, 0))
 
     def draw_food_anims(self, surface: pygame.Surface) -> None:
@@ -663,21 +823,15 @@ class SceneMainGame:
                             frame_idx = total_frames - 1
                         else:
                             frame_idx = (pet.animation_counter // frame_duration) % total_frames
+                        # Frames are pre-scaled in load()
                         food_sprite = anim_frames[frame_idx]
                         x = pet.x
                         # Prevent food from overlapping menu icons
                         y_offset = 20 * runtime_globals.UI_SCALE if game_globals.showClock else 5 * runtime_globals.UI_SCALE
                         y_min = y_offset + 2 * runtime_globals.MENU_ICON_SIZE
-                        if game_globals.configuration.max_pets == 4:
-                            y = max(y_min, pet.y - (food_sprite.get_height() // 2))
-                            surface.blit(food_sprite, (x, y))
-                        else:
-                            # Scale the food sprite
-                            food_size = food_sprite.get_height()
-                            food_size = food_size * max(game_globals.configuration.max_pets, 2) // 4
-                            food_sprite_scaled = pygame.transform.scale(food_sprite, (food_size, food_size))
-                            y = max(y_min, pet.y - (food_size // 2))
-                            surface.blit(food_sprite_scaled, (x, y))
+                        food_size = food_sprite.get_height()
+                        y = max(y_min, pet.y - (food_size // 2))
+                        surface.blit(food_sprite, (x, y))
                 elif idx in self.food_anims:
                     # Clean up if pet is no longer eating
                     game_pet_eating.pop(idx, None)
@@ -799,21 +953,50 @@ class SceneMainGame:
 
         blit_with_cache(surface, heart_surface, (x, y))
 
+    def plays_own_input_sounds(self):
+        """Input is locked while an evolution plays: no answer to each press."""
+        return bool(getattr(self, "lock_inputs", False))
+
     def handle_event(self, event) -> None:
         """
         Handles keyboard and GPIO button inputs in the main game scene.
         """
         event_type, event_data = event
-        
+
+        # The screensaver is up: this input only wakes the screen, as the
+        # devices do ("press any button to turn the screen back on"). The
+        # press used to act as well, opening the icon still under the cursor.
+        waking = getattr(self, "_ss_active", False) and event_type not in self.PASSIVE_INPUTS
+
         # Reset timers on any input
         self.fade_out_timer = 60 * constants.FRAME_RATE
         runtime_globals.last_input_frame = getattr(self, 'frame_counter', 0)
 
+        if waking:
+            self._ss_active = False
+            return
+
         if self.lock_inputs:
             return
 
-        # Handle mouse/touch clicks in pet area to toggle hearts view and menu clicks
-        if event_type == "LCLICK":
+        # A press answers each pet's standing evolution call
+        # (GamePet.answer_call); a pointer that only moves does not.
+        if event_type not in self.PASSIVE_INPUTS:
+            for pet in game_globals.pet_list:
+                if getattr(pet, "evolution_call", 0) > 0:
+                    pet.answer_call("evolution")
+
+        # Any input ends a C'mon Switch close-up, and does nothing else.
+        if accessory_utils.closeup_active():
+            accessory_utils.end_closeup()
+            return
+
+        # Handle mouse/touch clicks in pet area to toggle hearts view and menu
+        # clicks. An event alert takes priority: this block used to swallow the
+        # click (toggling the hearts view) and return before the event handler
+        # below ever saw it, so an event could only be accepted with A.
+        event_active = self.event_stage > 0 and game_globals.event
+        if event_type == "LCLICK" and not event_active:
             if event_data and "pos" in event_data:
                 mouse_pos = event_data["pos"]
                 
@@ -824,20 +1007,29 @@ class SceneMainGame:
                     runtime_globals.main_menu_index = clicked_index
                     runtime_globals.game_console.log(f"[SceneMainGame] Menu item {clicked_index} clicked")
                     # Don't return here - let handle_action_keys process the click action
-                elif self.is_mouse_in_pet_area(mouse_pos):
-                    # Check if any dying pet needs B presses - LCLICK on pet counts as B press
+                else:
+                    # Check if any dying pet needs B presses - LCLICK in the
+                    # pet area counts as a B press
                     dying_pet_saved = False
-                    for pet in game_globals.pet_list:
-                        if pet.death_save_b_counter > 0:
-                            pet.death_save_b_counter -= 1
-                            dying_pet_saved = True
-                            if pet.death_save_b_counter == 0:
-                                runtime_globals.game_console.log(f"[Death Save] {pet.name} B-press requirement met (touch)!")
+                    if self.is_mouse_in_pet_area(mouse_pos):
+                        for pet in game_globals.pet_list:
+                            if pet.death_save_b_counter > 0:
+                                pet.death_save_b_counter -= 1
+                                dying_pet_saved = True
+                                if pet.death_save_b_counter == 0:
+                                    runtime_globals.game_console.log(f"[Death Save] {pet.name} B-press requirement met (touch)!")
                     if not dying_pet_saved:
-                        # Only toggle hearts if no dying pet needed saving
-                        runtime_globals.show_hearts = not runtime_globals.show_hearts
-                        runtime_globals.game_sound.play("menu")
-                        runtime_globals.game_console.log(f"[SceneMainGame] Hearts view toggled: {runtime_globals.show_hearts}")
+                        # Click directly on a pet toggles its selection (same
+                        # as A on keyboard/joystick); clicking anywhere else
+                        # outside the menu toggles the hearts view.
+                        clicked_pet = self.get_pet_index_at(mouse_pos)
+                        if clicked_pet >= 0:
+                            self.toggle_pet_selection(clicked_pet)
+                            runtime_globals.game_sound.play("menu")
+                        else:
+                            runtime_globals.show_hearts = not runtime_globals.show_hearts
+                            runtime_globals.game_sound.play("menu")
+                            runtime_globals.game_console.log(f"[SceneMainGame] Hearts view toggled: {runtime_globals.show_hearts}")
                     return
                 
         # Handle event system inputs
@@ -914,14 +1106,16 @@ class SceneMainGame:
 
     def handle_debug_keys(self, event_type) -> None:
         """
-        Debugging shortcuts (F11, F12).
+        Debugging shortcut (F12).
         """
-        if event_type == "F11":
-            # Open test scene
-            runtime_globals.game_sound.play("menu")
-            change_scene("test")
-            runtime_globals.game_console.log("[DEBUG] Opening test scene")
-        elif event_type == "F12" and game_globals.configuration.debug_mode:
+        # F11 opened a test scene that no longer exists (no "test" in the
+        # scene map); off for the release.
+        # if event_type == "F11":
+        #     # Open test scene
+        #     runtime_globals.game_sound.play("menu")
+        #     change_scene("test")
+        #     runtime_globals.game_console.log("[DEBUG] Opening test scene")
+        if event_type == "F12" and game_globals.configuration.debug_mode:
             # Open debug scene
             runtime_globals.game_sound.play("menu")
             change_scene("debug")
@@ -1010,7 +1204,8 @@ class SceneMainGame:
             if blocked:
                 runtime_globals.game_sound.play("cancel")
                 return
-            runtime_globals.game_sound.play("cancel")
+            # start_scene already plays the "menu" sound — playing "cancel"
+            # here too made both sounds fire together.
             self.start_scene("settings")
 
         elif event_type == "L":  # Rotate screen upside-down
@@ -1109,36 +1304,32 @@ class SceneMainGame:
 
     def heal_sick_pets(self) -> None:
         """
-        Heals sick pets. If both Dots and Skull types exist, opens healing scene.
+        Heals sick and injured pets. If the party has both a sickness (Dots)
+        and an injury (Skull), opens the healing scene to pick one.
         Otherwise heals directly.
         """
-        sick_pets = [pet for pet in game_globals.pet_list if pet.sick > 0]
+        sick_pets = [pet for pet in game_globals.pet_list if ailments.ailing(pet)]
 
         if not sick_pets:
             runtime_globals.game_sound.play("cancel")
             runtime_globals.game_console.log("[SceneMainGame] No sick pets to heal.")
             return
 
-        # Check if there are both dots and non-dots sick pets
-        has_dots = any(getattr(pet, 'sick_type', '') == 'dots' for pet in sick_pets)
-        has_skull = any(getattr(pet, 'sick_type', '') != 'dots' for pet in sick_pets)
-
-        if has_dots and has_skull:
+        kinds = {ailments.kind_of(pet) for pet in sick_pets}
+        if len(kinds) > 1:
             # Open healing scene for selection
             self.start_scene("healing")
             return
 
-        # Only one type — heal all directly
+        # Only one kind: heal all directly
         self._do_heal(sick_pets)
 
     def _do_heal(self, pets_to_heal) -> None:
-        """Heal the given list of pets by 1 sickness point."""
+        """Heal the given list of pets by one dose of their ailment."""
         runtime_globals.game_sound.play("fail")
         distribute_pets_evenly()
 
         for pet in pets_to_heal:
-            pet.sick = max(0, pet.sick - 1)
-            if pet.sick == 0:
-                pet.sick_type = ""
+            left = ailments.heal_dose(pet)
             pet.set_state("angry")
-            runtime_globals.game_console.log(f"[SceneMainGame] {pet.name} healed. Remaining sickness: {pet.sick}")
+            runtime_globals.game_console.log(f"[SceneMainGame] {pet.name} healed. Doses left: {left}")

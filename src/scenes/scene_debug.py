@@ -10,15 +10,20 @@ import time
 from ui.ui_manager import UIManager
 from ui.components.background import Background
 from ui.components.button import Button
+from ui.components.menu import Menu
 from ui.components.title_scene import TitleScene
 from ui.components.pet_selector import PetSelector
 from ui.ui_constants import BASE_RESOLUTION
 from ui.windows.window_background import WindowBackground
 from core import game_globals, runtime_globals
+from utils import ailments
+from models.game_digidex import register_digidex_entry
+from models.game_pet import GamePet
 from utils.scene_utils import change_scene
-from utils.pet_utils import get_selected_pets
+from utils.pet_utils import distribute_pets_evenly, get_selected_pets, refresh_pet_sizes
 from utils.module_utils import get_module
 from utils.quest_event_utils import force_complete_quest, generate_daily_quests, get_hourly_random_event
+from utils.utils_unlocks import is_unlocked
 
 
 #=====================================================================
@@ -29,6 +34,9 @@ class SceneDebug:
     Debug scene with various testing options for pets and game systems.
     Refactored to use UI system with button grid and page navigation.
     """
+
+    # Rows the Add Pet picker shows at once; the rest are scrolled to.
+    MENU_MAX_VISIBLE = 8
 
     def __init__(self) -> None:
         """
@@ -52,7 +60,8 @@ class SceneDebug:
         # Define debug options - will be split into pages of 6
         self.debug_options = [
             ("+60min", self._add_60min, "Add 60 minutes to pet timers"),
-            ("Sick", self._add_sickness, "Add sickness and injuries"), 
+            ("Sick", self._add_sickness, "Add a dose of sickness (Dots) and one to its count"),
+            ("Injury", self._add_injury, "Add a dose of injury (Skull) and one to its count"),
             ("Mistake", self._add_mistake, "Add care mistake or remove condition heart"),
             ("Effort", self._add_effort, "Add to effort counter"),
             ("Overfeed", self._add_overfeed, "Add to overfeed counter"),
@@ -77,8 +86,24 @@ class SceneDebug:
             ("Quest Reset", self._reset_quests, "Reset daily quests"),
             ("Complete Quests", self._complete_quests, "Complete all available quests"),
             ("Try Event", self._try_event, "Attempt to trigger an event"),
-            ("+All Items", self._add_all_items, "Add 1 of each item from all modules")
+            ("+All Items", self._add_all_items, "Add 1 of each item from all modules"),
+            ("+1k Currency", self._add_currency, "Add 1000 of every module currency"),
+            ("+Card Packs", self._add_card_packs, "Open one of every module's card packs"),
+            # Temporary, for testing the holo (owner, 2026-10-21); kept for later tests.
+            # ("+Shiny Card", self._add_shiny_card, "Add a random shiny card to every module with cards"),
+            ("Add Pet", self._add_pet, "Pick any pet from any module and add it to the party")
         ]
+
+        # "Add Pet" picker state. The Menu closes itself right after a
+        # callback runs, so each step is queued and opened on the next update.
+        self.menu = None
+        self.pending_menu = None
+        self.picker_modules = []
+        self.picker_module_index = 0
+        self.picker_versions = []
+        self.picker_version_index = 0
+        self.picker_monsters = []
+        self.picker_monster_index = 0
         
         # Initialize counters
         for option_name, _, _ in self.debug_options:
@@ -181,7 +206,17 @@ class SceneDebug:
         self.pet_selector.set_pets(get_selected_pets())  # Set selected pets
         self.pet_selector.selected_pets = []  # No selection highlighting needed
         self.ui_manager.add_component(self.pet_selector)
-        
+
+        # Add Pet picker menu. Kept out of the UI manager's component list (as
+        # the freezer box does) so its events are not processed twice; the
+        # manager still renders it and routes to it as the active modal.
+        self.menu = Menu(width=180)
+        self.menu.visible = False
+        self.menu.manager = self.ui_manager
+        if not self.menu.base_rect:
+            self.menu.base_rect = self.menu.rect.copy()
+        self.menu.rect = self.ui_manager.scale_rect(self.menu.base_rect)
+
         # Update button texts for first page
         self._update_button_texts()
         
@@ -258,10 +293,23 @@ class SceneDebug:
 
     def update(self) -> None:
         """Updates the debug scene."""
-        # Update pet selector with current selected pets
+        # A Menu closes itself right after its callback returns, so the next
+        # step of the Add Pet picker is opened here instead of inside it.
+        if self.pending_menu:
+            open_next_step = self.pending_menu
+            self.pending_menu = None
+            open_next_step()
+
+        # Update pet selector with current selected pets, only when they
+        # changed: set_pets marks the row for redraw, which rebuilt the whole
+        # UI overlay every frame (34 ms a frame on the Pi Zero 2W).
         if self.pet_selector:
             current_pets = get_selected_pets()
-            self.pet_selector.set_pets(current_pets)
+            key = [(id(pet), getattr(pet, "name", None), getattr(pet, "state", None) == "nap")
+                   for pet in current_pets]
+            if key != getattr(self, "_pet_selector_key", None):
+                self._pet_selector_key = key
+                self.pet_selector.set_pets(current_pets)
         
         self.ui_manager.update()
 
@@ -286,25 +334,50 @@ class SceneDebug:
 
     # Debug action methods
     def _add_60min(self) -> bool:
-        """Add 60 minutes to pet timers."""
+        """Add 60 minutes to pet timers WITHOUT gameplay events.
+
+        Shifting only _rt_origin used to make the per-minute tick see 60
+        elapsed minutes at once, so pets instantly lost hunger/strength and
+        pooped. Instead: advance the real-time clocks (hatch timers), swallow
+        the jump in the minute tick (no hunger/poop/care/death events), and
+        credit the evolution clock directly so evolution still progresses.
+        """
         selected_pets = get_selected_pets()
         if not selected_pets:
             return False
 
+        from utils.module_utils import get_module
         for pet in selected_pets:
-            pet._rt_origin -= 60 * 60  # shift origin 60 minutes into the past
+            pet._rt_origin -= 60 * 60      # real-time clocks move forward
+            pet._rt_last_minute += 60      # minute tick skips the jump: no events
+
+            # Evolution time still advances (same conditions as the tick)
+            module = get_module(pet.module)
+            counts_asleep = getattr(module, 'count_evolution_while_sleeping', True)
+            if pet.state not in ("nap", "dead") or (pet.state == "nap" and counts_asleep):
+                pet._evol_minutes += 60
+                pet.update_evolution()
+
             pet.edited = True
         return True
 
     def _add_sickness(self) -> bool:
-        """Add sickness and injuries."""
+        """A dose of sickness (Dots), and one to the sicknesses count."""
+        return self._add_ailment("sick")
+
+    def _add_injury(self) -> bool:
+        """A dose of injury (Skull), and one to the injuries count."""
+        return self._add_ailment("injury")
+
+    def _add_ailment(self, kind) -> bool:
         selected_pets = get_selected_pets()
         if not selected_pets:
             return False
-            
+
         for pet in selected_pets:
-            pet.sick += 1
-            pet.injuries += 1
+            setattr(pet, kind, ailments.doses(pet, kind) + 1)
+            total = ailments.TOTALS[kind]
+            setattr(pet, total, int(getattr(pet, total, 0) or 0) + 1)
             pet.edited = True
         return True
 
@@ -608,3 +681,182 @@ class SceneDebug:
         
         runtime_globals.game_console.log(f"[SceneDebug] Added {items_added} items to inventory.")
         return items_added > 0
+
+    def _add_currency(self) -> bool:
+        """Add 1000 of every currency a module declares (shop.json), up to
+        the currency's cap where it has one (the iC's 9,999)."""
+        from utils.currency_utils import add_currency
+
+        currencies = 0
+        for module_name, module in runtime_globals.game_modules.items():
+            for currency in getattr(module, "currencies", None) or []:
+                if currency.get("name"):
+                    add_currency(module_name, currency["name"], 1000)
+                    currencies += 1
+
+        runtime_globals.game_console.log(f"[SceneDebug] Added 1000 to {currencies} currencies.")
+        return currencies > 0
+
+    def _add_card_packs(self) -> bool:
+        """Open one of every card pack each module declares (cards.json), as
+        a bought one is: the cards join the collection, and the pack reveal
+        plays back on the main screen. Packs are never held unopened."""
+        from utils import card_utils
+
+        opened = 0
+        for module_name, data in card_utils.modules_with_cards():
+            for pack in data.get("packs") or []:
+                drawn = card_utils.open_pack(module_name, pack.get("id"))
+                if drawn:
+                    card_utils.announce_cards(drawn, module_name, pack.get("id"), wait_for_main=True)
+                    opened += 1
+
+        runtime_globals.game_console.log(f"[SceneDebug] Opened {opened} card packs.")
+        return opened > 0
+
+    # Temporary, for testing the holo (owner, 2026-10-21): off for the release.
+    # def _add_shiny_card(self) -> bool:
+    #     """A shiny copy of one random card of each module with cards (Soul
+    #     Plates are never shiny), for testing the holo."""
+    #     import random
+    #     from utils import card_utils
+    #
+    #     added = 0
+    #     for module_name, data in card_utils.modules_with_cards():
+    #         cards = [card for card in data["cards"]
+    #                  if card_utils.card_can_be_shiny(module_name, card.get("id"))]
+    #         if not cards:
+    #             continue
+    #         card = random.choice(cards)
+    #         if card_utils.add_card_copy(module_name, card["id"], shiny=True):
+    #             card_utils.announce_cards([(card, True)], module_name, wait_for_main=True)
+    #             added += 1
+    #
+    #     runtime_globals.game_console.log(f"[SceneDebug] Added {added} shiny cards.")
+    #     return added > 0
+
+    # Add Pet picker: module -> version -> pet
+    def _add_pet(self) -> bool:
+        """Open the picker that adds any module's pet to the party."""
+        if not runtime_globals.game_modules:
+            return False
+
+        self._open_module_menu()
+        return True
+
+    def _open_picker_menu(self, options, on_select, on_cancel, selected_index):
+        """Open one step of the picker, restoring where its cursor was."""
+        self.menu.open(options, on_select, on_cancel, max_visible=self.MENU_MAX_VISIBLE)
+        self.menu.set_selected_index(selected_index)
+        self.ui_manager.set_active_menu(self.menu)
+
+    def _open_module_menu(self):
+        """Step 1: every installed module."""
+        self.picker_modules = sorted(runtime_globals.game_modules.keys())
+        self._open_picker_menu(self.picker_modules, self._on_picker_module,
+                               self._on_picker_cancel, self.picker_module_index)
+
+    def _open_version_menu(self):
+        """Step 2: the versions of that module that have a hatchable egg."""
+        options = [f"Ver. {version}" for version in self.picker_versions]
+        self._open_picker_menu(options, self._on_picker_version,
+                               self._open_module_menu_later, self.picker_version_index)
+
+    def _open_pet_menu(self):
+        """Step 3: every pet on the chosen version."""
+        options = [monster["name"] for monster in self.picker_monsters]
+        self._open_picker_menu(options, self._on_picker_monster,
+                               self._open_version_menu_later, self.picker_monster_index)
+
+    def _open_module_menu_later(self):
+        self.pending_menu = self._open_module_menu
+
+    def _open_version_menu_later(self):
+        self.pending_menu = self._open_version_menu
+
+    def _on_picker_cancel(self):
+        """Backing out of the first step closes the picker."""
+        self.pending_menu = None
+
+    def _on_picker_module(self, index):
+        if not 0 <= index < len(self.picker_modules):
+            return
+        self.picker_module_index = index
+        module = get_module(self.picker_modules[index])
+        self.picker_versions = self._get_hatchable_versions(module)
+        if not self.picker_versions:
+            # Nothing to pick — fall back to the module list rather than
+            # opening an empty menu.
+            runtime_globals.game_console.log(
+                f"[SceneDebug] {module.name} has no hatchable eggs")
+            runtime_globals.game_sound.play("cancel")
+            self.pending_menu = self._open_module_menu
+            return
+        self.picker_version_index = 0
+        self.pending_menu = self._open_version_menu
+
+    def _on_picker_version(self, index):
+        if not 0 <= index < len(self.picker_versions):
+            return
+        self.picker_version_index = index
+        version = self.picker_versions[index]
+        module = get_module(self.picker_modules[self.picker_module_index])
+        self.picker_monsters = [monster for monster in module.get_all_monsters()
+                                if monster.get("version") == version]
+        if not self.picker_monsters:
+            runtime_globals.game_sound.play("cancel")
+            self.pending_menu = self._open_version_menu
+            return
+        self.picker_monster_index = 0
+        self.pending_menu = self._open_pet_menu
+
+    def _on_picker_monster(self, index):
+        if not 0 <= index < len(self.picker_monsters):
+            return
+        self.picker_monster_index = index
+        self._spawn_pet(self.picker_monsters[index])
+
+    def _get_hatchable_versions(self, module) -> list:
+        """Versions of ``module`` that currently have an obtainable egg.
+
+        Same availability rules as the egg selector: a special egg only counts
+        once its unlock — or its G-Cell fragment — is held.
+        """
+        versions = []
+        for egg in module.get_monsters_by_stage(0):
+            if egg.get("special", False):
+                special_key = egg.get("special_key", "")
+                module_name = egg.get("module", module.name)
+                if special_key == "gcell_fragment":
+                    fragment_key = f"{module_name}@{egg.get('version', 1)}"
+                    if fragment_key not in getattr(game_globals, "gcell_fragments", []):
+                        continue
+                elif special_key and not is_unlocked(module_name, None, special_key):
+                    continue
+            version = egg.get("version")
+            if version is not None and version not in versions:
+                versions.append(version)
+        return sorted(versions)
+
+    def _spawn_pet(self, monster) -> None:
+        """Create the chosen monster and put it in the party."""
+        if len(game_globals.pet_list) >= game_globals.configuration.max_pets:
+            runtime_globals.game_console.log("[SceneDebug] Party is full, pet not added")
+            runtime_globals.game_sound.play("cancel")
+            return
+
+        # get_all_monsters returns the raw records, which carry no module.
+        pet_data = dict(monster)
+        pet_data["module"] = self.picker_modules[self.picker_module_index]
+
+        pet = GamePet(pet_data)
+        game_globals.pet_list.append(pet)
+        register_digidex_entry(pet.name, pet.module, pet.version)
+
+        # Pet size depends on how many are in the party, so the whole row is
+        # resized when one joins.
+        refresh_pet_sizes()
+        distribute_pets_evenly()
+
+        runtime_globals.game_console.log(
+            f"[SceneDebug] Added {pet.name} (v{pet.version}) from {pet.module}")

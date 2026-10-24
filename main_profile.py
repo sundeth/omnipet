@@ -26,9 +26,7 @@ from utils.document_utils import build_module_documentation
 # sys.stderr = open(os.devnull, 'w')  # Commented out to allow error stack traces
 
 from vpet import VirtualPetGame
-
-# Game Version
-VERSION = "1.0.0 Beta 1"
+from core.version import VERSION
 
 # Check Pygame version for compatibility
 PYGAME_VERSION = tuple(map(int, pygame.version.ver.split('.')))
@@ -177,14 +175,18 @@ def setup_display():
 
     # The final screen always uses native resolution if scaling is enabled
     final_screen = pygame.display.set_mode(
-        (native_width if scale_to_screen else screen_width,
-         native_height if scale_to_screen else screen_height),
+        (native_width if scale_to_screen else (config.window_width or screen_width),
+         native_height if scale_to_screen else (config.window_height or screen_height)),
         screen_mode,
         bit_depth
     )
 
-    # Create the render surface if scaling
-    render_surface = pygame.Surface((screen_width, screen_height)) if scale_to_screen else final_screen
+    # Render canvas = internal resolution; scaled onto the window each frame.
+    if final_screen.get_size() == (screen_width, screen_height):
+        render_surface = final_screen
+    else:
+        render_surface = pygame.Surface((screen_width, screen_height))
+    runtime_globals.render_surface = render_surface
 
     pygame.display.set_caption(f"Omnipet {VERSION} [PROFILING]")
     pygame.mouse.set_visible(False)
@@ -246,15 +248,11 @@ def run_game_loop():
         # Update game state
         game.update()
         
-        # Draw game
-        game.draw(screen, clock)
+        # Draw to the internal render canvas, then scale it onto the window.
+        from utils import display_utils
+        game.draw(runtime_globals.render_surface, clock)
+        display_utils.present()
 
-        # If scaling, blit scaled render surface to fullscreen display
-        if scale_to_screen:
-            pygame.transform.scale(screen, (native_width, native_height), final_screen)
-
-        pygame.display.flip()
-        
         # Maintain framerate
         clock.tick(game_globals.configuration.frame_rate)
         frame_count += 1

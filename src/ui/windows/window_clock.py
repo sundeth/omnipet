@@ -27,6 +27,13 @@ class WindowClock:
         self.last_time_string = ""
         self.time_surface = None
 
+        # Persistent bar surface: the whole top bar (black strip + time +
+        # battery) is composited here and only re-rendered when the time
+        # string or battery icon changes. draw() is then a single small blit,
+        # so the scene never needs to rebuild anything clock-related.
+        self.bar_surface = pygame.Surface((runtime_globals.SCREEN_WIDTH, self.height))
+        self._bar_dirty = True
+
         self.battery = runtime_globals.i2c  # I2C Battery instance
 
     def load_battery_icons(self):
@@ -75,27 +82,37 @@ class WindowClock:
 
         self.last_battery_update = now
 
+    def _rebuild_bar(self):
+        """Re-composite the bar surface (called only when its content changed)."""
+        bar = self.bar_surface
+        bar.fill((0, 0, 0))
+        if self.time_surface:
+            bar.blit(self.time_surface, (self.x, self.padding))
+        if self.battery_icon:
+            battery_x = runtime_globals.SCREEN_WIDTH - self.battery_icon.get_width() - self.padding
+            battery_y = (self.height - self.battery_icon.get_height()) // 2
+            bar.blit(self.battery_icon, (battery_x, battery_y))
+        self._bar_dirty = False
+
     def draw(self, surface):
         now = time.time()
 
         # Only update time string and surface once per second
         if now - self.last_time_update >= 1:
-            self.last_time_string = time.strftime("%H:%M:%S")
-            self.time_surface = self.font.render(self.last_time_string, True, constants.FONT_COLOR_DEFAULT)
+            time_string = time.strftime("%H:%M:%S")
+            if time_string != self.last_time_string:
+                self.last_time_string = time_string
+                self.time_surface = self.font.render(time_string, True, constants.FONT_COLOR_DEFAULT)
+                self._bar_dirty = True
             self.last_time_update = now
 
-        # Draw top black bar
-        pygame.draw.rect(surface, (0, 0, 0), (0, self.y, runtime_globals.SCREEN_WIDTH, self.height))
-
-        # Draw cached time surface
-        if self.time_surface:
-            #surface.blit(self.time_surface, (self.x, self.padding))
-            blit_with_cache(surface, self.time_surface, (self.x, self.padding))
-
-        # Update and draw battery icon
+        # Battery polling is rate-limited internally (5s)
+        prev_icon_key = self.current_icon_key
         self.update_battery_icon()
-        if self.battery_icon:
-            battery_x = runtime_globals.SCREEN_WIDTH - self.battery_icon.get_width() - self.padding
-            battery_y = self.y + (self.height - self.battery_icon.get_height()) // 2
-            #surface.blit(self.battery_icon, (battery_x, battery_y))
-            blit_with_cache(surface, self.battery_icon, (battery_x, battery_y))
+        if self.current_icon_key != prev_icon_key:
+            self._bar_dirty = True
+
+        if self._bar_dirty:
+            self._rebuild_bar()
+
+        blit_with_cache(surface, self.bar_surface, (0, self.y))

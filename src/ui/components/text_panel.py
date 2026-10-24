@@ -20,16 +20,52 @@ class TextPanel(UIComponent):
         # Cache
         self.cached_surface = None
         self.last_text = ""
-        
+
         # This component is not focusable
         self.focusable = False
-        
+
+        # Slow vertical auto-scroll for text taller than the panel: scroll
+        # down, pause, scroll back up, pause, repeat.  Overflow amount is
+        # computed during render; zero disables the animation.
+        self.auto_scroll = True
+        self._scroll_px = 0.0
+        self._scroll_dir = 1
+        self._scroll_pause = 60      # initial hold before the first scroll
+        self._scroll_overflow = 0
+        self._last_scroll_int = 0
+
     def set_text(self, text):
         """Set the text to display"""
         if text != self.text:
             self.text = text or ""
             self.needs_redraw = True
             self.cached_surface = None
+            self._scroll_px = 0.0
+            self._scroll_dir = 1
+            self._scroll_pause = 60
+            self._scroll_overflow = 0
+
+    def update(self):
+        super().update()
+        if not self.visible or not self.auto_scroll or self._scroll_overflow <= 0:
+            return
+        if self._scroll_pause > 0:
+            self._scroll_pause -= 1
+            return
+        # ~12 base px/second at 30 FPS, scaled with the UI.
+        speed = 0.4 * (self.manager.ui_scale if self.manager else 1)
+        self._scroll_px += speed * self._scroll_dir
+        if self._scroll_px >= self._scroll_overflow:
+            self._scroll_px = float(self._scroll_overflow)
+            self._scroll_dir = -1
+            self._scroll_pause = 45
+        elif self._scroll_px <= 0:
+            self._scroll_px = 0.0
+            self._scroll_dir = 1
+            self._scroll_pause = 45
+        if int(self._scroll_px) != self._last_scroll_int:
+            self._last_scroll_int = int(self._scroll_px)
+            self.needs_redraw = True
         
     def _calculate_cut_rectangle_points(self):
         """Calculate points for rectangle with cut top-left and bottom-right corners"""
@@ -135,14 +171,17 @@ class TextPanel(UIComponent):
             font = self.get_font("text")
             
             if font:
-                # Calculate text area (inside the cut rectangle with padding)
-                cut = self.manager.scale_value(self.cut_size) if self.manager else self.cut_size
-                padding = self.manager.scale_value(8) if self.manager else 8
-                
-                text_x = cut + padding
-                text_y = cut + padding
-                text_width = self.rect.width - (cut * 2) - (padding * 2)
-                text_height = self.rect.height - (cut * 2) - (padding * 2)
+                # Text area: keep side margins at just a few pixels (the old
+                # cut+padding inset wasted ~19px per side and cut text off).
+                # The small vertical offset keeps the first line clear of the
+                # top-left corner cut diagonal.
+                margin_x = self.manager.scale_value(4) if self.manager else 4
+                margin_y = self.manager.scale_value(8) if self.manager else 8
+
+                text_x = margin_x
+                text_y = margin_y
+                text_width = self.rect.width - (margin_x * 2)
+                text_height = self.rect.height - (margin_y * 2)
                 
                 # Wrap text to fit
                 lines = self._wrap_text(self.text, font, text_width)
@@ -150,22 +189,33 @@ class TextPanel(UIComponent):
                 if lines:
                     line_height = font.get_height()
                     total_text_height = len(lines) * line_height + (len(lines) - 1) * self.line_spacing
-                    
-                    # Center text vertically in available space
-                    start_y = text_y + (text_height - total_text_height) // 2
-                    
+
+                    # Center text vertically when it fits; when it's taller
+                    # than the panel, top-align and let update() slowly
+                    # auto-scroll through the overflow.
+                    self._scroll_overflow = max(0, total_text_height - text_height)
+                    start_y = text_y + max(0, (text_height - total_text_height) // 2)
+                    if self._scroll_overflow > 0:
+                        start_y -= int(self._scroll_px)
+
+                    # Clip to the text area so partially-visible lines crop
+                    # cleanly while scrolling.
+                    prev_clip = self.cached_surface.get_clip()
+                    self.cached_surface.set_clip(
+                        pygame.Rect(text_x, text_y, text_width, text_height))
+
                     # Draw each line centered horizontally
                     for i, line in enumerate(lines):
+                        line_rect_y = start_y + i * (line_height + self.line_spacing)
+                        if line_rect_y + line_height < text_y or line_rect_y > text_y + text_height:
+                            continue  # fully outside the visible area
                         line_surface = font.render(line, True, fg_color)
                         line_rect = line_surface.get_rect()
-                        
-                        # Center horizontally within text area
                         line_rect.centerx = text_x + text_width // 2
-                        line_rect.y = start_y + i * (line_height + self.line_spacing)
-                        
-                        # Make sure we don't draw outside the text area
-                        if line_rect.bottom <= text_y + text_height:
-                            blit_with_cache(self.cached_surface, line_surface, line_rect.topleft)
+                        line_rect.y = line_rect_y
+                        self.cached_surface.blit(line_surface, line_rect.topleft)
+
+                    self.cached_surface.set_clip(prev_clip)
                         
         self.needs_redraw = False
         self.last_text = self.text

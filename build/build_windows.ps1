@@ -2,8 +2,18 @@
 # Creates a Windows executable using PyInstaller
 
 param(
-    [string]$Version = "0.9.8"
+    [string]$Version = ""
 )
+
+# The release version is src/core/version.py's unless -Version is given
+if (-not $Version) {
+    if ((Get-Content (Join-Path $PSScriptRoot "..\src\core\version.py") -Raw) -match 'VERSION\s*=\s*"([^"]+)"') {
+        $Version = $matches[1]
+    } else {
+        Write-Host "[ERROR] No VERSION in src/core/version.py" -ForegroundColor Red
+        exit 1
+    }
+}
 
 $RELEASE_DIR = "..\Release"
 $BUILD_NAME = "Omnipet_Windows_Ver_$Version"
@@ -37,10 +47,12 @@ if (-not (Test-Path "..\pyinstall.spec")) {
 
 Write-Status "Building Windows executable version..."
 
-# Clean previous builds
+# Clean previous builds. PyInstaller's work folder is build\pyinstall (its
+# default "build" beside the spec, named after it); "..\build" itself is the
+# folder holding these scripts and must never be removed.
 Write-Status "Cleaning previous builds..."
 if (Test-Path $TEMP_DIR) { Remove-Item -Recurse -Force $TEMP_DIR }
-if (Test-Path "..\build") { Remove-Item -Recurse -Force "..\build" }
+if (Test-Path "..\build\pyinstall") { Remove-Item -Recurse -Force "..\build\pyinstall" }
 if (Test-Path "..\dist") { Remove-Item -Recurse -Force "..\dist" }
 
 # Install pygame if needed and run PyInstaller
@@ -80,21 +92,25 @@ New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME" -Force | Out-Null
 Write-Status "Copying assets..."
 Copy-Item -Recurse "..\assets" "$TEMP_DIR\$BUILD_NAME\"
 
-# Copy and rename config files
-Write-Status "Copying configuration files..."
-New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\config" -Force | Out-Null
-Copy-Item "..\config\config_windows.json" "$TEMP_DIR\$BUILD_NAME\config\config.json"
-Copy-Item "..\config\input_config_windows.json" "$TEMP_DIR\$BUILD_NAME\config\input_config.json"
+# Settings live in the save (GameConfiguration): the config/ folder
+# these builds used to copy was removed in 1.0 (e09369e8).
 
 # Copy documentation
 Write-Status "Copying documentation..."
 Copy-Item -Recurse "..\Documentation" "$TEMP_DIR\$BUILD_NAME\"
 
-# Copy Module Editor (excluding Source folder)
+# Copy the Module Editor: its own repository's Release build (beside this
+# repository); an older checkout kept a copy in "Module Editor" here.
 Write-Status "Copying Module Editor..."
-New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\Module Editor" -Force | Out-Null
-Get-ChildItem "..\Module Editor" | Where-Object { $_.Name -ne "Source" } | ForEach-Object {
-    Copy-Item -Recurse $_.FullName "$TEMP_DIR\$BUILD_NAME\Module Editor\"
+$editorSrc = @("..\Module Editor", "..\..\Omnipet Module Editor\OmnipetModuleEditor\bin\Release") |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($editorSrc) {
+    New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\Module Editor" -Force | Out-Null
+    Get-ChildItem $editorSrc | Where-Object { $_.Name -ne "Source" } | ForEach-Object {
+        Copy-Item -Recurse $_.FullName "$TEMP_DIR\$BUILD_NAME\Module Editor\"
+    }
+} else {
+    Write-Host "[WARNING] No Module Editor build found (build it in Release first); shipping without it" -ForegroundColor Yellow
 }
 
 # Ship an EMPTY modules/ folder - releases must not include the dev
@@ -111,7 +127,6 @@ New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\save" -Force | Out-Nul
 Write-Status "Copying executable and additional files..."
 Copy-Item "..\dist\Omnipet.exe" "$TEMP_DIR\$BUILD_NAME\"
 Copy-Item "..\LICENSE.txt" "$TEMP_DIR\$BUILD_NAME\"
-Copy-Item "..\ModuleEditor.bat" "$TEMP_DIR\$BUILD_NAME\"
 
 # Create the ZIP file
 Write-Status "Creating ZIP archive..."
@@ -129,7 +144,11 @@ try {
     Add-Type -AssemblyName "System.IO.Compression.FileSystem"
     $sourcePath = (Resolve-Path "$TEMP_DIR\$BUILD_NAME").Path
     $zipPath = (Resolve-Path $RELEASE_DIR).Path + "\$BUILD_NAME.zip"
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($sourcePath, $zipPath)
+    # Forward slashes and Unix permissions (scripts executable, folders
+    # writable): .NET's ZipFile wrote backslashes and no modes, which Linux
+    # unzip and Python's zipfile mis-extract (build/make_zip.py).
+    python (Join-Path $PSScriptRoot "make_zip.py") $sourcePath $zipPath
+    if ($LASTEXITCODE -ne 0) { throw "make_zip.py failed with exit code $LASTEXITCODE" }
 } catch {
     Write-Error-Message "Failed to create ZIP file: $_"
     exit 1
@@ -138,7 +157,7 @@ try {
 # Clean up
 Write-Status "Cleaning up temporary files..."
 if (Test-Path $TEMP_DIR) { Remove-Item -Recurse -Force $TEMP_DIR }
-if (Test-Path "..\build") { Remove-Item -Recurse -Force "..\build" }
+if (Test-Path "..\build\pyinstall") { Remove-Item -Recurse -Force "..\build\pyinstall" }
 if (Test-Path "..\dist") { Remove-Item -Recurse -Force "..\dist" }
 
 if (Test-Path "$RELEASE_DIR\$BUILD_NAME.zip") {

@@ -22,6 +22,7 @@ from scenes.scene_eggselection import SceneEggSelection
 from scenes.scene_evolution import SceneEvolution
 from scenes.scene_freezerbox import SceneFreezerBox
 from scenes.scene_library import SceneLibrary
+from scenes.scene_collection import SceneCollection
 from scenes.scene_settingsmenu import SceneSettingsMenu
 from scenes.scene_setup import SceneSetup
 from scenes.scene_tutorial import SceneTutorial
@@ -35,8 +36,9 @@ from scenes.scene_inventory import SceneInventory
 from scenes.scene_training import SceneTraining
 from scenes.scene_debug import SceneDebug
 
-# Game Version
-runtime_globals.VERSION = "1.0.0 Beta 1"
+from core.version import VERSION
+
+runtime_globals.VERSION = VERSION
 
 # Global timing variable for system stats updates
 last_stats_update = time.time()
@@ -61,12 +63,58 @@ class VirtualPetGame:
                 game_globals.load_player_id()
             # Migrate legacy save folder structure (Type0→Default, Type1→<player_id>)
             game_globals.migrate_legacy_saves()
-            game_globals.load()
-        
+            if runtime_globals.IS_ANDROID:
+                # The phone's render resolution was settled from the device
+                # screen before this point; a save's own display fields
+                # describe whatever wrote it, so they are carried across
+                # rather than applied.  Desktop wants the saved window size
+                # and reconciles it just below.
+                from utils import display_utils
+                display_utils.load_keeping_device_display()
+            else:
+                game_globals.load()
+
+        # The window was created at launch with default config (the save wasn't
+        # loaded yet); now that the configuration is in, resize the window to
+        # the saved size so a restart honours it.  No-op fullscreen / Android.
+        if not runtime_globals.IS_ANDROID:
+            try:
+                from utils import display_utils
+                display_utils.reconcile_window_from_config()
+            except Exception as exc:
+                runtime_globals.game_console.log(
+                    f"[VirtualPetGame] window reconcile failed: {exc}")
+
+        # Pet size comes from how many pets are in the party, and the party is
+        # only known once the save has been read — the sprites loaded above
+        # used the pre-load estimate. Resize them now that both the party and
+        # the final window size are settled (a no-op if the estimate was right).
+        try:
+            from utils.pet_utils import refresh_pet_sizes
+            refresh_pet_sizes()
+        except Exception as exc:
+            runtime_globals.game_console.log(
+                f"[VirtualPetGame] pet resize after load failed: {exc}")
+
+        # Take the evolution routes from the modules as they are NOW. A pet
+        # keeps the routes it was created with, so without this a module fix
+        # can never reach a pet already in the save — updating the module and
+        # restarting is how a player repairs one. Only the evolution lists are
+        # touched; nothing else about the pet is overwritten.
+        try:
+            from utils.pet_utils import refresh_pet_evolutions
+            n = refresh_pet_evolutions()
+            if n:
+                runtime_globals.game_console.log(
+                    f"[Init] Refreshed evolution data on {n} pet(s) from their modules")
+        except Exception as exc:
+            runtime_globals.game_console.log(
+                f"[VirtualPetGame] evolution refresh failed: {exc}")
+
         # Reload input mappings after configuration is loaded
         from input.input_manager import reload_input_mappings
         reload_input_mappings(runtime_globals.game_input)
-        
+
         self.scene = SceneBoot()
         print("[Init] Omnibot initialized with SceneBoot")
         self.rotated = False
@@ -76,13 +124,13 @@ class VirtualPetGame:
         
         # Load mouse pointer sprite (only on desktop)
         self.mouse_pointer = None
+        self._mouse_pointer_orig = None
+        self._mouse_pointer_size = None
         if not runtime_globals.IS_ANDROID:
             try:
                 pointer_path = "assets/Pointer.png"
-                self.mouse_pointer = image_load(pointer_path).convert_alpha()
-                # Scale the pointer to an appropriate size
-                pointer_size = int(16 * runtime_globals.UI_SCALE)
-                self.mouse_pointer = pygame.transform.scale(self.mouse_pointer, (pointer_size, pointer_size))
+                self._mouse_pointer_orig = image_load(pointer_path).convert_alpha()
+                self._update_mouse_pointer_scale()
                 print(f"[Init] Mouse pointer sprite loaded: {pointer_path}")
             except (pygame.error, FileNotFoundError) as e:
                 print(f"[Init] Could not load mouse pointer sprite: {e}")
@@ -104,11 +152,33 @@ class VirtualPetGame:
                 self._accel_enabled = False
                 print("[Input] Failed to enable accelerometer:", e)
 
+    def _update_mouse_pointer_scale(self):
+        """Scale the pointer for the current render scale so it stays a
+        constant on-screen size.
+
+        The pointer is drawn on the render canvas, which is then scaled to the
+        window.  ``16 * UI_SCALE`` canvas pixels works out to a constant
+        fraction of the window after that scaling, so the pointer looks the
+        same regardless of render resolution (it was previously fixed at the
+        startup scale and went tiny at 4x)."""
+        if self._mouse_pointer_orig is None:
+            return
+        size = max(8, int(16 * runtime_globals.UI_SCALE))
+        if self._mouse_pointer_size == size and self.mouse_pointer is not None:
+            return
+        self.mouse_pointer = pygame.transform.scale(
+            self._mouse_pointer_orig, (size, size))
+        self._mouse_pointer_size = size
+
     def update(self) -> None:
         """
         Updates the current scene and handles scene transitions if needed.
         """
         self.scene.update()
+        # A card pack being opened plays over the scene (ui.card_reveal).
+        from ui.card_reveal import REVEAL
+        if REVEAL.pending():
+            REVEAL.update(type(self.scene).__name__)
 
         # Poll joystick actions (including analog stick directions)
         #for action in runtime_globals.game_input.get_just_pressed_joystick():
@@ -142,6 +212,9 @@ class VirtualPetGame:
         Draws the current scene to the given surface.
         """
         self.scene.draw(surface)
+        from ui.card_reveal import REVEAL
+        if REVEAL.active:
+            REVEAL.draw(surface)
 
         global last_stats_update, cached_stats
 
@@ -153,9 +226,15 @@ class VirtualPetGame:
                 last_stats_update = now
             draw_system_stats(clock, surface, cached_stats, self.stat_font)
 
-        # Draw mouse pointer only when in mouse mode
-        if (runtime_globals.INPUT_MODE == runtime_globals.MOUSE_MODE and 
-            self.mouse_pointer is not None):
+        # Keep the pointer a constant on-screen size as the render scale
+        # changes (e.g. after a Render Res change).
+        self._update_mouse_pointer_scale()
+
+        # Draw mouse pointer only when in mouse mode AND the cursor is
+        # actually over the game window — pygame.mouse.get_focused() is False
+        # once the pointer leaves the window, so we stop drawing the icon then.
+        if (runtime_globals.INPUT_MODE == runtime_globals.MOUSE_MODE and
+            self.mouse_pointer is not None and pygame.mouse.get_focused()):
             mouse_pos = runtime_globals.game_input.get_mouse_position()
             if mouse_pos != (0, 0):  # Only draw if mouse position is valid
                 # Draw pointer slightly offset so the tip points to the actual position
@@ -184,15 +263,32 @@ class VirtualPetGame:
         # (Backspace → START by default).  The scene only consumes the key
         # when a text component is focused, so gameplay scenes are unaffected
         # and fall through to the normal mapping below.
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_BACKSPACE:
-            if self.scene.handle_event(event):
-                return
+        # Only offered while a text field has focus: most scenes take input
+        # tuples only, and handing them the raw event raised TypeError in 8 of
+        # 21 scenes, so START never arrived from the keyboard there.
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_BACKSPACE and self._text_field_focused():
+            try:
+                if self.scene.handle_event(event):
+                    return
+            except (TypeError, ValueError, AttributeError):
+                pass
 
         input_event = runtime_globals.game_input.process_event(event)
 
+        # The attention sounds are calls for the player — once they respond,
+        # whatever they pressed, the call has been answered and the sound has
+        # no reason to keep going. Silenced here because this is the one place
+        # every player input passes through, whatever the scene.
+        # (guarded on sounds_loaded so the first press doesn't trigger the
+        # lazy load just to ask whether anything is playing)
+        if input_event and runtime_globals.game_sound.sounds_loaded:
+            for _call in ("need_attention", "alarm"):
+                if runtime_globals.game_sound.is_playing(_call):
+                    runtime_globals.game_sound.stop(_call)
+
         # Pass the input event tuple to the scene if we got one
         if input_event:
-            if self.scene.handle_event(input_event):
+            if self.dispatch_input(input_event):
                 return
 
         # Forward raw text-input events to the scene so a focused
@@ -216,7 +312,96 @@ class VirtualPetGame:
                 if action in ("ANALOG_UP", "ANALOG_DOWN", "ANALOG_LEFT", "ANALOG_RIGHT"):
                     from input.input_event import create_simple_event
                     directional = action.replace("ANALOG_", "")
-                    self.scene.handle_event(create_simple_event(directional))
+                    self.dispatch_input(create_simple_event(directional))
+
+    #: Presses and taps that must answer with a sound (owner rule, 2026-10-13):
+    #: "menu" when something was selected or switched, "cancel" when nothing
+    #: happened. Pointer motion, scrolling, drags and the debug F-keys are not
+    #: presses.
+    SOUNDED_INPUTS = frozenset({"UP", "DOWN", "LEFT", "RIGHT", "A", "B", "START", "SELECT",
+                                "X", "Y", "L", "R", "LCLICK", "RCLICK"})
+
+    def dispatch_input(self, input_event):
+        """Hand an input action to the scene; make sure a press is heard.
+
+        Scenes play their own sounds. When a press reached a scene and nothing
+        played, this answers for it: "menu" if the press changed the screen
+        (a scene or view switch, focus, a phase or selection), "cancel" if it
+        did nothing. A scene running gameplay of its own (a minigame, a
+        battle) says so through ``plays_own_input_sounds()`` and is left alone.
+        Returns what the scene's handler returned.
+        """
+        event_type = input_event[0] if isinstance(input_event, tuple) else None
+        from ui.card_reveal import REVEAL
+        if REVEAL.active:
+            # A card pack reveal holds the input until it is done.
+            return REVEAL.handle_event(input_event)
+        sound = runtime_globals.game_sound
+        watch = (event_type in self.SOUNDED_INPUTS
+                 and not self._scene_plays_own_input_sounds())
+        if watch:
+            before_sounds = getattr(sound, "play_requests", 0)
+            before_state = self._input_fingerprint()
+        handled = self.scene.handle_event(input_event)
+        if watch and getattr(sound, "play_requests", 0) == before_sounds:
+            changed = self._input_fingerprint() != before_state
+            sound.play("menu" if changed else "cancel")
+        return handled
+
+    def _text_field_focused(self):
+        """Whether a text field (a sticky-focus TextInput / CodeEntry) has focus
+        in the scene or its view."""
+        scene = self.scene
+        for owner in (scene, getattr(scene, "current_view", None)):
+            manager = getattr(owner, "ui_manager", None) if owner is not None else None
+            components = getattr(manager, "focusable_components", None) or []
+            index = getattr(manager, "focused_index", -1)
+            if 0 <= index < len(components):
+                focused = components[index]
+                if getattr(focused, "sticky_focus", False) and getattr(focused, "focused", False):
+                    return True
+        return False
+
+    def _scene_plays_own_input_sounds(self):
+        check = getattr(self.scene, "plays_own_input_sounds", None)
+        try:
+            return bool(check()) if callable(check) else False
+        except Exception:
+            return False
+
+    def _input_fingerprint(self):
+        """What a press can visibly change: the scene, its view and phase, focus,
+        an open menu, the focused component's selection."""
+        scene = self.scene
+        parts = [id(scene), runtime_globals.game_state_update, runtime_globals.game_state,
+                 getattr(runtime_globals, "main_menu_index", None), getattr(runtime_globals, "show_hearts", None)]
+        for owner in (scene, getattr(scene, "current_view", None)):
+            if owner is None:
+                continue
+            parts.append(id(owner))
+            for attr in ("phase", "mode", "state", "current_view_name", "page", "current_page",
+                         "selected_index", "current_index", "selection", "view_focus"):
+                value = getattr(owner, attr, None)
+                parts.append(value if value is None or isinstance(value, (str, int, float, bool))
+                             else id(value))
+            manager = getattr(owner, "ui_manager", None)
+            if manager is None:
+                continue
+            menu = getattr(manager, "active_menu", None)
+            parts += [getattr(manager, "focused_index", None),
+                      id(menu) if menu is not None and getattr(menu, "visible", False) else None,
+                      getattr(menu, "selected_index", None) if menu is not None else None,
+                      getattr(manager, "active_tooltip", None) is not None]
+            focusables = getattr(manager, "focusable_components", [])
+            index = getattr(manager, "focused_index", -1)
+            if 0 <= index < len(focusables):
+                focused = focusables[index]
+                for attr in ("selected_index", "active_index", "current_page", "page", "scroll_offset",
+                             "value", "checked", "selected", "cursor", "text"):
+                    value = getattr(focused, attr, None)
+                    if isinstance(value, (str, int, float, bool)):
+                        parts.append((attr, value))
+        return tuple(parts)
 
     def change_scene(self) -> None:
         """
@@ -226,6 +411,9 @@ class VirtualPetGame:
         state = runtime_globals.game_state
 
         scene_mapping = {
+            # The error screen's Retry, and its switch to Free Mode, start
+            # the boot again; without it here they did nothing.
+            "boot": SceneBoot,
             "egg": SceneEggSelection,
             "game": SceneMainGame,
             "settings": SceneSettingsMenu,
@@ -245,6 +433,7 @@ class VirtualPetGame:
             "evolution": SceneEvolution,
             "freezer": SceneFreezerBox,
             "library": SceneLibrary,
+            "collection": SceneCollection,
             "debug": SceneDebug,
         }
 

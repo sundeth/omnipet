@@ -12,6 +12,9 @@ from .versus_battle_view import VersusBattleView
 from .adventure_module_selection_view import AdventureModuleSelectionView
 from .adventure_area_selection_view import AdventureAreaSelectionView
 from .adventure_battle_view import AdventureBattleView
+from .specials_view import SpecialsView
+from .password_view import PasswordView
+from .module_shop_view import ModuleShopView
 
 __all__ = [
     'AdventureView',
@@ -23,4 +26,7 @@ __all__ = [
     'AdventureModuleSelectionView',
     'AdventureAreaSelectionView',
     'AdventureBattleView',
+    'SpecialsView',
+    'PasswordView',
+    'ModuleShopView',
 ]

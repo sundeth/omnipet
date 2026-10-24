@@ -2,6 +2,9 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 from models.game_pet import GamePet
 
+#: Digimon a freezer box holds: its 5x5 grid (rebuild).
+BOX_CAPACITY = 25
+
 
 @dataclass
 class GameFreezer:

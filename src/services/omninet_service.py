@@ -11,9 +11,25 @@ from typing import Optional, Tuple, Dict, Any
 
 from core import runtime_globals, constants
 
+#: What the player reads when Omninet answers with something that is not its
+#: JSON (an HTML error page from a proxy, a cut-off body): the parser's own
+#: text ("Expecting value: line 1 column 1") meant nothing to anyone.
+UNREADABLE_ANSWER = "Omninet is not answering properly, try again later"
+
+
+def _readable(exc):
+    """A message for the player from an exception caught around a request."""
+    if isinstance(exc, ValueError):          # json.JSONDecodeError and kin
+        return UNREADABLE_ANSWER
+    return "Omninet request failed, try again later"
+
 
 class OmninetService:
     """API client for Omninet server communication."""
+
+    #: Seconds a team registration or an arena battle may take: the server
+    #: runs its battle engine before it answers.
+    ARENA_TIMEOUT = 20
     
     # Singleton instance
     _instance = None
@@ -38,6 +54,9 @@ class OmninetService:
         self._device_id: Optional[str] = None
         self._player_id: Optional[str] = None  # Cached player UUID from server
         self._user_info: Optional[Dict[str, Any]] = None
+        self.last_purchase_id: Optional[str] = None  # the row purchase_item made
+        self.last_coins_remaining: Optional[int] = None  # the balance it left
+        self.last_points_remaining: Optional[int] = None  # contribution points it left
         self._timeout = 5  # seconds
         
         # Path for storing device credentials
@@ -77,7 +96,7 @@ class OmninetService:
         main_url = getattr(constants, 'OMNINET_MAIN_URL', None)
         if main_url:
             return main_url.rstrip('/')
-        return 'https://omnipet.app.br'
+        return 'https://dev.omnipet.app.br'
     
     def _load_credentials(self) -> None:
         """Load saved device credentials from file."""
@@ -167,8 +186,10 @@ class OmninetService:
                 
                 return True, data.get('message', 'Device linked successfully!'), None
             else:
-                error_data = response.json()
-                error_msg = error_data.get('detail', 'Invalid or expired code')
+                try:
+                    error_msg = response.json().get('detail', 'Invalid or expired code')
+                except ValueError:
+                    error_msg = UNREADABLE_ANSWER
                 runtime_globals.game_console.log(f"[OmninetService] Pairing failed: {error_msg}")
                 return False, error_msg, None
                 
@@ -180,7 +201,7 @@ class OmninetService:
             return False, "Cannot connect to server", None
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Error: {e}")
-            return False, str(e), None
+            return False, _readable(e), None
     
     def validate_device(self) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
         """
@@ -223,11 +244,16 @@ class OmninetService:
                 runtime_globals.game_console.log(f"[OmninetService] Logged in as: {self._user_info.get('nickname')}")
                 return True, "Device validated", self._user_info
             else:
-                # Invalid credentials, clear them
-                error_data = response.json()
-                error_msg = error_data.get('detail', 'Device validation failed')
+                try:
+                    error_msg = response.json().get('detail', 'Device validation failed')
+                except ValueError:
+                    error_msg = UNREADABLE_ANSWER
                 runtime_globals.game_console.log(f"[OmninetService] Validation failed: {error_msg}")
-                self._clear_credentials()
+                # Only a refused key is forgotten: a server error (500, a
+                # restart) used to log the player out and send them through
+                # the e-mailed code again.
+                if response.status_code in (401, 403):
+                    self._clear_credentials()
                 return False, error_msg, None
                 
         except requests.exceptions.Timeout:
@@ -236,7 +262,7 @@ class OmninetService:
             return False, "Cannot connect to server", None
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Error: {e}")
-            return False, str(e), None
+            return False, _readable(e), None
     
     def logout(self) -> bool:
         """
@@ -245,24 +271,19 @@ class OmninetService:
         Returns:
             True if logout was successful
         """
-        # Try to invalidate on server (if we have credentials and server is available)
-        if self._device_key:
+        # Revoke this device's key on the server: deleting the device is what
+        # does it (DELETE /users/me/devices/{id}). It posted to
+        # /auth/logout, which the server does not have, so the key stayed
+        # valid for anyone holding it (online finding 2).
+        if self._device_key and self._device_id:
             try:
                 base_url = self._get_base_url()
-                url = urljoin(base_url, '/api/v1/auth/logout')
-                
-                headers = {
-                    'X-Device-Key': self._device_key,
-                    'Content-Type': 'application/json'
-                }
-                
-                response = requests.post(
+                url = urljoin(base_url, f'/api/v1/users/me/devices/{self._device_id}')
+                response = requests.delete(
                     url,
-                    headers=headers,
-                    json={'secret_key': self._device_key},
+                    headers={'X-Device-Key': self._device_key},
                     timeout=self._timeout
                 )
-                
                 runtime_globals.game_console.log(f"[OmninetService] Logout response: {response.status_code}")
             except Exception as e:
                 runtime_globals.game_console.log(f"[OmninetService] Logout error: {e}")
@@ -310,7 +331,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Register error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def verify_registration(self, email: str, code: str) -> Tuple[bool, str]:
         """
@@ -347,7 +368,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] VerifyReg error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def login_request(self, email: str, password: str) -> Tuple[bool, str]:
         """
@@ -379,7 +400,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Login error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def verify_login(self, email: str, code: str,
                      clear_devices: bool = False) -> Tuple[bool, str]:
@@ -423,7 +444,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] VerifyLogin error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def resend_code(self, email: str) -> Tuple[bool, str]:
         """
@@ -450,7 +471,7 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Resend error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def is_logged_in(self) -> bool:
         """Check if device is linked and has valid credentials."""
@@ -492,7 +513,7 @@ class OmninetService:
     # =========================================================================
     
     def _make_request(self, method: str, endpoint: str, json_data: dict = None, 
-                      require_auth: bool = True) -> Tuple[bool, Any]:
+                      require_auth: bool = True, timeout: float = None) -> Tuple[bool, Any]:
         """
         Make an API request with optional authentication.
         
@@ -513,17 +534,21 @@ class OmninetService:
             if require_auth and self._device_key:
                 headers['X-Device-Key'] = self._device_key
             
+            timeout = timeout or self._timeout
             if method.upper() == 'GET':
-                response = requests.get(url, headers=headers, timeout=self._timeout)
+                response = requests.get(url, headers=headers, timeout=timeout)
             elif method.upper() == 'POST':
-                response = requests.post(url, headers=headers, json=json_data or {}, timeout=self._timeout)
+                response = requests.post(url, headers=headers, json=json_data or {}, timeout=timeout)
             elif method.upper() == 'DELETE':
-                response = requests.delete(url, headers=headers, timeout=self._timeout)
+                response = requests.delete(url, headers=headers, timeout=timeout)
             else:
                 return False, f"Unsupported method: {method}"
             
             if response.status_code == 200:
-                return True, response.json()
+                try:
+                    return True, response.json()
+                except ValueError:
+                    return False, UNREADABLE_ANSWER
             else:
                 # Handle error responses
                 try:
@@ -551,14 +576,20 @@ class OmninetService:
             return False, "Cannot connect to server"
         except Exception as e:
             runtime_globals.game_console.log(f"[OmninetService] Request error: {e}")
-            return False, str(e)
+            return False, _readable(e)
     
     def get_shop_modules(self, category: str = None) -> Tuple[bool, list]:
-        """Get list of modules available in shop."""
+        """Get list of modules available in shop.
+
+        Sends the device key (when logged in) so the server can apply
+        per-user pricing — namely 0 for the player's free first module in
+        Progress Mode.  The listing itself is public, so a missing device
+        key simply yields the standard fixed price.
+        """
         endpoint = '/api/v1/shop/modules'
         if category:
             endpoint += f'?category={category}'
-        success, data = self._make_request('GET', endpoint, require_auth=False)
+        success, data = self._make_request('GET', endpoint, require_auth=True)
         if success and isinstance(data, dict):
             return True, data.get('modules', [])
         return success, data if isinstance(data, list) else []
@@ -604,13 +635,34 @@ class OmninetService:
         """
         if not self._device_key:
             return False, "Not logged in"
-        
+
+        self.last_purchase_id = None
+        self.last_coins_remaining = None
+        self.last_points_remaining = None
         success, data = self._make_request('POST', '/api/v1/shop/purchase', {
             'purchase_type': item_type,  # Server expects 'purchase_type', not 'item_type'
             'item_id': item_id
         })
-        
+
         if success and isinstance(data, dict):
+            # A refused purchase (not enough coins, already owned) is HTTP 200
+            # with success false: it used to be booked as bought, the coins
+            # taken and the item granted locally.
+            if data.get('success', True) is False:
+                return False, data.get('message') or 'Purchase refused'
+            # The row an item purchase made, so the account sync does not
+            # count that item a second time (GamePurchases.apply_item_purchase)
+            self.last_purchase_id = data.get('purchase_id')
+            # The account's balance after it: what the server charged, which
+            # a listing loaded earlier may not show (the free first module)
+            remaining = data.get('coins_remaining')
+            self.last_coins_remaining = remaining if isinstance(remaining, int) else None
+            # A Special priced in contribution points leaves the coins alone
+            # and answers with what is left of the points.
+            points = data.get('contribution_points_remaining')
+            self.last_points_remaining = points if isinstance(points, int) else None
+            if self.last_points_remaining is not None and self._user_info is not None:
+                self._user_info['contribution_points'] = self.last_points_remaining
             return True, data.get('message', 'Purchase successful')
         return False, data if isinstance(data, str) else 'Purchase failed'
     
@@ -646,7 +698,7 @@ class OmninetService:
             total = int(response.headers.get('Content-Length', 0) or 0)
             downloaded = 0
             chunks = []
-            for chunk in response.iter_content(chunk_size=32 * 1024):
+            for chunk in response.iter_content(chunk_size=128 * 1024):
                 if not chunk:
                     continue
                 chunks.append(chunk)
@@ -669,7 +721,7 @@ class OmninetService:
         except Exception as e:
             runtime_globals.game_console.log(
                 f"[OmninetService] download_module_zip error: {e}")
-            return False, str(e)
+            return False, _readable(e)
 
     def get_module_sprite(self, module_id: str, sprite_type: str):
         """Fetch a module sprite image ('icon' or 'logo'). Returns a pygame.Surface or None."""
@@ -707,14 +759,28 @@ class OmninetService:
         """
         import io
         import pygame
+        data = self.get_shop_sprite_bytes(kind, item_id)
+        if not data:
+            return None
+        try:
+            return pygame.image.load(io.BytesIO(data)).convert_alpha()
+        except Exception as e:
+            runtime_globals.game_console.log(
+                f"[OmninetService] Shop sprite fetch error ({kind}/{item_id}): {e}")
+        return None
+
+    def get_shop_sprite_bytes(self, kind: str, item_id: str) -> Optional[bytes]:
+        """The image file of a shop entry's sprite (``get_shop_sprite``), as
+        the server sends it, for the game to keep: a bought item's icon, a
+        background whose download carried no picture. None on any failure."""
         if not item_id:
             return None
         try:
             base_url = self._get_base_url()
             url = urljoin(base_url, f'/api/v1/shop/{kind}/{item_id}/sprite')
             response = requests.get(url, timeout=self._timeout)
-            if response.status_code == 200:
-                return pygame.image.load(io.BytesIO(response.content)).convert_alpha()
+            if response.status_code == 200 and response.content:
+                return response.content
         except Exception as e:
             runtime_globals.game_console.log(
                 f"[OmninetService] Shop sprite fetch error ({kind}/{item_id}): {e}")
@@ -739,12 +805,72 @@ class OmninetService:
         return self._make_request('GET', f'/api/v1/shop/download/item/{item_id}')
 
     # ------------------------------------------------------------------
+    # Specials and contribution points
+    # ------------------------------------------------------------------
+
+    def get_contribution_points(self) -> Optional[int]:
+        """The account's contribution points as last read from the server
+        (earned on the Digimon Database; a balance apart from the coins)."""
+        if not self._user_info:
+            return None
+        value = self._user_info.get('contribution_points')
+        return int(value) if isinstance(value, int) else None
+
+    def refresh_user_info(self) -> Tuple[bool, Any]:
+        """Read the account again (balances included): contribution points
+        are earned outside the game, so the Specials page asks each time it
+        opens. Unlike validate_device, a refusal here keeps the credentials."""
+        if not self._device_key:
+            return False, "Not logged in"
+        success, data = self._make_request('POST', '/api/v1/auth/validate-device')
+        if success and isinstance(data, dict) and data.get('id'):
+            self._user_info = data
+            return True, data
+        return False, data
+
+    def get_special_preview(self, item_id: str, small: bool = True):
+        """A Special's preview picture as a Surface, or None. *small* asks
+        for a background's 96x96 day picture (the server's default is the
+        1024x1024 one, a few MB each)."""
+        import io
+        import pygame
+        if not item_id:
+            return None
+        try:
+            base_url = self._get_base_url()
+            url = urljoin(base_url, f'/api/v1/shop/special/{item_id}/sprite')
+            response = requests.get(url, params={'size': 'small'} if small else None,
+                                    timeout=self._timeout)
+            if response.status_code == 200 and response.content:
+                return pygame.image.load(io.BytesIO(response.content)).convert_alpha()
+        except Exception as e:
+            runtime_globals.game_console.log(
+                f"[OmninetService] Special preview error ({item_id}): {e}")
+        return None
+
+    def download_special(self, special_id: str) -> Tuple[bool, Any]:
+        """Download a bought Special: for a background, every picture it has
+        as base64 (day/dusk/night, normal and _high: up to ~10 MB), hence the
+        long timeout."""
+        if not self._device_key:
+            return False, "Not logged in"
+        return self._make_request('GET', f'/api/v1/shop/download/special/{special_id}',
+                                  timeout=120)
+
+    # ------------------------------------------------------------------
     # Arena / Teams / Battles / Seasons
     # ------------------------------------------------------------------
 
     def get_current_season(self) -> Tuple[bool, Any]:
-        """Fetch the current ACTIVE season (auto-creates a weekly one if none)."""
+        """Fetch the running season (404 between seasons)."""
         return self._make_request('GET', '/api/v1/seasons/current', require_auth=False)
+
+    def get_arena_modules(self) -> Tuple[bool, Any]:
+        """Modules installed on the server for this season's battles.
+
+        Pets from any other module cannot join an arena team.
+        """
+        return self._make_request('GET', '/api/v1/arena/modules', require_auth=False)
 
     def get_user_teams(self, include_past: bool = False) -> Tuple[bool, Any]:
         """List the player's teams (current season + any with unclaimed rewards)."""
@@ -752,6 +878,12 @@ class OmninetService:
             return False, "Not logged in"
         endpoint = f'/api/v1/teams?include_past={"true" if include_past else "false"}'
         return self._make_request('GET', endpoint)
+
+    def get_team(self, team_id: str) -> Tuple[bool, Any]:
+        """One of the player's teams with its pets (any season)."""
+        if not self._device_key:
+            return False, "Not logged in"
+        return self._make_request('GET', f'/api/v1/teams/{team_id}')
 
     def get_current_team(self) -> Tuple[bool, Any]:
         """Get the player's team for the current season (or 404 if none)."""
@@ -764,18 +896,21 @@ class OmninetService:
         Create an arena team.
 
         Args:
-            pets: list of dicts with the GamePet fields the server expects
-                  (name, module_name, module_version, pet_version, stage,
-                  level, atk_main, atk_alt, atk_alt2, power, attribute,
-                  hp, star, critical_turn, extra_data).
+            pets: one dict per pet naming the species (name, module_name,
+                  module_version, pet_version) and carrying its care
+                  ``status``, its ``uid``, the species values the game
+                  holds (``base``) and its full save copy (``pet_json``).
+                  The server rebuilds stage, attribute, power, HP and
+                  attacks from its own copy of the module.
             team_name: optional display name for the team.
         """
         if not self._device_key:
             return False, "Not logged in"
+        # The server's engine rebuilds and checks every pet: allow it time.
         return self._make_request('POST', '/api/v1/teams', {
             'name': team_name,
             'pets': pets,
-        })
+        }, timeout=max(self._timeout, self.ARENA_TIMEOUT))
 
     def deactivate_team(self, team_id: str) -> Tuple[bool, Any]:
         """Soft-delete (deactivate) an arena team."""
@@ -816,7 +951,27 @@ class OmninetService:
         """
         if not self._device_key:
             return False, "Not logged in"
-        return self._make_request('POST', f'/api/v1/battles/find/{team_id}')
+        # The server fights the whole battle before answering.
+        return self._make_request('POST', f'/api/v1/battles/find/{team_id}',
+                                  timeout=max(self._timeout, self.ARENA_TIMEOUT))
+
+    def get_season_standings(self, season_id: str, limit: int = 50) -> Tuple[bool, Any]:
+        """A season's table (live while it runs, final once closed); the
+        player's own row is flagged ``is_you``."""
+        return self._make_request(
+            'GET', f'/api/v1/seasons/{season_id}/standings?limit={int(limit)}',
+            require_auth=bool(self._device_key))
+
+    def get_season_winners(self, season_id: str) -> Tuple[bool, Any]:
+        """A finished season's podium."""
+        return self._make_request('GET', f'/api/v1/seasons/{season_id}/winners',
+                                  require_auth=False)
+
+    def get_arena_winners(self, user_id: str = None, limit: int = 30) -> Tuple[bool, Any]:
+        """Every finished season's podium, newest first (one player's with
+        *user_id*)."""
+        query = f'?limit={int(limit)}' + (f'&user_id={user_id}' if user_id else '')
+        return self._make_request('GET', f'/api/v1/arena/winners{query}', require_auth=False)
 
     # ------------------------------------------------------------------
     # Reward claims
@@ -847,12 +1002,25 @@ class OmninetService:
                     'idempotency_key': idempotency_key,
                 })
                 if success and isinstance(data, dict):
-                    total = data.get('total_coins')
-                    if total is not None and self._user_info is not None:
-                        self._user_info['coins'] = total
+                    # Different server endpoints name the new balance
+                    # differently; accept the common variants.
+                    total = (data.get('total_coins') if data.get('total_coins') is not None
+                             else data.get('total') if data.get('total') is not None
+                             else data.get('new_balance') if data.get('new_balance') is not None
+                             else data.get('coins'))
+                    if total is not None:
+                        if self._user_info is not None:
+                            self._user_info['coins'] = total
+                        # Mirror the server balance into the local coin total —
+                        # that is what the shop / HUD actually read and spend.
+                        try:
+                            game_globals.coins = int(total)
+                            game_globals.save()
+                        except Exception:
+                            pass
                     runtime_globals.game_console.log(
                         f"[OmninetService] Reward claimed: {event_type} "
-                        f"(+{data.get('coins_awarded', '?')} coins)"
+                        f"(+{data.get('coins_awarded', '?')} coins, total {total})"
                     )
                 else:
                     runtime_globals.game_console.log(

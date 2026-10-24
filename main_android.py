@@ -80,6 +80,28 @@ if not any(type(f).__name__ == '_PyonlyFinder' for f in sys.meta_path):
     print(f"[main_android] _PyonlyFinder installed (sitecustomize in modules: "
           f"{'sitecustomize' in sys.modules})")
 
+# --- Android pause behaviour ------------------------------------------------
+# SDL's Android event pump blocks the calling thread for the whole time the
+# activity is paused (SDL_SemWait on the resume semaphore), and pygame does
+# NOT release the GIL around SDL_PumpEvents -- only event.wait() does that.
+# So a backgrounded app sits inside pygame.event.get() holding the GIL.
+#
+# That deadlocks every resume: Activity.onResume() dispatches
+# ActivityLifecycleCallbacks.onActivityResumed *before* SDLActivity posts
+# nativeResume, so the pyjnius callback runs on Android's UI thread and waits
+# for a GIL that only nativeResume can release -- while nativeResume is the
+# next thing that same, now-frozen, UI thread was going to do.  The window
+# never repaints and no input is delivered: a black, unresponsive app.
+#
+# It also explains why the app "never received" APP_DIDENTERBACKGROUND: the
+# loop was blocked inside the pump, so the event only surfaced after resume.
+#
+# With the hint off SDL keeps the pump non-blocking, our loop keeps running
+# (and keeps releasing the GIL) and the lifecycle events arrive on the main
+# thread as they happen.  The app must not draw while paused -- SDL backs the
+# EGL context up on the way out -- so the loop below idles instead.  SDL reads
+# this once, in Android_CreateDevice, hence before pygame.init().
+os.environ.setdefault("SDL_ANDROID_BLOCK_ON_PAUSE", "0")
 os.environ["SDL_RENDER_SCALE_QUALITY"] = "0"
 import pygame
 
@@ -111,127 +133,158 @@ def main():
         game_width  = (width  // 2) & ~1
         game_height = (height // 2) & ~1
 
+        # The configuration is the engine's authority on the render
+        # resolution everywhere else, so record what was actually chosen here.
+        # Left at the imported default (a 240-based canvas derived from the
+        # screen's aspect) the two disagree, and every recompute that reads the
+        # configuration -- a save switch, a login, the graphics test -- resets
+        # SCREEN_WIDTH/HEIGHT to a value the offscreen canvas cannot follow,
+        # drawing the game into a corner of it.  It is also what a save records
+        # as the resolution it was written at, which is how the poops are
+        # re-placed on the next boot.
+        cfg = game_globals.configuration
+        cfg.fullscreen = True
+        cfg.window_width, cfg.window_height = width, height
+        cfg.screen_width, cfg.screen_height = game_width, game_height
+        cfg.base_resolution_width, cfg.base_resolution_height = game_width, game_height
+        cfg.resolution_multiplyer = 1
+
         # Update runtime globals to use the game's internal resolution (half)
         runtime_globals.update_resolution_constants(game_width, game_height)
 
-        # Create an offscreen surface at game resolution to render into
+        # Create an offscreen surface at game resolution to render into.
+        # Published as runtime_globals.render_surface so a live render-res
+        # change (display_utils.apply_render_multiplier rebuilds the canvas)
+        # is picked up by the loop below -- otherwise the game keeps drawing
+        # into this stale-size surface and only fills part of the screen.
         offscreen = pygame.Surface((game_width, game_height))
+        runtime_globals.render_surface = offscreen
 
-        # Now import game after environment is configured
+        from services import android_progress
+        android_progress.install_intent_hook()
         from vpet import VirtualPetGame
         game = VirtualPetGame()
+        android_progress.refresh_scene(game)
+        android_progress.request_notification_permission()
+        game.save()  # first checkpoint/forecast, including legacy-save migration
 
-        # Background service controller
-        from services import android_background_service as bg_service
+        # SDL2 lifecycle events on Android.  SDL sends the APP_* pair on every
+        # pause/resume; the WINDOW_* ones come straight out of nativePause /
+        # nativeResume and act as a backstop on devices that route the APP_*
+        # events differently.
+        def _events(*names):
+            return tuple(ev for ev in (getattr(pygame, n, None) for n in names)
+                         if ev is not None)
 
-        # If a previous session left the service running, stop it now.
-        bg_service.stop_service()
-
-        # Ask for POST_NOTIFICATIONS at runtime (Android 13+).
-        bg_service.request_notification_permission()
-
-        # SDL2 lifecycle events on Android.
-        APP_DIDENTERBACKGROUND = getattr(pygame, "APP_DIDENTERBACKGROUND", None)
-        APP_WILLENTERFOREGROUND = getattr(pygame, "APP_WILLENTERFOREGROUND", None)
+        BACKGROUND_EVENTS = _events(
+            "APP_WILLENTERBACKGROUND", "APP_DIDENTERBACKGROUND",
+            "WINDOWMINIMIZED", "WINDOWHIDDEN")
+        FOREGROUND_EVENTS = _events(
+            "APP_WILLENTERFOREGROUND", "APP_DIDENTERFOREGROUND",
+            "WINDOWRESTORED", "WINDOWSHOWN")
         APP_TERMINATING = getattr(pygame, "APP_TERMINATING", None)
 
         # Main game loop
         clock = pygame.time.Clock()
         running = True
+        paused = False           # activity backgrounded: don't tick, don't draw
+        present_failures = 0
         last_periodic_save = pygame.time.get_ticks()
         _last_frame_ticks = None  # None skips the gap check on the first iteration
         PERIODIC_SAVE_MS = 30_000
+        PAUSED_IDLE_MS = 250
+        # ~2 s of failed frames at 30 fps before we assume SDL's window is
+        # genuinely gone rather than momentarily unavailable.
+        PRESENT_FAILURES_BEFORE_REACQUIRE = 60
 
-        # Flags set from the JVM callback thread; consumed on the main thread.
-        # [0] = needs display re-acquire (set_mode)
-        # [1] = needs game state reload from disk
-        _resume_flags = [False, False]
+        # Set from the JVM UI thread by the lifecycle callbacks below.
+        _lifecycle = {"pause": False, "resume": False}
 
-        def _save_and_start_service():
-            try:
-                game.save()
-            except Exception as save_exc:
-                print(f"[main_android] save() failed: {save_exc}")
-            try:
-                bg_service.start_service()
-            except Exception as svc_exc:
-                print(f"[main_android] start_service() failed: {svc_exc}")
+        def _enter_background():
+            """Checkpoint care state and let native scheduled alarms take over."""
+            nonlocal paused
+            if paused:
+                return
+            paused = True
+            android_progress.enter_background()
+
+        def _leave_background():
+            """Recover invisibly before any input or rendering resumes."""
+            nonlocal paused, present_failures
+            if not paused:
+                return
+            android_progress.enter_foreground()
+            android_progress.refresh_scene(game)
+            paused = False
+            present_failures = 0
+
+        # These run on Android's UI thread and must stay one assignment long.
+        # Anything heavier (a save, a JNI call, an import) blocks the UI thread
+        # inside onPause/onResume waiting for the GIL -- see the note at the
+        # top of this file.  The real work happens on the main thread below.
+        def _on_pause_from_jvm():
+            _lifecycle["pause"] = True
 
         def _on_resume_from_jvm():
-            # Called on the JVM thread — must not touch pygame directly.
-            # stop_service() only removes a file and calls JNI stopService,
-            # both safe on the JVM thread.
-            try:
-                bg_service.stop_service()
-            except Exception as exc:
-                print(f"[main_android] on_resume stop_service failed: {exc}")
-            # Signal the main pygame thread to re-acquire the display and
-            # reload game state (reload_state_from_disk calls game_globals.load
-            # which is not thread-safe with the running game loop).
-            _resume_flags[0] = True
-            _resume_flags[1] = True
+            _lifecycle["resume"] = True
 
         # Install Android-native lifecycle callbacks.
-        bg_service.install_lifecycle_hooks(
-            on_pause=_save_and_start_service,
+        android_progress.install_lifecycle_hooks(
+            on_pause=_on_pause_from_jvm,
             on_resume=_on_resume_from_jvm,
         )
 
         while running:
+            # --- Lifecycle signals raised on the JVM thread ---
+            if _lifecycle["pause"]:
+                _lifecycle["pause"] = False
+                _enter_background()
+            if _lifecycle["resume"]:
+                _lifecycle["resume"] = False
+                _leave_background()
+
             # --- Suspension gap detection (resume fallback) ---
-            # When SDL2 blocks during background, pygame.time.get_ticks()
-            # keeps advancing.  A gap >3 s means the app was suspended; we
-            # treat it the same as receiving APP_WILLENTERFOREGROUND.  This
-            # fires even on devices where SDL2 or JNI lifecycle events are
-            # unreliable (e.g. MIUI).
+            # A tick jump while we believed ourselves to be in the foreground
+            # means the OS froze the process without any lifecycle event
+            # reaching us.  Only checked when not paused: a frozen *paused*
+            # process is normal, and resuming on that would start drawing
+            # into a backed-up EGL context.
             _now_ticks = pygame.time.get_ticks()
-            if _last_frame_ticks is not None and _now_ticks - _last_frame_ticks > 3000:
-                try:
-                    bg_service.stop_service()
-                except Exception:
-                    pass
-                _resume_flags[0] = True
-                _resume_flags[1] = True
+            if (not paused and _last_frame_ticks is not None
+                    and _now_ticks - _last_frame_ticks > 3000):
+                android_progress.recover_suspension((_now_ticks - _last_frame_ticks) / 1000.0)
+                android_progress.refresh_scene(game)
             _last_frame_ticks = _now_ticks
 
-            # --- Resume handling (main thread, pygame-safe) ---
-            if _resume_flags[0]:
-                _resume_flags[0] = False
-                try:
-                    # Re-acquire the display surface.  SDL2 may have destroyed
-                    # the EGL context while the app was backgrounded; calling
-                    # set_mode() obtains a fresh, valid surface.
-                    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-                except Exception as disp_exc:
-                    print(f"[main_android] display re-acquire failed: {disp_exc}")
-
-            if _resume_flags[1]:
-                _resume_flags[1] = False
-                try:
-                    bg_service.reload_state_from_disk()
-                except Exception as rel_exc:
-                    print(f"[main_android] reload_state_from_disk failed: {rel_exc}")
-
             for event in pygame.event.get():
+                if event.type in BACKGROUND_EVENTS:
+                    _enter_background()
+                    continue
+                if event.type in FOREGROUND_EVENTS:
+                    _leave_background()
+                    continue
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                    running = False
-                elif APP_DIDENTERBACKGROUND is not None and event.type == APP_DIDENTERBACKGROUND:
-                    _save_and_start_service()
-                elif APP_WILLENTERFOREGROUND is not None and event.type == APP_WILLENTERFOREGROUND:
-                    # SDL2 path — we're already on the main thread.
-                    bg_service.stop_service()
-                    # Re-acquire display and reload state via flags so the
-                    # actions happen at the top of the next loop iteration,
-                    # preventing potential double-execution with the JNI path.
-                    _resume_flags[0] = True
-                    _resume_flags[1] = True
                 elif APP_TERMINATING is not None and event.type == APP_TERMINATING:
-                    _save_and_start_service()
+                    # Can arrive while paused, so it is handled before the
+                    # backgrounded check below.
+                    _enter_background()
+                    running = False
+                elif paused:
+                    continue  # backgrounded: nothing else is worth handling
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     running = False
                 else:
                     game.handle_event(event)
+
+            if paused:
+                # Native alarms handle reminders; touching the GL surface
+                # here would blank or crash it.  Idle instead -- time.wait()
+                # releases the GIL, which is what keeps the JVM lifecycle
+                # callbacks above (and Android's UI thread) responsive.
+                pygame.time.wait(PAUSED_IDLE_MS)
+                _last_frame_ticks = pygame.time.get_ticks()
+                continue
 
             game.update()
 
@@ -244,24 +297,54 @@ def main():
                     print(f"[main_android] periodic save() failed: {save_exc}")
                 last_periodic_save = now
 
-            # Render the game into the offscreen (half-res) surface
-            game.draw(offscreen, clock)
+            # Render the game into the internal canvas.  Read it from
+            # runtime_globals each frame: a live Render Res change replaces
+            # the canvas with one at the new internal resolution.
+            canvas = runtime_globals.render_surface
+            if canvas is None:
+                canvas = runtime_globals.render_surface = offscreen
 
-            screen.fill((0, 0, 0))
-            scaled = pygame.transform.scale(offscreen, screen.get_size())
-            screen.blit(scaled, (0, 0))
-
-            pygame.display.flip()
+            try:
+                game.draw(canvas, clock)
+                sw, sh = screen.get_size()
+                if sw <= 0 or sh <= 0:
+                    raise pygame.error(f"zero-size window surface ({sw}x{sh})")
+                # When the canvas IS the window surface (a render
+                # resolution equal to the device's), the frame is already
+                # where it has to be -- filling or blitting here would erase
+                # what was just drawn.
+                if canvas is not screen:
+                    screen.fill((0, 0, 0))
+                    if canvas.get_size() != (sw, sh):
+                        pygame.transform.scale(canvas, (sw, sh), screen)
+                    else:
+                        screen.blit(canvas, (0, 0))
+                pygame.display.flip()
+                present_failures = 0
+            except pygame.error as draw_exc:
+                # SDL's window surface went away without a lifecycle event we
+                # recognised.  It normally comes back on its own, so retry the
+                # frame; only re-acquire the display once it clearly hasn't.
+                present_failures += 1
+                if present_failures == 1:
+                    print(f"[main_android] frame present failed: {draw_exc}")
+                if present_failures >= PRESENT_FAILURES_BEFORE_REACQUIRE:
+                    present_failures = 0
+                    try:
+                        canvas_was_display = runtime_globals.render_surface is screen
+                        screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                        if canvas_was_display:
+                            # The canvas aliased the old window surface --
+                            # rebuild it against the new display.
+                            from utils import display_utils
+                            display_utils._rebuild_render_surface()
+                        print(f"[main_android] display re-acquired at "
+                              f"{screen.get_size()}")
+                    except Exception as disp_exc:
+                        print(f"[main_android] display re-acquire failed: {disp_exc}")
             clock.tick(game_globals.configuration.frame_rate)
 
-        game.save()
-
-        # Foreground loop is exiting (user quit or OS terminating). Hand
-        # ticking off to the background service so pets keep advancing.
-        try:
-            bg_service.start_service()
-        except Exception as bg_exc:
-            print(f"[main_android] Failed to start background service on exit: {bg_exc}")
+        _enter_background()
 
     except Exception as e:
         # Show error screen with crash info + diagnostic data for debugging
@@ -285,12 +368,16 @@ def main():
         error_lines.append("")
         error_lines.extend(tb_text.split('\n'))
 
+        # Touch dismisses the crash screen too -- on a phone there is no key
+        # to press, and a screen that ignores every tap is indistinguishable
+        # from a hung app.
+        DISMISS_EVENTS = (pygame.QUIT, pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN,
+                          pygame.FINGERDOWN)
+
         running = True
         while running:
             for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                elif event.type == pygame.KEYDOWN:
+                if event.type in DISMISS_EVENTS:
                     running = False
 
             screen.fill((120, 0, 0))  # Dark red background

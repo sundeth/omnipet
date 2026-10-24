@@ -92,7 +92,12 @@ class VersusView:
         selector_y = buttons_y + button_height + 5
         selector_height = 50
         self.pet_selector = PetSelector(10, selector_y, ui_width - 20, selector_height)
-        self.pet_selector.set_pets(get_selected_pets())
+        versus_pets = get_selected_pets()
+        self.pet_selector.set_pets(versus_pets)
+        # Pets without battle resources (module battle cost: DP/hunger) or
+        # otherwise unable to fight can't be picked for versus.
+        self.pet_selector.set_enabled_pets(
+            [i for i, pet in enumerate(versus_pets) if pet.can_battle()])
         self.pet_selector.set_interactive(True)
         self.pet_selector.activation_callback = self._handle_pet_activation
         self.ui_manager.add_component(self.pet_selector)
@@ -191,10 +196,11 @@ class VersusView:
         
         runtime_globals.game_sound.play("menu")
         
-        # Get the selected pets
-        from core import game_globals
-        pet1 = game_globals.pet_list[self.selected_pets[0]]
-        pet2 = game_globals.pet_list[self.selected_pets[1]]
+        # The selection holds indices into the list shown (the selected pets,
+        # or the party), not into the party: reading pet_list fought other
+        # pets than the two tapped whenever the two lists differed.
+        pet1 = self.pet_selector.pets[self.selected_pets[0]]
+        pet2 = self.pet_selector.pets[self.selected_pets[1]]
         
         # Change to protocol selection view with the selected pets
         self.change_view("protocol", pet1=pet1, pet2=pet2)

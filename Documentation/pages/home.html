@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+  <meta charset="UTF-8">
   <title>Home - Omnipet Documentation</title>
   <link rel="stylesheet" href="../assets/main.css">
 </head>
@@ -9,54 +10,76 @@
 <body>
   <div class="page-content">
     <div class="page-header">
-      <h1 class="page-title">Omnipet</h1>
-      <p class="page-subtitle">A modular VPet simulator for Windows and Linux systems</p>
-    </div>
-
-    <!-- Work-in-progress warning -->
-    <div class="content-section" style="background: #fff3cd; border: 1px solid #ffeeba; padding: 16px; margin-bottom: 24px; border-radius: 6px;">
-      <strong>⚠️ Documentation Work in Progress:</strong>
-      <p>
-        This documentation is a work in progress. Many changes will happen and new information will be added regularly.
-        If you can't find what you're looking for, please check back later or reach out to the developer on <a href="https://discord.gg/3JRzKPpC" target="_blank">Discord</a>.
-      </p>
-    </div>
-
-    <div class="content-section">
-      <h2 class="section-title">About the project.</h2>
-      <div class="section-content">
-        <p>Omnipet is an open-source virtual pet simulator designed for low-spec systems. With a user-friendly editor,
-          you can create and customize your own virtual pet experience.</p>
-        <p>This document contains all the information you need to get started with Omnipet, including installation
-          instructions, user guides, and troubleshooting tips.</p>
-        <p>This is an in-development fan-project with no connection to actual vpet manufacturers.</p>
+      <div class="page-header-text">
+        <h1 class="page-title">Omnipet</h1>
+        <p class="page-subtitle">A modular virtual pet simulator for Windows, Linux, Raspberry Pi handhelds, Batocera and Android.</p>
       </div>
     </div>
 
     <div class="content-section">
-      <h2 class="section-title">More Resources</h2>
+      <h2 class="section-title">About the project</h2>
       <div class="section-content">
-        <p>Are you still looking for something? Check out these places</p>
+        <p>Omnipet raises Digimon the way the virtual pet devices do. Each device is a module: its Digimon, evolution
+          routes, care rules, battles, items and backgrounds are data that the game reads, so the same game plays the
+          Digital Monster, the Pendulum, the Digivice iC, the Vital Bracelet and more, side by side in one party.</p>
+        <p>Omnipet can battle real devices through a DCom adapter, other Omnipets on the same network, and other players
+          online through Omninet, the Arena and Discord. The Module Editor creates and edits modules.</p>
+        <p>This is a fan project with no connection to the manufacturers of the original devices.</p>
       </div>
     </div>
 
-    <div class="feature-grid">
-      <div class="feature-card">
-        <div class="feature-icon"><img src="../assets/DigitamanH.png" alt="Digitama Hatchery" width="48px" /></div>
-        <h3 class="feature-title"><a href="https://humulos.com/digimon/" target="_blank">Digitama Hatchery</a></h3>
-        <p class="feature-description">Source for guides and tutorials for modern vpet devices.</p>
+    <div class="content-section">
+      <h2 class="section-title">Documentation</h2>
+      <div class="section-content">
+        <div class="feature-grid">
+          <a class="feature-card" href="installation-guide.html">
+            <h3 class="feature-title">Installation</h3>
+            <p class="feature-description">Downloads for each platform, how to start the game and where the save is kept.</p>
+          </a>
+          <a class="feature-card" href="manual.html">
+            <h3 class="feature-title">Manual</h3>
+            <p class="feature-description">Every screen of the game: care, status, training, battle, Library, Freezer, Digidex, Connect and Settings.</p>
+          </a>
+          <a class="feature-card" href="online-play.html">
+            <h3 class="feature-title">Online Play</h3>
+            <p class="feature-description">Omninet accounts, Progress and Free Mode, Arena seasons, Discord battles and local WiFi battles.</p>
+          </a>
+          <a class="feature-card" href="module-guide.html">
+            <h3 class="feature-title">Module Guide</h3>
+            <p class="feature-description">The documentation of each installed module: unlocks, evolution charts, enemies and items.</p>
+          </a>
+          <a class="feature-card" href="module-editor.html">
+            <h3 class="feature-title">Module Editor</h3>
+            <p class="feature-description">Creating and editing modules: every tab and field of the editor.</p>
+          </a>
+          <a class="feature-card" href="troubleshooting.html">
+            <h3 class="feature-title">Troubleshooting</h3>
+            <p class="feature-description">Evolution, unlocks, DCom, WiFi, Discord, the Arena, saves and platform questions.</p>
+          </a>
+        </div>
       </div>
+    </div>
 
-      <div class="feature-card">
-        <div class="feature-icon"><img src="../assets/Wikimon.png" alt="Wikimon" width="48px"/></div>
-        <h3 class="feature-title"><a href="https://wikimon.net/Main_Page" target="_blank">Wikimon</a></h3>
-        <p class="feature-description">Source for information and resources related to old vpet devices.</p>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-icon"><img src="../assets/Discord.png" alt="Discord" width="48px"/></div>
-        <h3 class="feature-title"><a href="https://discord.gg/3JRzKPpC" target="_blank">Discord</a></h3>
-        <p class="feature-description">Join our Discord community to connect with other players, share your experiences, and get support from fellow pet owners.</p>
+    <div class="content-section">
+      <h2 class="section-title">More resources</h2>
+      <div class="section-content">
+        <div class="feature-grid">
+          <a class="feature-card" href="https://humulos.com/digimon/" target="_blank">
+            <div class="feature-icon"><img src="../assets/DigitamanH.png" alt=""></div>
+            <h3 class="feature-title">Digitama Hatchery</h3>
+            <p class="feature-description">Guides for the modern virtual pet devices.</p>
+          </a>
+          <a class="feature-card" href="https://wikimon.net/Main_Page" target="_blank">
+            <div class="feature-icon"><img src="../assets/Wikimon.png" alt=""></div>
+            <h3 class="feature-title">Wikimon</h3>
+            <p class="feature-description">Information on the older virtual pet devices.</p>
+          </a>
+          <a class="feature-card" href="https://discord.gg/3JRzKPpC" target="_blank">
+            <div class="feature-icon"><img src="../assets/Discord.png" alt=""></div>
+            <h3 class="feature-title">Discord</h3>
+            <p class="feature-description">Questions, bug reports and battles with other players.</p>
+          </a>
+        </div>
       </div>
     </div>
   </div>

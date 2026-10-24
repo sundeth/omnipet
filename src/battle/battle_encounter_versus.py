@@ -3,20 +3,21 @@
 import pygame
 from battle.battle_encounter import BattleEncounter, GameBattle
 from battle.sim.battle_simulator import BattleSimulator, BattleProtocol
-from models.animation import PetFrame
+from models.animation import PetFrame, frame_or_fallback
+from utils.sprite_utils import get_right_sprite
 from battle.sim.models import Digimon
+from battle.sim.dcom_battle_simulator import pet_to_digimon
+from battle.sim import protocol_constants
 import core.constants as constants
 from utils.scene_utils import change_scene
 from core import game_globals, runtime_globals
-from utils.utils_unlocks import unlock_item
-from utils.module_utils import get_module
 import ui.ui_constants as ui_constants
 from ui.components.image import Image
 from ui.components.label import Label
 from ui.components.component import UIComponent
 
 class BattleEncounterVersus(BattleEncounter):
-    def __init__(self, pet1, pet2, protocol: BattleProtocol):
+    def __init__(self, pet1, pet2, protocol: BattleProtocol, battle_format: str = None):
         """
         Initializes the Versus encounter for PvP battles.
         """
@@ -28,29 +29,38 @@ class BattleEncounterVersus(BattleEncounter):
         # Set pvp_mode flag before calling parent init
         self.pvp_mode = True
         
-        # Call the base class initializer with module="DMC"
-        module = "DMC"
+        # The encounter's module only presents the battle here: each pet keeps
+        # its own rules (finish_versus) and the chosen format fights it. It was
+        # "DMC", so without the DMC module every versus battle raised KeyError
+        # (BAT-F6); the first pet's module is always installed, as DCom uses.
+        module = getattr(pet1, "module", None) or "DMC"
 
         super().__init__(module, 0, 0, pvp_mode=True)
+        # The device line this battle is fought on. The base class sets it to
+        # None, so it has to be filled in after super().__init__ -- without it
+        # a versus battle had no format at all, and the presentation fell back
+        # to whichever module the encounter happened to be built with.
+        self.battle_format = battle_format or self.BATTLE_FORMATS.get(protocol)
         self.enemy_entry_counter = 0
 
         # Override the BattlePlayer with the two pets for versus mode
         self.battle_player = GameBattle([pet1], [pet2], 0, 0, self.module)
-        fixed_hp = None
-        if protocol in [BattleProtocol.DM_BS]:
-            fixed_hp = 5  # Original DM uses 5 HP
-            self.turn_limit = 4  # 4 turns (3 normal + 1 finishing)
-        elif protocol in [BattleProtocol.DMC_BS]:
-            fixed_hp = 5  # DMC uses 5 HP (Winner 1112, Loser 1111)
-            self.turn_limit = 4  # 4 turns
-        elif protocol in [BattleProtocol.DM20_BS]:
-            fixed_hp = 5  # DM20 uses 5 HP
-            self.turn_limit = 5  # 5 turns
-        elif protocol in [BattleProtocol.PEN20_BS]:
-            fixed_hp = 5  # PEN20 uses 5 HP
-            self.turn_limit = 5  # 5 turns
-        elif protocol in [BattleProtocol.DMX_BS]:
-            self.turn_limit = 5
+        # The HP a versus battle is fought with belongs to the wire, exactly
+        # as it does over a cable, and so does the round count. This was a
+        # chain of literals keyed on the protocol, and PENOG had simply never
+        # been added to it -- so the simulation fought at its fixed 3 HP
+        # while the pets on screen kept their own, which is the DMX's
+        # variable-HP behaviour. Read from the format now, where the values
+        # already lived and where nothing new can be forgotten.
+        #
+        # FIXED_HP of None means the wire has no fixed HP (DMX, PENZ) and the
+        # pets keep theirs.
+        limits = protocol_constants.get_constants(self.battle_format)
+        fixed_hp = getattr(limits, 'FIXED_HP', None) if limits else None
+        # A format whose rounds repeat past its pattern (DMM) declares how
+        # far they can run; every other format fights its TURNS once.
+        self.turn_limit = (getattr(limits, 'MAX_ROUNDS', getattr(limits, 'TURNS', 5))
+                           if limits else 5)
 
         if fixed_hp is not None:
             self.battle_player.team1_hp[0] = fixed_hp
@@ -81,7 +91,7 @@ class BattleEncounterVersus(BattleEncounter):
         self.setup_alert_components()
 
         # Initialize the BattleSimulator with the given protocol
-        self.simulator = BattleSimulator(protocol)
+        self.simulator = BattleSimulator(protocol, battle_format=battle_format)
 
         # Configure the global HPBar for versus mode and initialize totals
         self.hp_bar.set_mode('versus')
@@ -140,9 +150,8 @@ class BattleEncounterVersus(BattleEncounter):
         left_sprite = None
         right_sprite = None
         # Left side shows pet2 (flip so it faces toward the center)
-        left_sprite = self.pet2.get_sprite(PetFrame.IDLE1.value) if hasattr(self.pet2, 'get_sprite') else None
-        if left_sprite:
-            left_sprite = pygame.transform.flip(left_sprite, True, False)
+        left_sprite = (get_right_sprite(self.pet2, PetFrame.IDLE1.value)
+                       if hasattr(self.pet2, 'get_sprite') else None)
 
         # Right side shows pet1 (no flip)
         right_sprite = self.pet1.get_sprite(PetFrame.IDLE1.value) if hasattr(self.pet1, 'get_sprite') else None
@@ -162,91 +171,74 @@ class BattleEncounterVersus(BattleEncounter):
 
         # Left label (left aligned) - now shows pet2's name
         self.left_label = Label(13, 99, text=getattr(self.pet2, 'name', ''), is_title=False, align_right=False, fixed_width=85, color_override=ui_constants.ANIM_BLACK)
-        # Force a 24px font for this label instance regardless of manager defaults
-        self.left_label.get_font = lambda font_type, custom_size=None: UIComponent.get_font(self.left_label, font_type, custom_size=24)
+        # Force a fixed size for this label instance regardless of manager
+        # defaults; scaled with the screen so it does not shrink away on a
+        # large display.
+        _versus_label_size = int(24 * runtime_globals.UI_SCALE)
+        self.left_label.get_font = lambda font_type, custom_size=None: UIComponent.get_font(self.left_label, font_type, custom_size=_versus_label_size)
         self.ui_manager.add_component(self.left_label)
 
         # Right label (right aligned) - now shows pet1's name
         self.right_label = Label(140, 130, text=getattr(self.pet1, 'name', ''), is_title=False, align_right=True, fixed_width=85, color_override=ui_constants.ANIM_BLACK)
-        self.right_label.get_font = lambda font_type, custom_size=None: UIComponent.get_font(self.right_label, font_type, custom_size=24)
+        self.right_label.get_font = lambda font_type, custom_size=None: UIComponent.get_font(self.right_label, font_type, custom_size=_versus_label_size)
         self.ui_manager.add_component(self.right_label)
 
-    def _wrap_byte_value(self, value, max_value=255):
-        """
-        Wrap a value to fit in the specified range, but ensure it never becomes 0.
-        If value exceeds max_value, wrap around (e.g., for max=255: 260->5, 256->1).
-        
-        Args:
-            value: Integer value that might exceed the range
-            max_value: Maximum allowed value (default 255 for byte)
-            
-        Returns:
-            Value wrapped to 1-max_value range
-        """
-        if value <= 0:
-            return 1
-        if value > max_value:
-            # Wrap around: (max+1)->1, (max+2)->2, etc.
-            wrapped = value % (max_value + 1)
-            return wrapped if wrapped != 0 else 1
-        return value
+    #: The device line each versus protocol builds its packets for. The
+    #: packets are the real ones, so the payload has to be built the same way
+    #: a DCom battle builds it.
+    BATTLE_FORMATS = {
+        BattleProtocol.DMOG_BS: 'DMOG',
+        BattleProtocol.PENOG_BS: 'PENOG',
+        BattleProtocol.DMM_BS: 'DMM',
+        BattleProtocol.IC_BS: 'IC',
+        BattleProtocol.DM20_BS: 'DM20',
+        BattleProtocol.PEN20_BS: 'PEN20',
+        BattleProtocol.DMX_BS: 'DMX',
+        BattleProtocol.DMC_BS: 'DMC',
+    }
+
+    #: Versus has no charge minigame; both sides get the same charge so the
+    #: fight is decided by the pets rather than by a bar nobody played.
+    #:
+    #: A format may name its own, because a flat number does not mean the
+    #: same thing on every scale: 3 is a full meter where the wire carries
+    #: the banded 0-3 quality, and a tenth of one where it carries the raw
+    #: shake count. `VERSUS_CHARGE` is that per-format value and is meant to
+    #: be a fixed, deliberate choice rather than a maximum -- PENOG sets 10
+    #: of its 40. Anything not naming one keeps the flat 3 it has always had.
+    FIXED_CHARGE = 3
+
+    @property
+    def fixed_charge(self):
+        constants = protocol_constants.get_constants(
+            self.battle_format or 'DM20')
+        return getattr(constants, 'VERSUS_CHARGE', self.FIXED_CHARGE)
 
     def simulate_combat(self):
-        strength_bonus = 3
+        """Run the protocol simulation over both pets' packets."""
+        # The chosen line, not the shared wire enum: PENC and DMXW share
+        # DMC's, PENZ shares DMX's (BAT-F5)
+        battle_format = self.battle_format or 'DM20'
 
-        # Attribute mapping
-        attribute_mapping = {
-            "Va": 0,  # Vaccine
-            "Da": 1,  # Data
-            "Vi": 2,  # Virus
-            "Free": 3  # Free
-        }
-
-        # Create Digimon instance for the attacker
-        # Note: DM20 protocol uses 6-bit shot values (0-63), so we cap them at 63
-        attacker = Digimon(
-            name=self.battle_player.team1[0].name,
-            order=0,
-            traited=1 if self.battle_player.team1[0].traited else 0,
-            egg_shake=1 if self.battle_player.team1[0].shook else 0,
-            index=0,
-            hp=self.battle_player.team1_hp[0],
-            attribute=attribute_mapping.get(self.battle_player.team1[0].attribute, 3),  # Default to Free if not found
-            power=self.battle_player.team1[0].get_power(),
-            handicap=0,
-            buff=0,
-            mini_game=strength_bonus,
-            level=self.battle_player.team1[0].level,
-            stage=self.battle_player.team1[0].stage,
-            sick=1 if self.battle_player.team1[0].sick else 0,
-            shot1=self._wrap_byte_value(self.battle_player.team1[0].atk_main, max_value=63),
-            shot2=self._wrap_byte_value(self.battle_player.team1[0].atk_alt, max_value=63),
-            tag_meter=2
-        )
-
-        # Create Digimon instance for the defender
-        defender = Digimon(
-            name=self.battle_player.team2[0].name,
-            order=1,
-            traited=1 if self.battle_player.team2[0].traited else 0,
-            egg_shake=1 if self.battle_player.team2[0].shook else 0,
-            index=1,
-            hp=self.battle_player.team2_hp[0],
-            attribute=attribute_mapping.get(self.battle_player.team2[0].attribute, 3),  # Default to Free if not found
-            power=self.battle_player.team2[0].get_power(),
-            handicap=0,
-            buff=0,
-            mini_game=strength_bonus,
-            level=self.battle_player.team2[0].level,
-            stage=self.battle_player.team2[0].stage,
-            sick=1 if self.battle_player.team2[0].sick else 0,
-            shot1=self._wrap_byte_value(self.battle_player.team2[0].atk_main, max_value=63),
-            shot2=self._wrap_byte_value(self.battle_player.team2[0].atk_alt, max_value=63),
-            tag_meter=2
-        )
+        # Built by the same conversion a DCom battle uses, so a versus packet
+        # says the same thing about a pet as a packet sent to a real device.
+        # Building it here by hand had drifted: the attack sprite ids went out
+        # 1-based (the protocols are 0-based, and Omnipet reserves 0 for "no
+        # sprite"), a pet with no second attack sent sprite 1 rather than
+        # none, `index` carried the pet's position in the team instead of its
+        # real index, and power was never clamped to the 8 bits the field has.
+        charge = self.fixed_charge
+        attacker = pet_to_digimon(self.battle_player.team1[0], battle_format,
+                                  charge)
+        defender = pet_to_digimon(self.battle_player.team2[0], battle_format,
+                                  charge)
+        defender.order = 1
 
         # Run simulation
         self.global_battle_log = self.simulator.simulate(attacker, defender)
+        # A level iC battle runs a round past MAX_ROUNDS (IC.TIE_ROUNDS);
+        # the animation has to play every round the simulation fought.
+        self.turn_limit = max(self.turn_limit, len(self.global_battle_log.battle_log or []))
 
         # Store the attacker's turns as the combat log for animation
         self.victory_status = "Victory" if self.global_battle_log.winner == "device1" else "Defeat"
@@ -272,39 +264,57 @@ class BattleEncounterVersus(BattleEncounter):
             winner = self.pet1 if self.global_battle_log.winner == "device1" else self.pet2
             loser = self.pet2 if winner == self.pet1 else self.pet1
 
-            winner.finish_versus(True)
-            loser.finish_versus(False)
+            winner.finish_versus(True, opponent=loser)
+            loser.finish_versus(False, opponent=winner)
 
-            # Versus unlock logic: check if both pets are from the same module
-            # and meet version requirements for versus unlocks
-            pet1_module = getattr(self.pet1, 'module', None)
-            pet2_module = getattr(self.pet2, 'module', None)
-            
-            # Only process versus unlocks if both pets are from the same module
-            if pet1_module and pet2_module and pet1_module == pet2_module:
-                pet_module = get_module(pet1_module)
-                if pet_module:
-                    module_unlocks = getattr(pet_module, 'unlocks', []) or []
-                    for unlock in module_unlocks:
-                        if unlock.get('type') == 'versus':
-                            ver_req = unlock.get('version', None)
-                            unlock_name = unlock.get('name')
-                            if unlock_name:
-                                # Check if at least one pet meets the version requirement
-                                pet1_version = getattr(self.pet1, 'version', 0)
-                                pet2_version = getattr(self.pet2, 'version', 0)
-                                
-                                if ver_req is not None:
-                                    # Version requirement specified - check if either pet meets it
-                                    if pet1_version == ver_req or pet2_version == ver_req:
-                                        unlock_item(pet1_module, 'versus', unlock_name)
-                                        runtime_globals.game_console.log(f"[Versus] Unlocked {unlock_name} for {pet1_module}")
-                                else:
-                                    # No version requirement - unlock for any versus battle in this module
-                                    unlock_item(pet1_module, 'versus', unlock_name)
-                                    runtime_globals.game_console.log(f"[Versus] Unlocked {unlock_name} for {pet1_module}")
+            # Connect Points and "connection" events, each pet against the
+            # other's device.
+            try:
+                from utils.event_utils import after_connection
+                for pet, won, other in ((winner, True, loser), (loser, False, winner)):
+                    after_connection([(pet, won)], getattr(other, 'device_version',
+                                                           getattr(other, 'version', None)),
+                                     battle_format=self.battle_format)
+            except Exception as exc:
+                runtime_globals.game_console.log(f"[Events] connection trigger failed: {exc}")
+
+            self._record_versus_unlocks(winner)
             # Return to the main scene
             change_scene("game")
+
+    def _record_versus_unlocks(self, winner):
+        """Connection (`versus`) unlocks for this battle (utils_unlocks).
+
+        Each side is the device its pet was hatched on (device_version, the
+        hardware, not the gameplay version). Two pets of one module count the
+        battle once for it, whichever pet meets the record ("battle XA with
+        XB" pairs either way round). Pets of two modules are two devices
+        meeting: each module counts the battle against the other pet, but only
+        for records that name the `protocol` fought on (PENGZ's backgrounds,
+        battling a Pendulum Color); older records stay same-module only."""
+        from utils.utils_unlocks import record_connection_battle
+
+        def side(pet):
+            version = getattr(pet, 'version', 0)
+            return {"device_version": getattr(pet, 'device_version', version), "version": version,
+                    "name": getattr(pet, 'name', None)}
+
+        pet1_module = getattr(self.pet1, 'module', None)
+        pet2_module = getattr(self.pet2, 'module', None)
+        one, two = side(self.pet1), side(self.pet2)
+        won1 = winner is self.pet1
+        try:
+            if pet1_module and pet1_module == pet2_module:
+                record_connection_battle(pet1_module, [(one, two, won1), (two, one, not won1)],
+                                         self.battle_format)
+                return
+            for module_name, own, other, won in ((pet1_module, one, two, won1),
+                                                 (pet2_module, two, one, not won1)):
+                if module_name:
+                    record_connection_battle(module_name, [(own, other, won)], self.battle_format,
+                                             protocol_records_only=True)
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[Versus] connection unlocks failed: {exc}")
 
     def draw_result(self, surface: pygame.Surface):
         """
@@ -332,7 +342,7 @@ class BattleEncounterVersus(BattleEncounter):
         if winner_pet:
             # Get the frame (IDLE1 or HAPPY)
             frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.HAPPY.value
-            pet_sprite = winner_pet.get_sprite(frame_id)
+            pet_sprite = frame_or_fallback(winner_pet.get_sprite, frame_id)
             
             # Center the sprite on screen
             pet_x = runtime_globals.SCREEN_WIDTH // 2 - pet_sprite.get_width() // 2
@@ -340,9 +350,11 @@ class BattleEncounterVersus(BattleEncounter):
             
             surface.blit(pet_sprite, (pet_x, pet_y))
         else:
-            # Draw both pets for a tie (smaller and side by side)
-            sprite_width = runtime_globals.PET_WIDTH // 2
-            sprite_height = runtime_globals.PET_HEIGHT // 2
+            # Draw both pets for a tie (smaller and side by side), snapped to
+            # the pixel-perfect ladder (PET//2 can land between steps).
+            from utils.sprite_utils import snap_pet_sprite_size
+            sprite_width = snap_pet_sprite_size(runtime_globals.PET_WIDTH // 2)
+            sprite_height = sprite_width
             
             # Both pets animate between IDLE1 and HAPPY
             frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.HAPPY.value
@@ -350,14 +362,14 @@ class BattleEncounterVersus(BattleEncounter):
             # Position for pet1 (left side)
             pet1_x = runtime_globals.SCREEN_WIDTH // 4 - sprite_width // 2
             pet1_y = runtime_globals.SCREEN_HEIGHT // 2 - sprite_height // 2
-            pet1_sprite = self.pet1.get_sprite(frame_id)
+            pet1_sprite = frame_or_fallback(self.pet1.get_sprite, frame_id)
             pet1_sprite = pygame.transform.scale(pet1_sprite, (sprite_width, sprite_height))
             surface.blit(pet1_sprite, (pet1_x, pet1_y))
             
             # Position for pet2 (right side)
             pet2_x = 3 * runtime_globals.SCREEN_WIDTH // 4 - sprite_width // 2
             pet2_y = runtime_globals.SCREEN_HEIGHT // 2 - sprite_height // 2
-            pet2_sprite = self.pet2.get_sprite(frame_id)
+            pet2_sprite = frame_or_fallback(self.pet2.get_sprite, frame_id)
             pet2_sprite = pygame.transform.scale(pet2_sprite, (sprite_width, sprite_height))
             surface.blit(pet2_sprite, (pet2_x, pet2_y))
 

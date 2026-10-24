@@ -376,11 +376,13 @@ class PetList(UIComponent):
                         target_sprite_size = int(base_sprite_size * min(screen_scale_factor, 2.0))  # Define target_sprite_size here too
                         sprite_size = max(20, target_sprite_size)
                     
-                    # Scale frames to the calculated size, maintaining aspect ratio
+                    # Scale frames to the calculated size, maintaining aspect ratio.
+                    # Nearest-neighbor keeps the pixel art sharp; smoothscale
+                    # smears the edges into blurry artifacts.
                     scaled_frames = []
                     for frame in frames:
                         # Always scale to ensure consistent sizing
-                        scaled_frame = pygame.transform.smoothscale(frame.copy(), (sprite_size, sprite_size))
+                        scaled_frame = pygame.transform.scale(frame.copy(), (sprite_size, sprite_size))
                         scaled_frames.append(scaled_frame)
                     
                     self.pet_sprites[i] = scaled_frames
@@ -423,9 +425,11 @@ class PetList(UIComponent):
         if self.left_arrow_pressed and now - self.arrow_press_time > 100:
             self.left_arrow_pressed = False
             self.static_layer = None
+            self.needs_redraw = True
         if self.right_arrow_pressed and now - self.arrow_press_time > 100:
             self.right_arrow_pressed = False
             self.static_layer = None
+            self.needs_redraw = True
             
         # Handle scrolling animation
         if self.scrolling:
@@ -611,8 +615,10 @@ class PetList(UIComponent):
             line_color = colors["highlight"]
             fg_color = colors["highlight"]
         
-        # Pressed state: brief visual feedback
-        if pressed and self.clicked:
+        # Pressed state: brief visual feedback (color flip like the standard
+        # Button). Keyed on the arrow's own pressed flag — the component-wide
+        # self.clicked is never set on the arrow click path.
+        if pressed:
             bg_color = colors["highlight"]
             fg_color = colors["bg"]
             line_color = colors["bg"]
@@ -733,9 +739,9 @@ class PetList(UIComponent):
                     flag_sprite = runtime_globals.game_module_flag.get(pet.module)
                     if flag_sprite:
                         try:
-                            # Scale flag to match pet sprite size
+                            # Scale flag to match pet sprite size (nearest-neighbor for sharp pixels)
                             flag_size = sprite.get_size()
-                            scaled_flag = pygame.transform.smoothscale(flag_sprite, flag_size)
+                            scaled_flag = pygame.transform.scale(flag_sprite, flag_size)
                             blit_with_cache(surface, scaled_flag, sprite_rect.topleft)
                         except Exception as e:
                             runtime_globals.game_console.log(f"[PetList] Error drawing module flag for pet {pet_index}: {e}")
@@ -743,7 +749,7 @@ class PetList(UIComponent):
                 runtime_globals.game_console.log(f"[PetList] Error drawing pet sprite {pet_index}: {e}")
                 # Draw error placeholder
                 pygame.draw.rect(surface, (255, 0, 0), slot_rect.inflate(-4, -4))
-                font = self.get_font("text", custom_size=16)
+                font = self.get_font("text")
                 error_text = font.render("ERR", True, (255, 255, 255))
                 error_rect = error_text.get_rect(center=slot_rect.center)
                 blit_with_cache(surface, error_text, error_rect)
@@ -996,7 +1002,13 @@ class PetList(UIComponent):
         """Handle scroll wheel events - behave like LEFT/RIGHT keys"""
         if not (runtime_globals.INPUT_MODE == runtime_globals.MOUSE_MODE):
             return False
-        
+
+        # The UI manager hands on the whole ("SCROLL", {"direction": ...})
+        # event; this compared it to "SCROLL_UP"/"SCROLL_DOWN" only, so the
+        # wheel did nothing on the pet row.
+        if isinstance(action, tuple) and len(action) == 2 and action[0] == "SCROLL":
+            action = "SCROLL_" + str((action[1] or {}).get("direction", ""))
+
         if action == "SCROLL_UP":
             self.select_previous()
             self.needs_redraw = True
@@ -1126,12 +1138,14 @@ class PetList(UIComponent):
             self.left_arrow_pressed = True
             self.arrow_press_time = pygame.time.get_ticks()
             self.static_layer = None
+            self.needs_redraw = True
             return
         elif relative_x >= self.rect.width - scaled_arrow_width:  # Right arrow
             self.select_next()
             self.right_arrow_pressed = True
             self.arrow_press_time = pygame.time.get_ticks()
             self.static_layer = None
+            self.needs_redraw = True
             return
             
         # Otherwise, select the current item

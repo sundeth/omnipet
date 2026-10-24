@@ -4,8 +4,10 @@ A status scene showing pet information using the new UI components.
 """
 
 import pygame
-from core import game_globals, runtime_globals, constants
+from core import game_globals, runtime_globals, constants, pet_stats
+from utils import connect_points
 from utils.module_utils import get_module
+from utils.power_display import power_display
 from ui.ui_manager import UIManager
 from ui.components.pet_list import PetList
 from ui.components.background import Background
@@ -15,13 +17,57 @@ from ui.ui_constants import YELLOW
 from ui.components.heart import HeartMeter
 from ui.components.dp_bar import DPBar
 from ui.components.gcell_bar import GCellBar
-from ui.components.status_carousel import StatusCarousel
+from ui.components.reliability_meter import ReliabilityMeter
+from ui.components.status_carousel import StatusCarousel, evolution_silhouette
 from ui.components.experience_bar import ExperienceBar
 from ui.components.numeric_meter import NumericMeter
 from ui.components.heart_meter_condition import HeartMeterCondition
 from ui.components.flag_panel import FlagPanel
+from ui.components.digisoul_icon import DigiSoulIcon, normalize_digisoul
 from ui.windows.window_background import WindowBackground
 from utils.scene_utils import change_scene
+
+
+HUNGER_TOOLTIP = "Hunger - basic need stat, keep your pet well fed to avoid penalties"
+
+
+def hunger_tooltip(visible_stats, hunger, stomach):
+    """The hunger meter's tooltip. With "Stomach" in visible_stats it gives
+    the fill as current/max: four hearts stop at 4 while a stomach holds up
+    to 15 (the iC, whose battles spend hearts from all of it)."""
+    if "Stomach" in visible_stats and stomach > 0:
+        return f"Hunger {int(hunger)}/{int(stomach)} - how full the stomach is; keep your pet well fed"
+    return HUNGER_TOOLTIP
+
+
+def connect_points_slot(visible_stats):
+    """Where the Connect Points meter goes: "left", the row below
+    Reliability (Effort's, which the iC leaves free), or "right", the top of
+    the right column when Effort or G-Cells take that row and no DP bar
+    takes this one (DW1). None when both are taken."""
+    if "Effort" not in visible_stats and "G-Cells" not in visible_stats:
+        return "left"
+    if "DP" not in visible_stats:
+        return "right"
+    return None
+
+
+def connect_points_tooltip(points, cap, battles=("connection",)):
+    where = ("every adventure battle and every battle with another device or pet"
+             if "adventure" in battles else "every battle with another device or pet")
+    return (f"Connect Points {int(points)}/{int(cap)} - earned in {where}; "
+            "a full meter gives an item")
+
+
+def digisoul_below_flags_available(visible_stats, use_condition_hearts=False):
+    """Whether the right-column row immediately below flags is unused."""
+    if any(stat in visible_stats for stat in (
+            "Level", "Experience", "Trophies", "Vital Values")):
+        return False
+    if (use_condition_hearts
+            and "Mistakes/Condition Hearts" in visible_stats):
+        return False
+    return True
 
 
 class SceneStatus:
@@ -62,10 +108,13 @@ class SceneStatus:
             
             # Flag panel for pet attributes and status
             self.flag_panel = None
+            self.digisoul_icon = None
             
             # Status components
             self.hunger_meter = None
             self.strength_meter = None  # Changed from vitamin_meter
+            self.reliability_meter = None
+            self.connect_points_meter = None
             self.effort_meter = None
             self.gcell_bar = None
             self.dp_bar = None
@@ -175,6 +224,18 @@ class SceneStatus:
             
             current_y += 15
 
+            # The right-column row immediately below the flags is normally
+            # used by Level/Experience-style stats. When that row is free, a
+            # module can use it for the pet's native DigiSoul family instead.
+            digisoul_size = 22
+            self.digisoul_icon = DigiSoulIcon(
+                flag_x + flag_width - digisoul_size,
+                current_y + 5,
+                digisoul_size,
+            )
+            self.digisoul_icon.visible = False
+            self.ui_manager.add_component(self.digisoul_icon)
+
             # Age label (right column) - will be shown based on module visible_stats
             self.age_label = Label(
                 margin, current_y, "Age: -", is_title=False, color_override=YELLOW
@@ -249,9 +310,10 @@ class SceneStatus:
             heart_height = 24
             heart_width = 85
             heart_y = current_y + 15
+            hunger_y = heart_y
 
             self.hunger_meter = HeartMeter(margin, heart_y, heart_width, heart_height, "Hunger", 0, 4, 1)
-            self.hunger_meter.set_tooltip("Hunger - basic need stat, keep your pet well fed to avoid penalties")
+            self.hunger_meter.set_tooltip(HUNGER_TOOLTIP)
             self.hunger_meter.visible = False  # Hidden by default, shown based on visible_stats
             self.ui_manager.add_component(self.hunger_meter)
             heart_y += 22
@@ -260,6 +322,17 @@ class SceneStatus:
             self.strength_meter.set_tooltip("Strength - basic need stat, keep at maximum to gain bonuses")
             self.strength_meter.visible = False  # Hidden by default, shown based on visible_stats
             self.ui_manager.add_component(self.strength_meter)
+
+            # Reliability replaces Strength in this slot on devices such as
+            # the iC, which have the former care stat and no protein meter.
+            self.reliability_meter = ReliabilityMeter(
+                margin, heart_y, heart_width, heart_height, constants.RELIABILITY_MIN
+            )
+            self.reliability_meter.set_tooltip(
+                "Reliability - trust between the pet and player, from 0 to 31"
+            )
+            self.reliability_meter.visible = False
+            self.ui_manager.add_component(self.reliability_meter)
             heart_y += 22
 
             self.effort_meter = HeartMeter(margin, heart_y, heart_width, heart_height, "Effort", 0, 4, 4)
@@ -269,9 +342,25 @@ class SceneStatus:
 
             # G-Cell Bar (alternative to effort meter)
             self.gcell_bar = GCellBar(margin, heart_y, heart_width + 3, heart_height)
-            self.gcell_bar.set_tooltip("G-Cells - evolution requirement indicator with 4 levels.")
+            self.gcell_bar.set_tooltip("G-Cells - evolution requirement indicator.")
             self.gcell_bar.visible = False  # Hidden by default, shown based on visible_stats
             self.ui_manager.add_component(self.gcell_bar)
+
+            # Connect Points, for a module whose events.json has them: the
+            # iC draws them on Reliability's gauge, in the row below it.
+            # Where Effort takes that row they go to the top of the right
+            # column instead, DP's place (connect_points_slot).
+            self.connect_points_positions = {
+                "left": (margin, heart_y),
+                "right": (margin + column_width + column_gap, hunger_y),
+            }
+            self.connect_points_meter = ReliabilityMeter(
+                margin, heart_y, heart_width, heart_height, 0,
+                label="CP", minimum=0, maximum=15
+            )
+            self.connect_points_meter.set_tooltip(connect_points_tooltip(0, 15))
+            self.connect_points_meter.visible = False
+            self.ui_manager.add_component(self.connect_points_meter)
 
             # Add DP Bar in second column, aligned with hunger meter
             dp_start_y = current_y + 13
@@ -435,18 +524,37 @@ class SceneStatus:
         self.pet_name_label.set_tooltip(f"Module: {pet.module}, Version: {pet.version}")
 
         # Update stage
-        stage_text = f"Stage: {constants.STAGES[pet.stage]}"
+        stage_text = f"Stage: {constants.stage_name(pet.stage)}"
         self.stage_label.set_text(stage_text)
+
+        # Get module configuration before laying out flags: DigiSoul can use
+        # the otherwise-empty right-column row directly below them.
+        module = get_module(pet.module)
+        visible_stats = module.visible_stats if module else []
 
         # Update flag panel (including G-Cell fragment flag if applicable)
         flags = []
         if hasattr(pet, 'gcell_fragment') and pet.gcell_fragment:
             flags.append('GCellFragment')
-        self.flag_panel.set_pet_flags(pet, additional_flags=flags)
 
-        # Get module to check visible stats
-        module = get_module(pet.module)
-        visible_stats = module.visible_stats if module else []
+        shows_digisoul = any(
+            str(stat).casefold() == "digisoul" for stat in visible_stats)
+        digisoul = normalize_digisoul(getattr(pet, 'digisoul', ''))
+        uses_condition_hearts = (
+            getattr(module, 'use_condition_hearts', False) if module else False)
+        show_digisoul_below = bool(
+            shows_digisoul and digisoul
+            and digisoul_below_flags_available(
+                visible_stats, uses_condition_hearts))
+        self.flag_panel.set_pet_flags(
+            pet,
+            additional_flags=flags,
+            digisoul=(digisoul if shows_digisoul and not show_digisoul_below
+                      else None),
+        )
+        self.digisoul_icon.set_digisoul(
+            digisoul if show_digisoul_below else None)
+        self.digisoul_icon.visible = show_digisoul_below
 
         # Update age if it's in visible stats
         if "Age" in visible_stats:
@@ -482,6 +590,9 @@ class SceneStatus:
         # Show trophy meter if Trophies is in visible stats but Level is not
         if "Trophies" in visible_stats and "Level" not in visible_stats:
             self.trophy_meter.set_value(getattr(pet, 'trophies', 0))
+            # The meter holds three digits; the tooltip has the whole count.
+            self.trophy_meter.set_tooltip(
+                f"Trophies: {getattr(pet, 'trophies', 0)} - earned by this pet")
             self.trophy_meter.visible = True
         else:
             self.trophy_meter.visible = False
@@ -511,35 +622,61 @@ class SceneStatus:
         # Update Heart meters and DP bar based on module visible_stats
         if "Hunger" in visible_stats:
             self.hunger_meter.set_value(pet.hunger)
-            # care_fixed_4_hearts: when False, dynamically show 1-4 hearts based on pet.stomach
+            stomach = getattr(pet, 'stomach', 4)
             care_fixed_4_hearts = getattr(module, 'care_fixed_4_hearts', True)
-            if care_fixed_4_hearts:
+            if stomach <= 0:
+                # No stomach capacity — the pet can't eat, so show no hearts.
+                self.hunger_meter.factor = 1
+                self.hunger_meter.set_max_value(0)
+            elif care_fixed_4_hearts:
                 self.hunger_meter.factor = 1
                 self.hunger_meter.set_max_value(4)
             else:
                 # Dynamic hearts based on stomach (1-4)
-                stomach = getattr(pet, 'stomach', 4)
                 self.hunger_meter.factor = 2
                 self.hunger_meter.set_max_value(max(1, min(4, stomach // 2)))
+            self.hunger_meter.set_tooltip(hunger_tooltip(visible_stats, pet.hunger, stomach))
             self.hunger_meter.visible = True
         else:
             self.hunger_meter.visible = False
-            
+
         if "Strength" in visible_stats:
             self.strength_meter.set_value(pet.strength)
-            # care_fixed_4_hearts: when False, dynamically show 1-4 hearts based on pet.stomach
+            stomach = getattr(pet, 'stomach', 4)
             care_fixed_4_hearts = getattr(module, 'care_fixed_4_hearts', True)
-            if care_fixed_4_hearts:
+            strength_max = getattr(module, 'strength_max', 0)
+            if strength_max:
+                # A capped meter (the Mini's 0-15) shows its share of the cap,
+                # so the hearts fall with it instead of reading full until 4.
+                self.strength_meter.factor = 1
+                self.strength_meter.set_max_value(4)
+                self.strength_meter.set_value(pet_stats.strength_hearts(pet.strength, strength_max))
+            elif stomach <= 0:
+                # No stomach capacity — the pet can't eat, so show no hearts.
+                self.strength_meter.factor = 1
+                self.strength_meter.set_max_value(0)
+            elif care_fixed_4_hearts:
                 self.strength_meter.factor = 1
                 self.strength_meter.set_max_value(4)
             else:
                 # Dynamic hearts based on stomach (1-4)
-                stomach = getattr(pet, 'stomach', 4)
                 self.strength_meter.factor = 2
                 self.strength_meter.set_max_value(max(1, min(4, stomach // 2)))
             self.strength_meter.visible = True
+            self.reliability_meter.visible = False
+        elif "Reliability" in visible_stats:
+            self.reliability_meter.set_value(
+                getattr(pet, 'reliability', constants.RELIABILITY_MIN)
+            )
+            # The gauge draws no number: the tooltip gives it.
+            self.reliability_meter.set_tooltip(
+                f"Reliability {int(getattr(pet, 'reliability', constants.RELIABILITY_MIN) or 0)}"
+                f"/{constants.RELIABILITY_MAX} - trust between the pet and player")
+            self.reliability_meter.visible = True
+            self.strength_meter.visible = False
         else:
             self.strength_meter.visible = False
+            self.reliability_meter.visible = False
             
         # Show G-Cell bar if G-Cell is in visible stats and Effort is not
         if "G-Cells" in visible_stats and "Effort" not in visible_stats:
@@ -553,7 +690,26 @@ class SceneStatus:
         else:
             self.effort_meter.visible = False
             self.gcell_bar.visible = False
-            
+
+        # Connect Points: shown wherever the module has them (events.json's
+        # connect_points block), not by a visible_stats entry.
+        # A cap of 1 (the Vital Bracelets' battle drops) has no meter to show.
+        cp_settings = connect_points.settings(module)
+        cp_slot = (connect_points_slot(visible_stats)
+                   if connect_points.shows_meter(cp_settings) else None)
+        if cp_slot:
+            cap = int(cp_settings["cap"])
+            points = getattr(pet, 'connect_points', 0) or 0
+            self.connect_points_meter.set_position(*self.connect_points_positions[cp_slot])
+            self.connect_points_meter.set_maximum(cap)
+            self.connect_points_meter.set_value(points)
+            self.connect_points_meter.set_tooltip(
+                connect_points_tooltip(self.connect_points_meter.value, cap,
+                                       connect_points.battles(cp_settings)))
+            self.connect_points_meter.visible = True
+        else:
+            self.connect_points_meter.visible = False
+
         # Update DP bar and stats based on visible_stats
         if "DP" in visible_stats:
             self.dp_bar.set_value(pet.dp)
@@ -563,10 +719,13 @@ class SceneStatus:
             
         if "Power" in visible_stats:
             self.power_combined.visible = True
-            power = str(pet.power + getattr(pet, 'bonus_stats', [0,0,0])[2])
-            if module.ruleset == "vb":
+            power, color = power_display(pet)
+            # Stars are a Vital Bracelet idea, but the pet carrying one is
+            # what decides whether to show it - not the module's ruleset.
+            if getattr(pet, 'star', 0) > 0:
                 power += f"({pet.star}★)"
             self.power_combined.set_value(power)
+            self.power_combined.set_value_color(color)
         else:
             self.power_combined.visible = False
             
@@ -612,14 +771,22 @@ class SceneStatus:
             'condition_hearts': getattr(pet, 'condition_hearts', 0),
             'sleep_disturbances': getattr(pet, 'sleep_disturbances', 0),
             'overfeed': getattr(pet, 'overfeed', 0),
-            'injuries': getattr(pet, 'injuries', 0),
+            'injuries': getattr(pet, 'injury_total', 0),
+            'sicknesses': getattr(pet, 'sick_total', 0),
+            'virus': getattr(pet, 'virus', 0),
             'evolution_timer': getattr(pet, 'time', '00:00'),
+            # The evolution clock itself (GamePet._evol_minutes), which also
+            # catches up offline; 'timer' is only the animation frame count.
+            'evolution_minutes': getattr(pet, '_evol_minutes', 0),
             'timer': getattr(pet, 'timer', 0),
             'evolve': getattr(pet, 'evolve', False),
             'sleeps': getattr(pet, 'sleeps', '00:00'),
             'wakes': getattr(pet, 'wakes', '00:00'),
             'poop_time': getattr(pet, 'poop_timer', '00:00'),
-            'feed_time': getattr(pet, 'hunger_loss', '00:00')
+            'feed_time': getattr(pet, 'hunger_loss', '00:00'),
+            # Only worked out where the module shows it: it runs the
+            # evolution check and loads the coming form's sprite.
+            'next_evolution': (evolution_silhouette(pet)
+                               if "Next Evolution" in visible_stats else None),
         }
         self.status_carousel.set_pet_data(pet_data)
-        

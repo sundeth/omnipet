@@ -9,15 +9,31 @@ import pygame
 import os
 import sys
 
+
+def game_root():
+    """The game's own folder, which assets/, Documentation/, modules/ and save/
+    are read from. In a PyInstaller one-file exe ``__file__`` is in the
+    temporary extraction folder; there it is the exe's folder."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+# Every asset, module and save path is relative to the working folder: start
+# from the game's own, whatever launched it (a shortcut, a terminal in another
+# folder). Started elsewhere, the one-file exe found no assets/OmnipetLogo.png
+# and quit, leaving modules/ and save/ there (2026-10-24 build review);
+# main_nuitka.py does the same.
+if __name__ == "__main__":
+    os.chdir(game_root())
+
 # Add src directory to Python path so internal imports (core, components, scenes, vpet) resolve
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from vpet import VirtualPetGame
 from core import constants, game_globals, runtime_globals
+from core.version import VERSION
 from utils.document_utils import build_module_documentation
-
-# Game Version
-VERSION = "1.0.0 Beta 1"
 
 # Check Pygame version for compatibility
 PYGAME_VERSION = tuple(map(int, pygame.version.ver.split('.')))
@@ -52,7 +68,8 @@ def try_set_video_driver():
         if os.path.exists("/usr/bin/batocera-info"):
             drivers = ["kmsdrm", "x11", "wayland", "fbcon"]
         else:
-            drivers = ["x11", "wayland", "fbcon"]
+            # kmsdrm: a console without X11/Wayland (SDL2 has no fbcon)
+            drivers = ["x11", "wayland", "kmsdrm", "fbcon"]
     elif platform.system() == "Windows":
         drivers = ["windows"]
     elif platform.system() == "Darwin":
@@ -174,16 +191,28 @@ def setup_display():
 
     bit_depth = 32 if IS_PYGAME2 else 16
 
-    # The final screen always uses native resolution if scaling is enabled
+    # Window (output) size: fullscreen scales to the native screen; windowed
+    # uses the configured window size (defaults to the render resolution).
+    if scale_to_screen:
+        window_w, window_h = native_width, native_height
+    else:
+        window_w = config.window_width or screen_width
+        window_h = config.window_height or screen_height
+
     final_screen = pygame.display.set_mode(
-        (native_width if scale_to_screen else screen_width,
-         native_height if scale_to_screen else screen_height),
+        (window_w, window_h),
         screen_mode,
         bit_depth
     )
 
-    # Create the render surface if scaling
-    render_surface = pygame.Surface((screen_width, screen_height)) if scale_to_screen else final_screen
+    # The render canvas is always the internal resolution.  The main loop
+    # scales it onto the window each frame; when the window already matches the
+    # render resolution we draw straight to it (no scaling).
+    if final_screen.get_size() == (screen_width, screen_height):
+        render_surface = final_screen
+    else:
+        render_surface = pygame.Surface((screen_width, screen_height))
+    runtime_globals.render_surface = render_surface
 
     pygame.display.set_caption(f"Omnipet {VERSION}")
     pygame.mouse.set_visible(False)
@@ -207,6 +236,13 @@ def setup_display():
     return render_surface, screen_width, screen_height
 
 
+def documentation_root():
+    """The folder whose modules/ and Documentation/ the Module Guide is built
+    from: the game's own folder (``game_root``; in a one-file exe the guide
+    beside the exe was never rebuilt from ``__file__``'s folder)."""
+    return game_root()
+
+
 def main():
     """Main function to initialize and run the game"""
     print("[Init] Starting Omnipet Virtual Pet Game...")
@@ -221,7 +257,7 @@ def main():
         
         # Build module documentation
         try:
-            project_root = os.path.dirname(__file__)
+            project_root = documentation_root()
             print("[Init] Building module documentation...")
             build_module_documentation(project_root)
         except Exception as e:
@@ -245,15 +281,14 @@ def main():
                 
                 # Update game state
                 game.update()
-                
-                # Draw game
-                game.draw(screen, clock)
 
-                # If scaling, blit scaled render surface to fullscreen display
-                if scale_to_screen:
-                    pygame.transform.scale(screen, (native_width, native_height), final_screen)
-
-                pygame.display.flip()
+                # Draw to the internal render canvas, then scale it onto the
+                # window (handles fullscreen and a windowed window size that
+                # differs from the render resolution).  Read the canvas from
+                # runtime_globals so a live window-size change is picked up.
+                from utils import display_utils
+                game.draw(runtime_globals.render_surface, clock)
+                display_utils.present()
                 
                 # Maintain framerate
                 clock.tick(game_globals.configuration.frame_rate)

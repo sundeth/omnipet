@@ -3,14 +3,19 @@ import pygame
 from ui.ui_manager import UIManager
 from ui.components.background import Background
 from ui.components.title_scene import TitleScene
+from ui.components.label import Label
 from ui.components.button import Button
 from ui.components.menu import Menu
 from ui.components.digidex_list import DigidexList
+from ui.components.digidex_module_list import (DigidexModuleEntry,
+                                               DigidexModuleList,
+                                               load_module_battle_icon)
 from ui.components.digidex_tree import DigidexTree
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals
 import core.constants as constants
-from models.game_digidex import is_pet_unlocked, load_digidex
+from models.game_digidex import known_pet_keys, load_digidex
+from utils.data_compat import availability as read_availability
 from models.game_digidex_entry import GameDigidexEntry
 from utils.pygame_utils import  sprite_load_percent
 from ui.windows.window_background import WindowBackground
@@ -47,25 +52,89 @@ class SceneDigidex:
             base_on="height"
         )
 
-        self.digidex_data = load_digidex()
-        self.pets = self.build_pet_list()
-        self.all_pets = self.pets.copy()  # Store unfiltered list for filtering
+        # The roster of every installed module is built after one "Loading..."
+        # frame has been drawn, a few modules per frame (LOAD_BUDGET_S): the
+        # first time each module's monster.json is parsed, which on a Pi Zero
+        # took 2.5 s in a single frame and looked like a frozen menu.
+        self._loading = True
+        self._loading_drawn = False
+        self._load_queue = None
+        self._loading_ui = UIManager(theme="LIME")
+        self._loading_ui.add_component(TitleScene(0, 9, "DIGIDEX"))
+        self._loading_label = Label(120, 112, "Loading...", is_title=True, center=True)
+        self._loading_ui.add_component(self._loading_label)
+        self.digidex_data = []
+        self.pets = []
+        self.all_pets = []
 
-        # View state: 'list' (main), 'tree'
-        self.state = 'list'
-        
+        # Scope chosen at the module view: which module (None = All) and
+        # whether the Friends list (availability == "Friend") is shown
+        # instead of the album.
+        self.scope_module = None
+        self.scope_friends = False
+
+        # View state / navigation: 'module' <-> 'list' <-> 'tree'
+        # (the Friends list is a 'list' without a tree level)
+        self.state = 'module'
+
         # UI Components
         self.background = None
         self.title_scene = None
+        self.module_list = None
         self.list_view = None
         self.tree_view = None
         self.up_button = None
         self.down_button = None
         self.tree_button = None
         self.back_button = None
-        
+
+    #: Time one frame may spend building rosters while Loading is shown.
+    LOAD_BUDGET_S = 0.025
+
+    def _load_step(self):
+        """Build module rosters for up to LOAD_BUDGET_S (at least one module),
+        then, once every module is in, the UI. Returns True when done."""
+        import time
+        if self._load_queue is None:
+            self.digidex_data = load_digidex()
+            self._load_known_keys = known_pet_keys()
+            self._load_queue = list(runtime_globals.game_modules.values())
+            self._load_total = len(self._load_queue)
+            self._load_entries = []
+            self._load_known_counts = {}
+        started = time.perf_counter()
+        while self._load_queue:
+            module = self._load_queue.pop(0)
+            entries, known = self._module_roster(module, self._load_known_keys)
+            self._load_entries.extend(entries)
+            self._load_known_counts[module.name] = known
+            if time.perf_counter() - started >= self.LOAD_BUDGET_S:
+                break
+        if self._load_queue:
+            done = self._load_total - len(self._load_queue)
+            self._loading_label.set_text(f"Loading... {done}/{self._load_total}")
+            return False
+        self._finish_loading()
+        return True
+
+    def _finish_loading(self):
+        """Build the roster (what _load_step has not yet) and the UI; the
+        constructor only showed Loading."""
+        if self._load_queue is None:
+            self.digidex_data = load_digidex()
+            self.pets = self.build_pet_list()
+        else:
+            while self._load_queue:
+                module = self._load_queue.pop(0)
+                entries, known = self._module_roster(module, self._load_known_keys)
+                self._load_entries.extend(entries)
+                self._load_known_counts[module.name] = known
+            self.pets = self._complete_pet_list(self._load_entries, self._load_known_counts)
+        self.all_pets = self.pets.copy()  # Store unfiltered list for filtering
         self._setup_ui()
-        
+        self._show_module_view()
+        self._loading = False
+        self._loading_ui = None
         runtime_globals.game_console.log("[SceneDigidex] Digidex scene initialized with UI system (LIME theme).")
 
     def _setup_ui(self):
@@ -94,55 +163,181 @@ class SceneDigidex:
         self.ui_manager.add_component(self.exit_button)
         
         # Filter state
-        self.active_filters = {"module": None, "stage": None, "known": None}
+        self.active_filters = {"module": None, "stage": None, "known": None, "friend": None}
         
-        # List view (initially visible) - now has more vertical space
-        # List takes space from y=30 to bottom (y=232)
+        # Module selection list (entry view) — same visuals as the pet list.
+        # Sized to its content (rows are 50 base px) up to 4 visible rows;
+        # longer lists scroll (UP/DOWN keys, mouse wheel and drag).
+        module_entries = self._build_module_entries()
         list_height = 202
+        module_list_height = min(list_height, max(1, len(module_entries)) * 50)
+        self.module_list = DigidexModuleList(5, 30, 230, module_list_height, self.unknown_sprite, sprite_size=SPRITE_SIZE)
+        self.module_list.set_pets(module_entries)
+        self.module_list.on_selection_callback = self._on_module_entry_selected
+        self.ui_manager.add_component(self.module_list)
+
+        # Pet list view (hidden until a module is chosen)
         self.list_view = DigidexList(5, 30, 230, list_height, self.unknown_sprite, sprite_size=SPRITE_SIZE)
         self.list_view.set_pets(self.pets)
         self.list_view.on_selection_callback = self._on_list_selection
+        self.list_view.visible = False
         self.ui_manager.add_component(self.list_view)
-        
+
         # Tree view (initially hidden)
         self.tree_view = DigidexTree(5, 30, 230, list_height, self.unknown_sprite, sprite_size=SPRITE_SIZE)
         self.tree_view.set_pets(self.pets)
         self.tree_view.on_back = self._on_tree_back
         self.tree_view.visible = False
         self.ui_manager.add_component(self.tree_view)
-        
-        # Set initial focus to list view
-        self.ui_manager.set_focused_component(self.list_view)
 
-    def build_pet_list(self):
-        all_entries = []
-        known_count_by_module = {}
+    # ------------------------------------------------------------------
+    # Module scope selection (the scene's entry view)
+    # ------------------------------------------------------------------
+
+    def _build_module_entries(self):
+        """Rows for the module view: 'All' plus one row per installed module,
+        each with the module's battle icon and its known/total pet count."""
+        icon_size = int(40 * runtime_globals.UI_SCALE)
+        entries = []
+
+        # Eggs (stage 0) are hidden from the lists — exclude them from the
+        # counts too. They still appear as the root of the evolution tree.
+        listed = [p for p in self.all_pets if p.stage != 0]
+        total_all = len(listed)
+        known_all = sum(1 for p in listed if p.known)
+        entries.append(DigidexModuleEntry(
+            "All", None, f"{known_all}/{total_all} known", module_name=None))
 
         for module in runtime_globals.game_modules.values():
-            monsters = module.get_all_monsters()
-            module_known_count = 0
+            module_pets = [p for p in listed if p.module == module.name]
+            if not module_pets:
+                continue
+            known = sum(1 for p in module_pets if p.known)
+            icon = load_module_battle_icon(module, icon_size)
+            entries.append(DigidexModuleEntry(
+                module.name, icon, f"{known}/{len(module_pets)} known",
+                module_name=module.name))
+        return entries
 
-            for monster in monsters:
-                name = monster["name"]
-                version = monster["version"]
-                attribute = monster.get("attribute", "")
-                stage = monster.get("stage", 0)
-                name_format = module.name_format
-                known = is_pet_unlocked(name, module.name, version)
+    def _show_module_view(self):
+        """Enter the module selection view (the navigation root)."""
+        self.state = 'module'
+        self.module_list.visible = True
+        self.list_view.visible = False
+        self.tree_view.visible = False
+        self.filter_button.visible = False
+        self.exit_button.set_text("EXIT")
+        self.ui_manager.set_focused_component(self.module_list)
 
-                if not known:
-                    name = "????"
-                    attribute = "???"
-                    sprite = self.unknown_sprite
-                else:
-                    module_known_count += 1
-                    sprite = None
+    def _on_module_entry_selected(self, entry):
+        if entry.module_name is None:
+            self._set_scope(None, False)
+            return
+        module_name = entry.module_name
+        if self._module_has_friends(module_name):
+            # Module has Friend pets: let the player pick which list to see.
+            menu = Menu(width=120, height=70)
+            menu.open(
+                options=["Album", "Friends"],
+                on_select=lambda i, m=module_name: self._set_scope(m, i == 1),
+                on_cancel=lambda: None  # stay on the module view
+            )
+            self.ui_manager.set_active_menu(menu)
+        else:
+            self._set_scope(module_name, False)
 
-                entry = GameDigidexEntry(name, attribute, stage, module.name, version, sprite, known, name_format)
-                all_entries.append(entry)
+    def _module_has_friends(self, module_name) -> bool:
+        return any(getattr(p, 'availability', 'Normal') == 'Friend'
+                   for p in self.all_pets if p.module == module_name)
 
-            known_count_by_module[module.name] = module_known_count
+    def _set_scope(self, module_name, friends: bool):
+        """Apply the chosen scope and enter the pet/friend list view."""
+        self.scope_module = module_name
+        self.scope_friends = friends
+        runtime_globals.game_sound.play("menu")
+        self._refresh_filtered_list()
 
+        self.state = 'list'
+        self.module_list.visible = False
+        self.list_view.visible = True
+        self.tree_view.visible = False
+        self.filter_button.visible = True
+        self.exit_button.set_text("BACK")
+        self.ui_manager.set_focused_component(self.list_view)
+        runtime_globals.game_console.log(
+            f"[SceneDigidex] Scope: module={module_name or 'All'} friends={friends}")
+
+    def build_pet_list(self):
+        """Every module's Library entries at once (the scene builds them a few
+        modules per frame instead, see _load_step)."""
+        known_keys = known_pet_keys()
+        all_entries = []
+        known_count_by_module = {}
+        for module in runtime_globals.game_modules.values():
+            entries, known = self._module_roster(module, known_keys)
+            all_entries.extend(entries)
+            known_count_by_module[module.name] = known
+        return self._complete_pet_list(all_entries, known_count_by_module)
+
+    def _module_roster(self, module, known_keys):
+        """One module's Library entries and how many of them are known."""
+        entries = []
+        module_known_count = 0
+        module_friends = None
+        roster = module.roster_summary()
+        name_format = module.name_format
+
+        for name, version, attribute, stage, availability in roster:
+            # Unobtainable pets never appear in the digidex.
+            if availability == "Unobtainable":
+                continue
+            if availability == "Friend":
+                # Friend pets are discovered by battling their
+                # Friend-flagged enemy, tracked in the save's friend list.
+                if module_friends is None:
+                    from utils.xros_utils import get_module_friends
+                    module_friends = get_module_friends(module.name)
+                known = name in module_friends
+            else:
+                known = (name, module.name, version) in known_keys
+
+            if not known:
+                name = "????"
+                attribute = "???"
+                sprite = self.unknown_sprite
+            else:
+                module_known_count += 1
+                sprite = None
+
+            entry = GameDigidexEntry(name, attribute, stage, module.name, version, sprite, known, name_format)
+            entry.availability = availability
+            entries.append(entry)
+
+        # Recruits (Digimon World's): raisable Digimon a friend-flagged
+        # enemy recruits are listed again under Friends, known once
+        # recruited. Not counted towards the digidex unlocks: raising
+        # them is what counts.
+        recruits = getattr(module, "get_recruit_friends", lambda: [])()
+        if recruits:
+            from utils.xros_utils import get_module_friends
+            met = get_module_friends(module.name)
+            seen = set()
+            for name, version, attribute, stage, _availability in roster:
+                if name not in recruits or name in seen:
+                    continue
+                seen.add(name)
+                known = name in met
+                entry = GameDigidexEntry(
+                    name if known else "????",
+                    attribute if known else "???",
+                    stage, module.name, version,
+                    None if known else self.unknown_sprite, known, module.name_format)
+                entry.availability = "Friend"
+                entries.append(entry)
+        return entries, module_known_count
+
+    def _complete_pet_list(self, all_entries, known_count_by_module):
+        """Grant the digidex-count unlocks and sort the entries."""
         for module in runtime_globals.game_modules.values():
             unlocks = getattr(module, "unlocks", [])
             if isinstance(unlocks, list):
@@ -158,23 +353,42 @@ class SceneDigidex:
     def update(self):
         # Update shared window background
         self.window_background.update()
-        
+
+        if self._loading:
+            if self._loading_drawn:
+                self._load_step()
+            return
+
         # Update UI manager (delegates to active components)
         self.ui_manager.update()
 
     def draw(self, surface: pygame.Surface):
         # Draw shared window background
         self.window_background.draw(surface)
-        
+
+        if self._loading:
+            self._loading_ui.draw(surface)
+            self._loading_drawn = True
+            return
+
         # Draw UI components via manager
         self.ui_manager.draw(surface)
 
     def handle_event(self, event):
         if not isinstance(event, tuple) or len(event) != 2:
             return False
-        
+        if self._loading:
+            return True     # nothing to press until the roster is built
+
         event_type, event_data = event
-        
+
+        # SELECT opens FILTER in the list: keys and buttons never reach the
+        # FILTER button, the list keeps the focus (only a tap opened it).
+        if (event_type == "SELECT" and self.state == 'list' and self.filter_button.visible
+                and self.ui_manager.active_menu is None):
+            self._on_filter_click()
+            return True
+
         # Handle events through UIManager
         if self.ui_manager.handle_event(event):
             return True
@@ -182,36 +396,33 @@ class SceneDigidex:
         # Enable keyboard navigation mode for keyboard/scroll inputs
         if event_type in ["B"]:
             self.ui_manager.keyboard_navigation_mode = True
-        
-            if self.state == 'tree':
-                self._on_tree_back()
-                runtime_globals.game_sound.play("cancel")
-                return True
-            elif self.state == 'list':
-                change_scene('game')
-                runtime_globals.game_sound.play("cancel")
-                return True
+            # Mirror the EXIT/BACK button: one navigation level up,
+            # leaving the scene only from the module selection view.
+            self._navigate_back()
+            return True
                 
     
     def _on_list_selection(self, selected_pet):
         """Callback when a pet is selected in the list view"""
+        # The Friends list has no evolution tree level.
+        if self.scope_friends:
+            return
         if selected_pet and selected_pet.known:
             # Switch to tree view
             self.list_view.visible = False
             self.tree_view.visible = True
             self.filter_button.visible = False  # Hide filter button in tree view
-            self.exit_button.text = "BACK"  # Change EXIT to BACK in tree view
-            self.exit_button.needs_redraw = True
+            self.exit_button.set_text("BACK")
             self.state = 'tree'
-            
+
             # Load and set tree data
             root = self.find_stage_zero_entry(selected_pet)
             tree_data = self.load_evolution_tree(selected_pet)
             self.tree_view.set_root(root, tree_data, selected_pet=selected_pet)
-            
+
             # Set focus to tree view
             self.ui_manager.set_focused_component(self.tree_view)
-            
+
             runtime_globals.game_console.log(f"[SceneDigidex] Switched to tree view for {selected_pet.name}")
 
     def _on_tree_back(self):
@@ -220,42 +431,49 @@ class SceneDigidex:
         self.tree_view.visible = False
         self.list_view.visible = True
         self.filter_button.visible = True  # Show filter button in list view
-        self.exit_button.text = "EXIT"  # Change BACK to EXIT in list view
-        self.exit_button.needs_redraw = True
+        self.exit_button.set_text("BACK")  # One more level up: module selection
         self.state = 'list'
-        
+
         # Set focus back to list view
         self.ui_manager.set_focused_component(self.list_view)
-        
+
         runtime_globals.game_console.log("[SceneDigidex] Returned to list view")
-    
-    def _on_exit_click(self):
-        """EXIT button clicked - exit digidex or return to list from tree"""
-        runtime_globals.game_console.log(f"[SceneDigidex] EXIT button clicked, state={self.state}")
-        if self.state == 'list':
-            change_scene('game')
-            runtime_globals.game_sound.play("cancel")
-        elif self.state == 'tree':
+
+    def _navigate_back(self):
+        """One navigation level up: tree -> list -> module selection -> exit.
+
+        The EXIT button only leaves the scene from the module selection view.
+        """
+        runtime_globals.game_sound.play("cancel")
+        if self.state == 'tree':
             self._on_tree_back()
-            runtime_globals.game_sound.play("cancel")
+        elif self.state == 'list':
+            self._show_module_view()
+        else:
+            change_scene('game')
+
+    def _on_exit_click(self):
+        """EXIT/BACK button clicked — navigate one level up (exit at root)."""
+        runtime_globals.game_console.log(f"[SceneDigidex] EXIT/BACK clicked, state={self.state}")
+        self._navigate_back()
     
     def _on_filter_click(self):
         """FILTER button clicked - show filter menu"""
         runtime_globals.game_console.log("[SceneDigidex] FILTER button clicked")
         
         # Create and open filter menu
-        menu = Menu(width=120, height=100)
+        menu = Menu(width=120, height=120)
         menu.open(
-            options=["Module", "Stage", "Known", "Reset"],
+            options=["Module", "Stage", "Known", "Friend", "Reset"],
             on_select=self._on_filter_menu_select,
             on_cancel=lambda: None
         )
         self.ui_manager.set_active_menu(menu)
         runtime_globals.game_sound.play("menu")
-    
+
     def _on_filter_menu_select(self, option_index):
         """Handle filter menu selection"""
-        options = ["Module", "Stage", "Known", "Reset"]
+        options = ["Module", "Stage", "Known", "Friend", "Reset"]
         selected = options[option_index]
         runtime_globals.game_console.log(f"[SceneDigidex] Filter option selected: {selected}")
         
@@ -271,29 +489,35 @@ class SceneDigidex:
             self.ui_manager.set_active_menu(menu)
         
         elif selected == "Stage":
-            # Show stage submenu
-            stage_list = constants.STAGES
+            # Show stage submenu (eggs are hidden from the list, so stage 0
+            # is not offered; menu index 0 = stage 1)
+            stage_list = constants.STAGES[1:]
             menu = Menu(width=150, height=min(200, 20 + len(stage_list) * 20))
             menu.open(
                 options=stage_list,
-                on_select=lambda idx: self._apply_filter("stage", idx),
+                on_select=lambda idx: self._apply_filter("stage", idx + 1),
                 on_cancel=lambda: None
             )
             self.ui_manager.set_active_menu(menu)
         
         elif selected == "Known":
-            # Show yes/no submenu
+            # Filter to known pets directly -- no submenu (a Yes/No prompt
+            # here read as a confirmation dialog and confused players).
+            self._apply_filter("known", True)
+
+        elif selected == "Friend":
+            # Filter to Friend pets directly (overrides the album scope).
+            self._apply_filter("friend", True)
+
+        elif selected == "Reset":
+            # Confirm before clearing all filters
             menu = Menu(width=100, height=60)
             menu.open(
                 options=["Yes", "No"],
-                on_select=lambda idx: self._apply_filter("known", idx == 0),
+                on_select=lambda idx: self._clear_filters() if idx == 0 else None,
                 on_cancel=lambda: None
             )
             self.ui_manager.set_active_menu(menu)
-        
-        elif selected == "Reset":
-            # Clear all filters
-            self._clear_filters()
     
     def _apply_filter(self, filter_type, value):
         """Apply a filter and refresh the list"""
@@ -305,22 +529,38 @@ class SceneDigidex:
     def _clear_filters(self):
         """Clear all active filters"""
         runtime_globals.game_console.log("[SceneDigidex] Clearing all filters")
-        self.active_filters = {"module": None, "stage": None, "known": None}
+        self.active_filters = {"module": None, "stage": None, "known": None, "friend": None}
         self._refresh_filtered_list()
         runtime_globals.game_sound.play("menu")
-    
+
     def _refresh_filtered_list(self):
-        """Refresh the list view with filtered pets"""
-        filtered_pets = self.all_pets.copy()
-        
+        """Refresh the list view with the current scope + filters applied"""
+        # Eggs never show in the lists (they still open the evolution tree
+        # as its root node).
+        filtered_pets = [p for p in self.all_pets if p.stage != 0]
+
+        # Scope: chosen module (None = all modules)
+        if self.scope_module is not None:
+            filtered_pets = [p for p in filtered_pets if p.module == self.scope_module]
+
+        # Friend pets live in their own "Friends" list; the album (and the
+        # All view) hides them.  The Friend search filter overrides that.
+        want_friends = self.scope_friends or self.active_filters.get("friend")
+        if want_friends:
+            filtered_pets = [p for p in filtered_pets
+                             if getattr(p, 'availability', 'Normal') == 'Friend']
+        else:
+            filtered_pets = [p for p in filtered_pets
+                             if getattr(p, 'availability', 'Normal') != 'Friend']
+
         # Apply module filter
         if self.active_filters["module"] is not None:
             filtered_pets = [p for p in filtered_pets if p.module == self.active_filters["module"]]
-        
+
         # Apply stage filter
         if self.active_filters["stage"] is not None:
             filtered_pets = [p for p in filtered_pets if p.stage == self.active_filters["stage"]]
-        
+
         # Apply known filter
         if self.active_filters["known"] is not None:
             filtered_pets = [p for p in filtered_pets if p.known == self.active_filters["known"]]
@@ -352,7 +592,9 @@ class SceneDigidex:
         return tree
 
     def find_stage_zero_entry(self, pet):
-        for entry in self.pets:
+        # Search the unfiltered list — eggs are hidden from self.pets but
+        # remain the tree's root node.
+        for entry in self.all_pets:
             if entry.module == pet.module and entry.version == pet.version and entry.stage == 0:
                 return entry
         return pet

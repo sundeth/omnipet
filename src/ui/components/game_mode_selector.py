@@ -234,7 +234,9 @@ class GameModeSelector(UIComponent):
 
     @staticmethod
     def _get_text_font(scale):
-        size = 12 * scale
+        # 16 = ProggySmall's pixel-perfect design grid; 12 * scale rendered
+        # with mixed 1-2px stems once anti-aliasing was disabled game-wide.
+        size = 16 * scale
         return font_load(TEXT_FONT, int(size))
 
     @staticmethod

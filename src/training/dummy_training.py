@@ -12,7 +12,7 @@ from ui.ui_manager import UIManager
 from battle import combat_constants
 import core.constants as constants
 from models.game_module import sprite_load
-from utils.pygame_utils import blit_with_shadow
+from utils.pygame_utils import blit_with_cache
 from ui.minigames.dummy_charge import DummyCharge
 from utils.scene_utils import change_scene
 
@@ -112,7 +112,7 @@ class DummyTraining(Training):
 
         if self.strength == 14:
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Dummy training perfect score achieved! Trophy awarded.")
 
     def draw_charge(self, surface):
@@ -123,11 +123,14 @@ class DummyTraining(Training):
     def handle_event(self, event):
         """Forward input events to the bar component."""
         event_type, event_data = event
+
+        if self.phase == "alert":
+            return
         
         if self.phase == "charge" and self.minigame.handle_event(event):
             return
         
-        if event_type in ("START", "B") and self.phase in ("charge", "alert"):
+        if event_type in ("START", "B") and self.phase == "charge":
             runtime_globals.game_sound.play("cancel")
             change_scene("game")
         elif event_type in ("B") and self.phase != "result":
@@ -148,10 +151,10 @@ class DummyTraining(Training):
             else:
                 self.draw_pets(surface, PetFrame.ATK1)
         else:
-            blit_with_shadow(surface, self.bag1, (int(50 * runtime_globals.UI_SCALE), runtime_globals.SCREEN_HEIGHT // 2 - self.bag1.get_height() // 2))
+            blit_with_cache(surface, self.bag1, (int(50 * runtime_globals.UI_SCALE), runtime_globals.SCREEN_HEIGHT // 2 - self.bag1.get_height() // 2))
 
         for sprite, (x, y) in self.attack_positions:
-            blit_with_shadow(surface, sprite, (int(x), int(y)))
+            blit_with_cache(surface, sprite, (int(x), int(y)))
 
     def draw_result(self, surface):
         self.strength = self.minigame.strength
@@ -167,20 +170,14 @@ class DummyTraining(Training):
             if result_img:
                 x = int(50 * runtime_globals.UI_SCALE)
                 y = runtime_globals.SCREEN_HEIGHT // 2 - result_img.get_height() // 2
-                blit_with_shadow(surface, result_img, (x, y))
+                blit_with_cache(surface, result_img, (x, y))
         else:
             # Use AnimatedSprite component with predefined result animations
             if not self.animated_sprite.is_animation_playing():
-                duration = combat_constants.RESULT_SCREEN_FRAMES / constants.FRAME_RATE
-                
-                
-                # Choose which result animation to play
-                if self.strength < 10:
-                    self.animated_sprite.play_bad(duration)
-                elif self.strength < 14:
-                    self.animated_sprite.play_great(duration)
-                else:
-                    self.animated_sprite.play_excellent(duration)
+                # The banner of the grade the training pays: 10 or less is a
+                # loss (BAD), 11-12 GOOD, 13 GREAT, 14 EXCELLENT. It used to
+                # read the bar on its own bands (10-13 GREAT).
+                self.play_grade_banner(self.get_attack_count())
             
             # Draw the animated sprite
             self.animated_sprite.draw(surface)
@@ -224,7 +221,9 @@ class DummyTraining(Training):
     def get_attack_count(self):
         """Returns the number of attacks based on strength."""
         self.strength = self.minigame.strength
-        if self.strength < 10:
+        if self.strength <= 10:
+            return 0
+        elif self.strength < 13:
             return 1
         elif self.strength < 14:
             return 2

@@ -1,0 +1,1149 @@
+{
+  "_comment": "Jogress DigiROMs harvested from nacatech's dump. A code is labelled by the pet you own and PRESENTS that pet's partner, so send the entry your own pet fits. Colour packets are MAGIC | 0x14 | Version | Index | Attribute | Stage | Check; the other lines are stored verbatim. A device ANSWERS with the operation one higher, so a reply to 0x14 is 0x15 -- `operation` is what we send, `operations` is what may be read.",
+  "operation": 20,
+  "operations": [
+    20,
+    21,
+    22,
+    23
+  ],
+  "stage_offset": 1,
+  "attribute_codes": {
+    "Free": 0,
+    "Vi": 1,
+    "Da": 2,
+    "Va": 3
+  },
+  "protocols": {
+    "ACCEL": {
+      "packets": "verbatim",
+      "packet_count": 2,
+      "version_map": {},
+      "presents": [],
+      "named": [
+        {
+          "label": "BanchoLeomon -> Chaosdramon",
+          "rom": "X2-2D8A-A1EA",
+          "folder": "Accel Jogress DigiROMs",
+          "owner": "BanchoLeomon",
+          "target": "Chaosdramon"
+        },
+        {
+          "label": "Darkdramon -> Chaosdramon",
+          "rom": "X2-2D8A-A1EA",
+          "folder": "Accel Jogress DigiROMs",
+          "owner": "Darkdramon",
+          "target": "Chaosdramon"
+        },
+        {
+          "label": "Sleipmon -> Chaosdramon",
+          "rom": "X2-2D8A-A1EA",
+          "folder": "Accel Jogress DigiROMs",
+          "owner": "Sleipmon",
+          "target": "Chaosdramon"
+        },
+        {
+          "label": "Valdurmon -> Chaosdramon",
+          "rom": "X2-3D8A-A1DA",
+          "folder": "Accel Jogress DigiROMs",
+          "owner": "Valdurmon",
+          "target": "Chaosdramon"
+        }
+      ]
+    },
+    "PENC": {
+      "packets": "colour",
+      "packet_count": null,
+      "version_map": {
+        "0": 1,
+        "1": 2,
+        "2": 3,
+        "3": 4,
+        "4": 5,
+        "5": 0,
+        "6": 6,
+        "7": 7
+      },
+      "presents": [
+        {
+          "stage": 4,
+          "stage_name": "Adult",
+          "attribute": "Da",
+          "rom": "C1-47444470001400020008000200038BD7",
+          "generic": true,
+          "label": "Jogress with Data Adult",
+          "version": 3,
+          "wire_version": 2,
+          "index": 8
+        },
+        {
+          "stage": 4,
+          "stage_name": "Adult",
+          "attribute": "Va",
+          "rom": "C1-47444470001400020006000300038BD6",
+          "generic": true,
+          "label": "Jogress with Vaccine Adult",
+          "version": 3,
+          "wire_version": 2,
+          "index": 6
+        },
+        {
+          "stage": 4,
+          "stage_name": "Adult",
+          "attribute": "Vi",
+          "rom": "C1-47444470001400010009000100038BD6",
+          "generic": true,
+          "label": "Jogress with Virus Adult",
+          "version": 2,
+          "wire_version": 1,
+          "index": 9
+        },
+        {
+          "stage": 5,
+          "stage_name": "Perfect",
+          "attribute": "Da",
+          "rom": "C1-4744447000140000000E000200048BDC",
+          "generic": true,
+          "label": "Jogress with Data Perfect",
+          "version": 1,
+          "wire_version": 0,
+          "index": 14
+        },
+        {
+          "stage": 5,
+          "stage_name": "Perfect",
+          "attribute": "Va",
+          "rom": "C1-4744447000140001000D000300048BDD",
+          "generic": true,
+          "label": "Jogress with Vaccine Perfect",
+          "version": 2,
+          "wire_version": 1,
+          "index": 13
+        },
+        {
+          "stage": 5,
+          "stage_name": "Perfect",
+          "attribute": "Vi",
+          "rom": "C1-47444470001400000011000100048BDE",
+          "generic": true,
+          "label": "Jogress with Virus Perfect",
+          "version": 1,
+          "wire_version": 0,
+          "index": 17
+        },
+        {
+          "stage": 6,
+          "stage_name": "Ultimate",
+          "attribute": "Da",
+          "rom": "C1-47444470001400000014000200058BE3",
+          "generic": false,
+          "label": "Jogress Eldoradimon into Tlalocmon",
+          "version": 1,
+          "wire_version": 0,
+          "index": 20
+        },
+        {
+          "stage": 6,
+          "stage_name": "Ultimate",
+          "attribute": "Va",
+          "rom": "C1-47444470001400010013000300058BE4",
+          "generic": false,
+          "label": "Jogress Houomon into Mitamamon",
+          "version": 2,
+          "wire_version": 1,
+          "index": 19
+        },
+        {
+          "stage": 6,
+          "stage_name": "Ultimate",
+          "attribute": "Vi",
+          "rom": "C1-47444470001400020016000100058BE6",
+          "generic": false,
+          "label": "Jogress Vamdemon into Voltobautamon",
+          "version": 3,
+          "wire_version": 2,
+          "index": 22
+        }
+      ],
+      "named": [
+        {
+          "label": "Jogress Lady Devimon into Mastemon",
+          "rom": "C1-47444470001400000012000300048BE1",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Lady Devimon",
+          "target": "Mastemon",
+          "wire_version": 0,
+          "version": 1,
+          "index": 18,
+          "attribute": "Va",
+          "stage": 5,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Angewomon into Mastemon",
+          "rom": "C1-47444470001400020012000100048BE1",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Angewomon",
+          "target": "Mastemon",
+          "wire_version": 2,
+          "version": 3,
+          "index": 18,
+          "attribute": "Vi",
+          "stage": 5,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Eldoradimon into Tlalocmon",
+          "rom": "C1-47444470001400000014000200058BE3",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Eldoradimon",
+          "target": "Tlalocmon",
+          "wire_version": 0,
+          "version": 1,
+          "index": 20,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Saber Leomon into Tlalocmon",
+          "rom": "C1-47444470001400000018000200058BE7",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Saber Leomon",
+          "target": "Tlalocmon",
+          "wire_version": 0,
+          "version": 1,
+          "index": 24,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Metal Etemon into Tlalocmon",
+          "rom": "C1-47444470001400000018000200058BE7",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Metal Etemon",
+          "target": "Tlalocmon",
+          "wire_version": 0,
+          "version": 1,
+          "index": 24,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Houomon into Mitamamon",
+          "rom": "C1-47444470001400010013000300058BE4",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Houomon",
+          "target": "Mitamamon",
+          "wire_version": 1,
+          "version": 2,
+          "index": 19,
+          "attribute": "Va",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Marin Angemon into Mitamamon",
+          "rom": "C1-47444470001400030013000300058BE6",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Marin Angemon",
+          "target": "Mitamamon",
+          "wire_version": 3,
+          "version": 4,
+          "index": 19,
+          "attribute": "Va",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Plesiomon into Aegisdramon",
+          "rom": "C1-47444470001400010014000200058BE4",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Plesiomon",
+          "target": "Aegisdramon",
+          "wire_version": 1,
+          "version": 2,
+          "index": 20,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Metal Seadramon into Aegisdramon",
+          "rom": "C1-47444470001400010016000200058BE6",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Metal Seadramon",
+          "target": "Aegisdramon",
+          "wire_version": 1,
+          "version": 2,
+          "index": 22,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Piemon into Voltobautamon",
+          "rom": "C1-47444470001400020010000100048BDF",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Piemon",
+          "target": "Voltobautamon",
+          "wire_version": 2,
+          "version": 3,
+          "index": 16,
+          "attribute": "Vi",
+          "stage": 5,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Vamdemon into Voltobautamon",
+          "rom": "C1-47444470001400020016000100058BE6",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Vamdemon",
+          "target": "Voltobautamon",
+          "wire_version": 2,
+          "version": 3,
+          "index": 22,
+          "attribute": "Vi",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Pinochimon into Cernumon",
+          "rom": "C1-47444470001400030014000200058BE6-47444470001600030014000200058BE8",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Pinochimon",
+          "target": "Cernumon",
+          "wire_version": 3,
+          "version": 4,
+          "index": 20,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Hydramon into Cernumon",
+          "rom": "C1-47444470001400030014000200058BE6-47444470001600030014000200058BE8",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Hydramon",
+          "target": "Cernumon",
+          "wire_version": 3,
+          "version": 4,
+          "index": 20,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Griffomon into Cernumon",
+          "rom": "C1-47444470001400030019000100058BEA-47444470001600030019000100058BEC",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Griffomon",
+          "target": "Cernumon",
+          "wire_version": 3,
+          "version": 4,
+          "index": 25,
+          "attribute": "Vi",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Mugendramon into Chaosdramon",
+          "rom": "C1-47444470001400040017000300058BEB-47444470001600040017000300058BED",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Mugendramon",
+          "target": "Chaosdramon",
+          "wire_version": 4,
+          "version": 5,
+          "index": 23,
+          "attribute": "Va",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Hi Andromon into Chaosdramon",
+          "rom": "C1-47444470001400040015000100058BE7-47444470001600040015000100058BE9",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Hi Andromon",
+          "target": "Chaosdramon",
+          "wire_version": 4,
+          "version": 5,
+          "index": 21,
+          "attribute": "Vi",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress War Greymon into Omegamon",
+          "rom": "C1-47444470001400040014000200058BE7-47444470001600040014000200058BE9",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "War Greymon",
+          "target": "Omegamon",
+          "wire_version": 4,
+          "version": 5,
+          "index": 20,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Metal Garurumon into Omegamon",
+          "rom": "C1-47444470001400050011000300058BE6-47444470001600050011000300058BE8",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Metal Garurumon",
+          "target": "Omegamon",
+          "wire_version": 5,
+          "version": 0,
+          "index": 17,
+          "attribute": "Va",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Arcturusmon into Proximamon",
+          "rom": "C1-4744447000140005001E000300058BF3-4744447000160005001E000300058BF5",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Arcturusmon",
+          "target": "Proximamon",
+          "wire_version": 5,
+          "version": 0,
+          "index": 30,
+          "attribute": "Va",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Siriusmon into Proximamon",
+          "rom": "C1-4744447000140005001F000100058BF2-4744447000160005001F000100058BF4",
+          "folder": "PenC Jogress DigiROMs",
+          "owner": "Siriusmon",
+          "target": "Proximamon",
+          "wire_version": 5,
+          "version": 0,
+          "index": 31,
+          "attribute": "Vi",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "(UNTESTED) Jogress Sagomon or Cho-Hakkaimon into Seiten Gokuwmon",
+          "rom": "C1-47444470001400060012000100048BE5-47444470001600060012000100048BE7",
+          "folder": "PenC Jogress DigiROMs (Saiyu Warriors/Toho Braves)",
+          "untested": true,
+          "owner": "Sagomon or Cho-Hakkaimon",
+          "target": "Seiten Gokuwmon",
+          "wire_version": 6,
+          "version": 6,
+          "index": 18,
+          "attribute": "Vi",
+          "stage": 5,
+          "decoded": true
+        },
+        {
+          "label": "(UNTESTED) Jogress Gokuwmon or Cho-Hakkaimon into Seiten Gokuwmon",
+          "rom": "C1-47444470001400060014000100048BE7-47444470001600060014000100048BE9",
+          "folder": "PenC Jogress DigiROMs (Saiyu Warriors/Toho Braves)",
+          "untested": true,
+          "owner": "Gokuwmon or Cho-Hakkaimon",
+          "target": "Seiten Gokuwmon",
+          "wire_version": 6,
+          "version": 6,
+          "index": 20,
+          "attribute": "Vi",
+          "stage": 5,
+          "decoded": true
+        },
+        {
+          "label": "(UNTESTED) Jogress Nezhamon or Takutoumon into Shakamon",
+          "rom": "C1-47444470001400060016000300058BEC-47444470001600060016000300058BEE",
+          "folder": "PenC Jogress DigiROMs (Saiyu Warriors/Toho Braves)",
+          "untested": true,
+          "owner": "Nezhamon or Takutoumon",
+          "target": "Shakamon",
+          "wire_version": 6,
+          "version": 6,
+          "index": 22,
+          "attribute": "Va",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "(UNTESTED) Jogress Erlangmon or Takutoumon into Shakamon",
+          "rom": "C1-47444470001400060019000200058BEE-47444470001600060019000200058BF0",
+          "folder": "PenC Jogress DigiROMs (Saiyu Warriors/Toho Braves)",
+          "untested": true,
+          "owner": "Erlangmon or Takutoumon",
+          "target": "Shakamon",
+          "wire_version": 6,
+          "version": 6,
+          "index": 25,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Tengumon into Enmamon",
+          "rom": "C1-4744447000140006001A000100058BEE-4744447000160006001A000100058BF0",
+          "folder": "PenC Jogress DigiROMs (Saiyu Warriors/Toho Braves)",
+          "owner": "Tengumon",
+          "target": "Enmamon",
+          "wire_version": 6,
+          "version": 6,
+          "index": 26,
+          "attribute": "Vi",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "(UNTESTED) Jogress Darumamon into Amaterasu",
+          "rom": "C1-4744447000140007000E000300048BE4-4744447000160007000E000300048BE6",
+          "folder": "PenC Jogress DigiROMs (Saiyu Warriors/Toho Braves)",
+          "untested": true,
+          "owner": "Darumamon",
+          "target": "Amaterasu",
+          "wire_version": 7,
+          "version": 7,
+          "index": 14,
+          "attribute": "Va",
+          "stage": 5,
+          "decoded": true
+        },
+        {
+          "label": "(UNTESTED) Jogress Shishimamon into Amaterasu",
+          "rom": "C1-47444470001400070014000300048BEA-47444470001600070014000300048BEC",
+          "folder": "PenC Jogress DigiROMs (Saiyu Warriors/Toho Braves)",
+          "untested": true,
+          "owner": "Shishimamon",
+          "target": "Amaterasu",
+          "wire_version": 7,
+          "version": 7,
+          "index": 20,
+          "attribute": "Va",
+          "stage": 5,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Amaterasumon or Ryugumon into Enmamon",
+          "rom": "C1-47444470001400070018000200058BEE-47444470001600070018000200058BF0",
+          "folder": "PenC Jogress DigiROMs (Saiyu Warriors/Toho Braves)",
+          "owner": "Amaterasumon or Ryugumon",
+          "target": "Enmamon",
+          "wire_version": 7,
+          "version": 7,
+          "index": 24,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Amaterasumon or Kaguyamon into Enmamon",
+          "rom": "C1-47444470001400070019000200058BEF-47444470001600070019000200058BF1",
+          "folder": "PenC Jogress DigiROMs (Saiyu Warriors/Toho Braves)",
+          "owner": "Amaterasumon or Kaguyamon",
+          "target": "Enmamon",
+          "wire_version": 7,
+          "version": 7,
+          "index": 25,
+          "attribute": "Da",
+          "stage": 6,
+          "decoded": true
+        },
+        {
+          "label": "(UNTESTED) Jogress Seiten Gokuwmon into Shakamon",
+          "rom": "C1-4744447000140007001B000100058BF0-4744447000160007001B000100058BF2",
+          "folder": "PenC Jogress DigiROMs (Saiyu Warriors/Toho Braves)",
+          "untested": true,
+          "owner": "Seiten Gokuwmon",
+          "target": "Shakamon",
+          "wire_version": 7,
+          "version": 7,
+          "index": 27,
+          "attribute": "Vi",
+          "stage": 6,
+          "decoded": true
+        }
+      ]
+    },
+    "PENCYCLE": {
+      "packets": "verbatim",
+      "packet_count": 2,
+      "version_map": {},
+      "presents": [],
+      "named": [
+        {
+          "label": "Garurumon (Vaccine)",
+          "rom": "V2-6231-7070",
+          "folder": "Pendulum Cycle Jogress",
+          "owner": "Garurumon",
+          "attribute": "Va"
+        },
+        {
+          "label": "Meramon (Data)",
+          "rom": "V2-9261-9081",
+          "folder": "Pendulum Cycle Jogress",
+          "owner": "Meramon",
+          "attribute": "Da"
+        },
+        {
+          "label": "Devimon (Virus)",
+          "rom": "V2-7241-C0A2",
+          "folder": "Pendulum Cycle Jogress",
+          "owner": "Devimon",
+          "attribute": "Vi"
+        }
+      ]
+    },
+    "PENPROGRESS": {
+      "packets": "verbatim",
+      "packet_count": 2,
+      "version_map": {},
+      "presents": [],
+      "named": [
+        {
+          "label": "XV-Mon -> Megadramon (For Tyranomon -> Paildramon, Angemon -> Angewomon, Dobermon -> Mihiramon)",
+          "rom": "V2-81A1-EA51",
+          "folder": "Pendulum Progress Jogress",
+          "owner": "XV-Mon",
+          "target": "Megadramon"
+        },
+        {
+          "label": "Tyranomon -> Paildramon (For XV-Mon -> Megadramon, Witchmon -> Andiramon, Aquilamon -> Cerberumon X)",
+          "rom": "V2-81B1-1A11",
+          "folder": "Pendulum Progress Jogress",
+          "owner": "Tyranomon",
+          "target": "Paildramon"
+        },
+        {
+          "label": "MetalGreymon -> Megidramon (For MegaloGrowmon -> Imperialdramon, Bastemon -> Seraphimon, WereGarurumon -> Qinglongmon)",
+          "rom": "V2-8211-BBF1",
+          "folder": "Pendulum Progress Jogress",
+          "owner": "MetalGreymon",
+          "target": "Megidramon"
+        },
+        {
+          "label": "MegaloGrowmon -> Imperialdramon (For MetalGreymon -> Megidramon, HolyAngemon -> Cherubimon, GrappLeomon -> Baihumon)",
+          "rom": "V2-8251-EB81",
+          "folder": "Pendulum Progress Jogress",
+          "owner": "MegaloGrowmon",
+          "target": "Imperialdramon"
+        },
+        {
+          "label": "Stingmon (D-Scanner)",
+          "rom": "V2-01A1-AA1F",
+          "folder": "Pendulum Progress Jogress"
+        },
+        {
+          "label": "Airdramon (D-Scanner)",
+          "rom": "V2-01B1-5A5F",
+          "folder": "Pendulum Progress Jogress"
+        },
+        {
+          "label": "Angemon (D-Scanner)",
+          "rom": "V2-91A1-1A11",
+          "folder": "Pendulum Progress Jogress"
+        },
+        {
+          "label": "Tailmon (D-Scanner)",
+          "rom": "V2-11B1-4A5F",
+          "folder": "Pendulum Progress Jogress"
+        },
+        {
+          "label": "Paildramon (D-Scanner)",
+          "rom": "V2-0211-AB8F",
+          "folder": "Pendulum Progress Jogress"
+        },
+        {
+          "label": "Megadramon (D-Scanner)",
+          "rom": "V2-0251-FBFF",
+          "folder": "Pendulum Progress Jogress"
+        },
+        {
+          "label": "Andiramon (D-Scanner)",
+          "rom": "V2-1251-EBFF",
+          "folder": "Pendulum Progress Jogress"
+        },
+        {
+          "label": "Angewomon (D-Scanner)",
+          "rom": "V2-1211-9B8F",
+          "folder": "Pendulum Progress Jogress"
+        }
+      ]
+    },
+    "PENX": {
+      "packets": "verbatim",
+      "packet_count": 2,
+      "version_map": {},
+      "presents": [],
+      "named": [
+        {
+          "label": "Dorugamon -> Doruguremon",
+          "rom": "X2-0D29-8189",
+          "folder": "PenX 1.x Jogress DigiROMs",
+          "owner": "Dorugamon",
+          "target": "Doruguremon"
+        },
+        {
+          "label": "Greymon X -> Doruguremon",
+          "rom": "X2-0C99-2189",
+          "folder": "PenX 1.x Jogress DigiROMs",
+          "owner": "Greymon X",
+          "target": "Doruguremon"
+        },
+        {
+          "label": "DeathXDorugamon (1.5) Raptordramon -> MegaSeadramon X",
+          "rom": "X2-0CF9-3209",
+          "folder": "PenX 1.x Jogress DigiROMs",
+          "owner": "DeathXDorugamon (1.5) Raptordramon",
+          "target": "MegaSeadramon X"
+        },
+        {
+          "label": "Seadramon X -> MegaSeadramon X",
+          "rom": "X2-0CC9-6209",
+          "folder": "PenX 1.x Jogress DigiROMs",
+          "owner": "Seadramon X",
+          "target": "MegaSeadramon X"
+        },
+        {
+          "label": "Okuwamon X -> Dorugoramon",
+          "rom": "X2-0D89-2279",
+          "folder": "PenX 1.x Jogress DigiROMs",
+          "owner": "Okuwamon X",
+          "target": "Dorugoramon"
+        },
+        {
+          "label": "Doruguremon -> Dorugoramon",
+          "rom": "X2-0E49-5279",
+          "folder": "PenX 1.x Jogress DigiROMs",
+          "owner": "Doruguremon",
+          "target": "Dorugoramon"
+        },
+        {
+          "label": "DeathXDoruguremon -> DeathXDorugoramon",
+          "rom": "X2-0DE9-92A9",
+          "folder": "PenX 1.x Jogress DigiROMs",
+          "owner": "DeathXDoruguremon",
+          "target": "DeathXDorugoramon"
+        },
+        {
+          "label": "Grademon -> Alphamon",
+          "rom": "X2-0DE9-92A9",
+          "folder": "PenX 1.x Jogress DigiROMs",
+          "owner": "Grademon",
+          "target": "Alphamon"
+        },
+        {
+          "label": "Okuwamon X -> GrandisKuwagamon",
+          "rom": "X2-1E49-7339",
+          "folder": "PenX 1.x Jogress DigiROMs",
+          "owner": "Okuwamon X",
+          "target": "GrandisKuwagamon"
+        },
+        {
+          "label": " Alphamon/DeathXDorugoramon -> Omegamon X",
+          "rom": "X2-1EA9-D379",
+          "folder": "PenX 1.x Jogress DigiROMs",
+          "owner": "Alphamon/DeathXDorugoramon",
+          "target": "Omegamon X"
+        },
+        {
+          "label": "Growmon X -> Hisyaryumon",
+          "rom": "X2-1C99-F1A9",
+          "folder": "PenX 2.0 Jogress DigiROMs",
+          "owner": "Growmon X",
+          "target": "Hisyaryumon"
+        },
+        {
+          "label": "Ginryumon -> Hisyaryumon",
+          "rom": "X2-1D29-51A9",
+          "folder": "PenX 2.0 Jogress DigiROMs",
+          "owner": "Ginryumon",
+          "target": "Hisyaryumon"
+        },
+        {
+          "label": "SkullBaluchimon -> DinoTigemon",
+          "rom": "X2-1DE9-62C9",
+          "folder": "PenX 2.0 Jogress DigiROMs",
+          "owner": "SkullBaluchimon",
+          "target": "DinoTigemon"
+        },
+        {
+          "label": "MameTyramon -> DinoTigemon",
+          "rom": "X2-1DB9-92C9",
+          "folder": "PenX 2.0 Jogress DigiROMs",
+          "owner": "MameTyramon",
+          "target": "DinoTigemon"
+        },
+        {
+          "label": "Triceramon X -> UltimateBrachimon",
+          "rom": "X2-0E49-8339",
+          "folder": "PenX 2.0 Jogress DigiROMs",
+          "owner": "Triceramon X",
+          "target": "UltimateBrachimon"
+        },
+        {
+          "label": "Hisyaryumon -> Ouryumon",
+          "rom": "X2-1E49-7339",
+          "folder": "PenX 2.0 Jogress DigiROMs",
+          "owner": "Hisyaryumon",
+          "target": "Ouryumon"
+        },
+        {
+          "label": "DinoTigemon -> Dukemon X",
+          "rom": "X2-0EA9-E379",
+          "folder": "PenX 2.0 Jogress DigiROMs",
+          "owner": "DinoTigemon",
+          "target": "Dukemon X"
+        },
+        {
+          "label": "Raptordramon -> Grademon",
+          "rom": "X2-2D29-41A9",
+          "folder": "PenX 3.0 Jogress DigiROMs",
+          "owner": "Raptordramon",
+          "target": "Grademon"
+        },
+        {
+          "label": "Waspmon -> Grademon",
+          "rom": "X2-2CC9-B1A9",
+          "folder": "PenX 3.0 Jogress DigiROMs",
+          "owner": "Waspmon",
+          "target": "Grademon"
+        },
+        {
+          "label": "Ginryumon ->Hisyaryumon",
+          "rom": "X2-2D59-E1D9",
+          "folder": "PenX 3.0 Jogress DigiROMs",
+          "owner": "Ginryumon",
+          "target": "Hisyaryumon"
+        },
+        {
+          "label": "Omekamon -> Hisyaryumon",
+          "rom": "X2-2CF9-51D9",
+          "folder": "PenX 3.0 Jogress DigiROMs",
+          "owner": "Omekamon",
+          "target": "Hisyaryumon"
+        },
+        {
+          "label": "Cannonbeemon -> TigerVespamon",
+          "rom": "X2-2DB9-82C9",
+          "folder": "PenX 3.0 Jogress DigiROMs",
+          "owner": "Cannonbeemon",
+          "target": "TigerVespamon"
+        },
+        {
+          "label": "Hisyaryumon -> TigerVespamon",
+          "rom": "X2-2DE9-72A9",
+          "folder": "PenX 3.0 Jogress DigiROMs",
+          "owner": "Hisyaryumon",
+          "target": "TigerVespamon"
+        },
+        {
+          "label": "Alphamon -> TigerVespamon",
+          "rom": "X2-1E49-7339",
+          "folder": "PenX 3.0 Jogress DigiROMs",
+          "owner": "Alphamon",
+          "target": "TigerVespamon"
+        },
+        {
+          "label": "Alphamon -> Alphamon: Ouryuken (need to feed 3+ Master tag and 1+ XX to Alphamon first)",
+          "rom": "X2-2E79-6309",
+          "folder": "PenX 3.0 Jogress DigiROMs",
+          "owner": "Alphamon",
+          "target": "Alphamon: Ouryuken"
+        },
+        {
+          "label": "Ouryumon -> Alphamon: Ouryuken (need to feed 3+ Master tag and 1+ XX to Ouryumon first)",
+          "rom": "X2-2E49-9309",
+          "folder": "PenX 3.0 Jogress DigiROMs",
+          "owner": "Ouryumon",
+          "target": "Alphamon: Ouryuken"
+        }
+      ]
+    },
+    "PENZ": {
+      "packets": "dmx",
+      "packet_count": 3,
+      "version_map": {
+        "6": 1,
+        "7": 2,
+        "8": 3,
+        "9": 4,
+        "10": 5,
+        "11": 6,
+        "12": 7
+      },
+      "presents": [
+        {
+          "stage": 4,
+          "stage_name": "Adult",
+          "attribute": "Da",
+          "rom": "V2-04^0E-4E9E-@E00E",
+          "generic": true,
+          "label": "Jogress with Data Adult",
+          "index": 58
+        },
+        {
+          "stage": 4,
+          "stage_name": "Adult",
+          "attribute": "Free",
+          "rom": "V2-04^0E-57BE-@E00E",
+          "generic": true,
+          "label": "Jogress with Free Adult",
+          "index": 94
+        },
+        {
+          "stage": 4,
+          "stage_name": "Adult",
+          "attribute": "Va",
+          "rom": "V2-04^0E-478E-@E00E",
+          "generic": true,
+          "label": "Jogress with Vaccine Adult",
+          "index": 30
+        },
+        {
+          "stage": 4,
+          "stage_name": "Adult",
+          "attribute": "Vi",
+          "rom": "V2-04^0E-4EEE-@E00E",
+          "generic": true,
+          "label": "Jogress with Virus Adult",
+          "index": 59
+        },
+        {
+          "stage": 5,
+          "stage_name": "Perfect",
+          "attribute": "Da",
+          "rom": "V2-04^0E-63DE-@E00E",
+          "generic": true,
+          "label": "Jogress with Data Perfect",
+          "index": 15
+        },
+        {
+          "stage": 5,
+          "stage_name": "Perfect",
+          "attribute": "Free",
+          "rom": "V2-04^0E-77BE-@E00E",
+          "generic": true,
+          "label": "Jogress with Free Perfect",
+          "index": 94
+        },
+        {
+          "stage": 5,
+          "stage_name": "Perfect",
+          "attribute": "Va",
+          "rom": "V2-04^0E-6A0E-@E00E",
+          "generic": true,
+          "label": "Jogress with Vaccine Perfect",
+          "index": 40
+        },
+        {
+          "stage": 5,
+          "stage_name": "Perfect",
+          "attribute": "Vi",
+          "rom": "V2-04^0E-63AE-@E00E",
+          "generic": true,
+          "label": "Jogress with Virus Perfect",
+          "index": 14
+        },
+        {
+          "stage": 6,
+          "stage_name": "Ultimate",
+          "attribute": "Da",
+          "rom": "V2-049E-985E-@E00E",
+          "generic": false,
+          "label": "Jogress War Greymon into Omegamon",
+          "version": 4,
+          "wire_version": 9,
+          "index": 97
+        },
+        {
+          "stage": 6,
+          "stage_name": "Ultimate",
+          "attribute": "Free",
+          "rom": "V2-049E-98BE-@E00E",
+          "generic": false,
+          "label": "Jogress Kaiser Greymon into Susanoomon",
+          "version": 4,
+          "wire_version": 9,
+          "index": 98
+        },
+        {
+          "stage": 6,
+          "stage_name": "Ultimate",
+          "attribute": "Va",
+          "rom": "V2-047E-984E-@E00E",
+          "generic": false,
+          "label": "Jogress Metal Garurumon into Omegamon",
+          "version": 2,
+          "wire_version": 7,
+          "index": 97
+        },
+        {
+          "stage": 7,
+          "stage_name": "Super Ultimate",
+          "attribute": "Va",
+          "rom": "V2-04^0E-B44E-@E00E",
+          "generic": false,
+          "label": "Jogress Imperialdramon: Fighter Mode into Imperialdramon: Paladin Mode",
+          "index": 81
+        }
+      ],
+      "named": [
+        {
+          "label": "Jogress Aquilamon into Silphymon / ????",
+          "rom": "V2-2C6E-430E-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "Aquilamon",
+          "target": "Silphymon / ????",
+          "index": 12,
+          "attribute": "Va",
+          "stage": 4,
+          "wire_version": 6,
+          "version": 1,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Tailmon into Silphymon / Angewomon",
+          "rom": "V2-2C9E-433E-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "Tailmon",
+          "target": "Silphymon / Angewomon",
+          "index": 12,
+          "attribute": "Free",
+          "stage": 4,
+          "wire_version": 9,
+          "version": 4,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Angemon into Shakkoumon / Holy Angemon",
+          "rom": "V2-2C7E-49FE-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "Angemon",
+          "target": "Shakkoumon / Holy Angemon",
+          "index": 39,
+          "attribute": "Free",
+          "stage": 4,
+          "wire_version": 7,
+          "version": 2,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Ankylomon into Shakkoumon / Marin Chimairamon",
+          "rom": "V2-2CBE-4F8E-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "Ankylomon",
+          "target": "Shakkoumon / Marin Chimairamon",
+          "index": 62,
+          "attribute": "Va",
+          "stage": 4,
+          "wire_version": 11,
+          "version": 6,
+          "decoded": true
+        },
+        {
+          "label": "Jogress XV-mon into Paildramon / Dinobeemon",
+          "rom": "V2-2C8E-503E-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "XV-mon",
+          "target": "Paildramon / Dinobeemon",
+          "index": 64,
+          "attribute": "Free",
+          "stage": 4,
+          "wire_version": 8,
+          "version": 3,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Stingmon into Paildramon / Dinobeemon",
+          "rom": "V2-2CAE-494E-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "Stingmon",
+          "target": "Paildramon / Dinobeemon",
+          "index": 37,
+          "attribute": "Va",
+          "stage": 4,
+          "wire_version": 10,
+          "version": 5,
+          "decoded": true
+        },
+        {
+          "label": "Jogress War Greymon into Omegamon",
+          "rom": "V2-049E-985E-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "War Greymon",
+          "target": "Omegamon",
+          "index": 97,
+          "attribute": "Da",
+          "stage": 6,
+          "wire_version": 9,
+          "version": 4,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Metal Garurumon into Omegamon",
+          "rom": "V2-047E-984E-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "Metal Garurumon",
+          "target": "Omegamon",
+          "index": 97,
+          "attribute": "Va",
+          "stage": 6,
+          "wire_version": 7,
+          "version": 2,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Kaiser Greymon into Susanoomon",
+          "rom": "V2-049E-98BE-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "Kaiser Greymon",
+          "target": "Susanoomon",
+          "index": 98,
+          "attribute": "Free",
+          "stage": 6,
+          "wire_version": 9,
+          "version": 4,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Magna Garurumon into Susanoomon",
+          "rom": "V2-047E-98BE-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "Magna Garurumon",
+          "target": "Susanoomon",
+          "index": 98,
+          "attribute": "Free",
+          "stage": 6,
+          "wire_version": 7,
+          "version": 2,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Imperialdramon: Fighter Mode into Imperialdramon: Paladin Mode",
+          "rom": "V2-04^0E-B44E-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "Imperialdramon: Fighter Mode",
+          "target": "Imperialdramon: Paladin Mode",
+          "index": 81,
+          "attribute": "Va",
+          "stage": 7,
+          "decoded": true
+        },
+        {
+          "label": "Jogress Omegamon into Imperialdramon: Paladin Mode",
+          "rom": "V2-048E-963E-@E00E",
+          "folder": "PenZ Jogress DigiROMs",
+          "owner": "Omegamon",
+          "target": "Imperialdramon: Paladin Mode",
+          "index": 88,
+          "attribute": "Free",
+          "stage": 6,
+          "wire_version": 8,
+          "version": 3,
+          "decoded": true
+        }
+      ]
+    }
+  }
+}

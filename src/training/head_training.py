@@ -38,10 +38,12 @@ class HeadToHeadTraining(Training):
     def update(self):
         """Update training state and minigame"""
         super().update()
-        self.head_charge.update()
+        if self.phase != "alert":
+            self.head_charge.update()
             
-        # Check if minigame is complete
-        if self.head_charge.is_complete() and self.phase != "result":
+        # Check if minigame is complete. Only from the charge: after the result
+        # the phase moves on to the currency screen, which this used to undo.
+        if self.head_charge.is_complete() and self.phase == "charge":
             self.phase = "result"
             self.frame_counter = 0
             
@@ -68,20 +70,23 @@ class HeadToHeadTraining(Training):
     def handle_event(self, event):
         """Handle input events - delegate to minigame or handle exit"""      
         event_type, event_data = event
+
+        if self.phase == "alert":
+            return
         
         # Let minigame handle the event first (UP/DOWN inputs)
-        if self.head_charge and self.head_charge.handle_event(event):
+        if self.phase != "alert" and self.head_charge and self.head_charge.handle_event(event):
             return  # Minigame handled the event
         
         # Let UI manager process components (buttons for mouse/touch)
-        if self.ui_manager and self.ui_manager.handle_event(event):
+        if self.phase != "alert" and self.ui_manager and self.ui_manager.handle_event(event):
             return
         
         # Handle exit commands
-        if event_type in ("START", "RCLICK") and self.phase in ("charge", "alert"):
+        if event_type in ("START", "RCLICK") and self.phase == "charge":
             runtime_globals.game_sound.play("cancel")
             change_scene("game")
-        elif event_type == "B" and self.phase in ("charge", "alert"):
+        elif event_type == "B" and self.phase == "charge":
             runtime_globals.game_sound.play("cancel")
             change_scene("game")
         elif event_type in ("A", "B") and self.phase == "result":
@@ -97,7 +102,7 @@ class HeadToHeadTraining(Training):
         """Award trophy on winning head-to-head training"""
         if self.check_victory():
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Head-to-head training won! Trophy awarded.")
 
     def get_attack_count(self):

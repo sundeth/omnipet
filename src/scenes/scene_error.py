@@ -298,5 +298,17 @@ class SceneError:
         game_globals.save_game_mode_preference()
         game_globals.player_id = None
         runtime_globals.game_console.log("[SceneError] Switched to Free Mode")
-        # Reboot to load Default save folder
+        # Load the Free Mode save, as the login scene's switch does: the boot
+        # only routes, so the Progress Mode party stayed in memory (and would
+        # have been saved into the Free folder).
+        try:
+            import os
+            from utils import display_utils
+            game_globals.skip_tutorial_on_mode_switch = False
+            game_globals.migrate_legacy_saves()
+            os.makedirs(game_globals.get_save_dir(), exist_ok=True)
+            display_utils.load_preserving_display()
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[SceneError] Free Mode save load failed: {exc}")
+        # Reboot to route from the Default save folder
         change_scene("boot")

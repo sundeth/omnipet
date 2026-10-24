@@ -5,11 +5,13 @@ A scene for network battles against other Omnipet devices.
 import pygame
 from ui.windows.window_background import WindowBackground
 from core import game_globals, runtime_globals
+from utils import ailments
 from battle.battle_encounter import BattleEncounter
 from battle.battle_encounter_dcom import BattleEncounterDCom
 from battle.sim import models as sim_models
 from utils.scene_utils import change_scene
 from models.animation import PetFrame
+from utils.sprite_utils import get_right_sprite
 from ui.components.image import Image
 from ui.components.label import Label
 from ui import ui_constants
@@ -45,8 +47,18 @@ class SceneBattlePvP:
                 self.enemy_player_name = pvp_data.get('enemy_player_name', 'ENEMY')
                 self.is_online_mode = pvp_data.get('is_online_mode', False)
                 self.is_dcom_mode = pvp_data.get('is_dcom_mode', False)  # DCom battle flag
+                # The device line the exchange was fought on. It decides the
+                # battle's presentation (round count, how a damage value is
+                # drawn), which belongs to the wire and not to the module.
+                self.battle_format = pvp_data.get('battle_format')
                 self.is_oem_mode = pvp_data.get('is_oem_mode', False)  # DCom OEM mode flag
                 self.enemy_first = pvp_data.get('enemy_first', False)  # Enemy attacks first flag
+                # An arena replay: a stored server result, the HP it was
+                # fought with and the connect view to return to.
+                self.arena_replay = pvp_data.get('arena_replay')
+                # A WiFi battle plays its host's result the same way, but
+                # with the real pets and counting like any connection battle.
+                self.lan_battle = pvp_data.get('lan_battle')
                 
                 # Validate required data
                 if not self.my_pets:
@@ -121,6 +133,14 @@ class SceneBattlePvP:
                 )
             
             runtime_globals.game_console.log(f"[SceneBattlePvP] Battle encounter created for module: {self.module_name}")
+
+            # A connection battle wakes a sleeping pet, as every other mode
+            # does -- DCom, WiFiCom and online battles all arrive here. A
+            # temporary evolution carries the real pet underneath.
+            for pet in self.my_pets:
+                real = getattr(pet, "pet", pet)
+                if hasattr(real, "check_disturbed_sleep"):
+                    real.check_disturbed_sleep()
             
             # Both devices should show the same visual arrangement:
             # Team1 (left) = device1 pets, Team2 (right) = device2 pets
@@ -156,7 +176,7 @@ class SceneBattlePvP:
                     complete_pet_data.setdefault("energy", 100)  # Default energy
                     complete_pet_data.setdefault("heal_doses", 1)  # Default heal doses
                     complete_pet_data.setdefault("condition_hearts", 0)  # Default condition hearts
-                    complete_pet_data.setdefault("jogress_avaliable", 0)  # Default jogress
+                    complete_pet_data.setdefault("jogress_available", 0)  # Default jogress
                     
                     # Create GamePet object using complete pet_data
                     temp_pet = GamePet(complete_pet_data)
@@ -176,7 +196,7 @@ class SceneBattlePvP:
                         "atk_alt": pet.atk_alt,
                         "atk_alt_2": getattr(pet, "atk_alt_2", 0),
                         "module": pet.module,
-                        "sick": getattr(pet, "sick", 0) > 0,
+                        "sick": ailments.ailing(pet),
                         "traited": getattr(pet, "traited", False),
                         "shook": getattr(pet, "shook", False)
                     }
@@ -185,7 +205,26 @@ class SceneBattlePvP:
             
             runtime_globals.game_console.log(f"[SceneBattlePvP] Setting up teams: team1_pets={len(team1_pets)}, team2_pet_data={len(team2_pet_data)}")
             # Host uses pvp_host HP bar, client uses pvp_client
+            # Only when we have one: BattleEncounterDCom reads the same value
+            # out of pvp_battle_data for itself, and None must not clobber it.
+            if getattr(self, 'battle_format', None):
+                self.battle_encounter.battle_format = self.battle_format
+            replay = getattr(self, 'arena_replay', None)
+            playback = replay or getattr(self, 'lan_battle', None)
+            if playback:
+                self.battle_encounter.presentation_format = playback.get('presentation_format')
+            if replay:
+                self.battle_encounter.replay_return = (
+                    replay.get('return_view', 'arena'), replay.get('return_kwargs') or {})
             self.battle_encounter.setup_pvp_teams(team1_pets, team2_pet_data, is_host=self.is_host)
+            if playback:
+                self.battle_encounter.apply_replay_hp(playback.get('team1_hp'), playback.get('team2_hp'))
+                if playback.get('enemy_first'):
+                    # The attacker shot first every round, and from the
+                    # defender's seat the attacker is the enemy side.
+                    self.battle_encounter.prime_enemy_first()
+                    for i in range(len(self.battle_encounter.battle_player.phase)):
+                        self.battle_encounter.battle_player.phase[i] = "enemy_charge"
             
             # Set flag for which team to show in result phase
             # Host should show team1 (their pets), client should show team2 (their pets)
@@ -199,6 +238,10 @@ class SceneBattlePvP:
                 # Set DCom mode flag on battle encounter for device mapping
                 self.battle_encounter.is_dcom_mode = True
                 self.battle_encounter.is_oem_mode = getattr(self, 'is_oem_mode', False)
+                # The charge minigame was played in the connection flow and
+                # its value is already inside the packets the device answered.
+                self.battle_encounter.skip_charge = True
+                self._register_xros_forms()
                 runtime_globals.game_console.log(f"[SceneBattlePvP] Set is_dcom_mode flag on battle encounter (OEM={self.battle_encounter.is_oem_mode})")
                 
                 # Apply enemy_first flag for DCom battles (enemy attacks first in V2 protocol)
@@ -213,9 +256,17 @@ class SceneBattlePvP:
                         self.battle_encounter.battle_player.phase[i] = "enemy_charge"
                     runtime_globals.game_console.log("[SceneBattlePvP] Set phases to enemy_charge for animation sequence")
                 
-                # Set the simulation data (already generated in scene_connect)
-                self.battle_encounter.global_battle_log = runtime_globals.pvp_battle_data.get('original_battle_log')
-                self.battle_encounter.victory_status = self.simulation_data.get('victory_status', 'Victory')
+                # The exchange was fought in the connection view; adopting it
+                # swaps device1/device2 into the order a battle scene reads
+                # (device1 = team1 = the player).
+                self.battle_encounter.adopt_battle_result(
+                    runtime_globals.pvp_battle_data.get('original_battle_log'))
+
+                # And it fights with the HP the two devices agreed on, not
+                # the pet module's adventure-battle HP.
+                self.battle_encounter.apply_exchange_hp(
+                    (self.my_team_data[0].get('hp') if self.my_team_data else None),
+                    (self.enemy_team_data[0].get('hp') if self.enemy_team_data else None))
                 
                 runtime_globals.game_console.log(f"[SceneBattlePvP] Victory status: {self.battle_encounter.victory_status}")
                 runtime_globals.game_console.log(f"[SceneBattlePvP] Battle log has {len(self.battle_encounter.global_battle_log.battle_log)} turns")
@@ -230,6 +281,10 @@ class SceneBattlePvP:
                 runtime_globals.game_console.log("[SceneBattlePvP] DCom battle setup completed, starting at entry phase")
                 return
             
+            # A non-DCom PvP battle plays back a finished simulation: keep the
+            # lanes in the simulator's round order.
+            self.battle_encounter.battle_player.lockstep = True
+
             # Set the simulation data for non-DCom battles
             # Try to use original battle log object first (for host)
             original_battle_log = runtime_globals.pvp_battle_data.get('original_battle_log', None)
@@ -315,6 +370,22 @@ class SceneBattlePvP:
             runtime_globals.game_console.log(f"[SceneBattlePvP] Traceback: {traceback.format_exc()}")
             change_scene("game")
     
+    def _register_xros_forms(self):
+        """Hand any temporary evolutions to the encounter so they revert.
+
+        The connection flow chooses the DigiXros form before the exchange, so
+        the pets that arrive here can already be XrosPet stand-ins. Telling
+        the encounter about them lets the result screen's devolution flash and
+        the end-of-battle cleanup work exactly as they do in an adventure
+        battle -- nothing is written to the real pet either way.
+        """
+        forms = {pet.pet: pet for pet in self.my_pets if hasattr(pet, 'pet')}
+        if not forms:
+            return
+        self.battle_encounter.xros_forms = forms
+        runtime_globals.game_console.log(
+            f"[SceneBattlePvP] {len(forms)} temporary evolution(s) registered")
+
     def setup_alert_components(self):
         """Setup PVP alert screen with team previews and player labels."""
         try:
@@ -397,10 +468,10 @@ class SceneBattlePvP:
             runtime_globals.game_console.log(f"[SceneBattlePvP] Displaying {len(team1_pets)} team1 pets at bottom")
             for i, pet in enumerate(team1_pets):
                 try:
-                    pet_sprite = pet.get_sprite(PetFrame.IDLE1.value) if hasattr(pet, 'get_sprite') else None
+                    # Facing right: its own right-facing frame, else flipped
+                    pet_sprite = (get_right_sprite(pet, PetFrame.IDLE1.value)
+                                  if hasattr(pet, 'get_sprite') else None)
                     if pet_sprite:
-                        # Flip sprite to face right
-                        pet_sprite = pygame.transform.flip(pet_sprite, True, False)
                         # Right to left: start at x=190 (240-40-10), go left by 50px each
                         x = 190 - i * spacing
                         y = 160  # Lower down
@@ -553,6 +624,10 @@ class SceneBattlePvP:
             else:
                 self.battle_encounter.draw(surface)
 
+    def plays_own_input_sounds(self):
+        """The whole scene is a battle (dispatch_input leaves its presses be)."""
+        return True
+
     def handle_event(self, event) -> None:
         """
         Handles keyboard and GPIO button inputs for the PvP battle scene.
@@ -561,16 +636,12 @@ class SceneBattlePvP:
             return False
         
         if self.battle_encounter:
+            # The encounter owns its result screen: B ends the wait and the
+            # result records what it must (the PvP counts, an arena replay's
+            # return) before it leaves. A branch here compared the (action,
+            # data) tuple to "A"/"B"/"START", so it never ran; made to work,
+            # it would have left before the result was recorded.
             self.battle_encounter.handle_event(event)
-            
-            # Check for battle completion and return to game
-            if self.battle_encounter.phase in ["result", "clear", "finished"]:
-                if event == "A" or event == "B" or event == "START":
-                    runtime_globals.game_console.log("[SceneBattlePvP] PvP battle completed, returning to game")
-                    # Clear PvP data
-                    if hasattr(runtime_globals, 'pvp_battle_data'):
-                        delattr(runtime_globals, 'pvp_battle_data')
-                    change_scene("game")
         else:
             # If no battle encounter, return to game on any input
             if event:

@@ -11,6 +11,13 @@ from utils.asset_utils import image_load
 
 _COIN_SPRITE = None
 _COIN_SPRITE_SOURCE = None
+_DIAMOND_SPRITE = None
+
+#: What a shop entry is priced in (Omninet's ShopSpecial.currency).
+CURRENCY_COINS = "coins"
+CURRENCY_CONTRIBUTION_POINTS = "contribution_points"
+#: A price's colour: gold coins, blue contribution points.
+PRICE_COLOURS = {CURRENCY_COINS: (255, 215, 80), CURRENCY_CONTRIBUTION_POINTS: (130, 210, 255)}
 
 
 def _get_coin_sprite() -> pygame.Surface:
@@ -28,26 +35,59 @@ def _get_coin_sprite() -> pygame.Surface:
     return _COIN_SPRITE
 
 
-def _scaled_coin(size_px: int) -> pygame.Surface:
-    """Return the coin sprite scaled to *size_px* on its longer edge."""
-    src = _get_coin_sprite()
+def _get_diamond_sprite() -> pygame.Surface:
+    """The contribution points icon (assets/ui/Shop_Diamond_1.png), loaded once."""
+    global _DIAMOND_SPRITE
+    if _DIAMOND_SPRITE is None:
+        try:
+            path = os.path.join("assets", "ui", "Shop_Diamond_1.png")
+            if os.path.exists(path):
+                _DIAMOND_SPRITE = image_load(path).convert_alpha()
+        except Exception as e:
+            runtime_globals.game_console.log(f"[ShopList] Diamond sprite load error: {e}")
+    return _DIAMOND_SPRITE
+
+
+def currency_icon_path(currency: str) -> str:
+    """The icon file of a currency, for an Image component."""
+    if currency == CURRENCY_CONTRIBUTION_POINTS:
+        return "assets/ui/Shop_Diamond_1.png"
+    return "assets/ui/Shop_Coin_1.png"
+
+
+def _scaled_coin(size_px: int, currency: str = CURRENCY_COINS) -> pygame.Surface:
+    """Return the currency's icon (the coin, or the contribution points'
+    diamond) scaled to *size_px* on its longer edge."""
+    src = _get_diamond_sprite() if currency == CURRENCY_CONTRIBUTION_POINTS else _get_coin_sprite()
     if src is None or size_px <= 0:
         return None
     w, h = src.get_size()
     scale = size_px / max(w, h)
-    return pygame.transform.smoothscale(src, (max(1, int(w * scale)), max(1, int(h * scale))))
+    size = (max(1, int(w * scale)), max(1, int(h * scale)))
+    if currency == CURRENCY_CONTRIBUTION_POINTS:
+        # Pixel art: whole-pixel scaling keeps its edges.
+        return pygame.transform.scale(src, size)
+    return pygame.transform.smoothscale(src, size)
 
 
 def _blit_price_or_owned(surface, item, font, row_y, row_height, right_edge, padding):
-    """Draw either a green ``Owned`` label, ``Free`` (Free Mode), or
+    """Draw a green ``Installed``/``Owned`` label, ``Free`` (Free Mode), or
     ``<coin icon> N`` on the right.
+
+    Free Mode has no purchases, so "Owned" is meaningless there — what
+    matters is whether the module is installed locally.  Progress Mode
+    keeps showing purchase state ("Owned").
 
     Returns the x of the leftmost pixel drawn (useful for callers that
     want to avoid overlapping the price area).
     """
-    if item.owned:
-        text = "Owned"
-        text_surf = font.render(text, True, (120, 220, 120))
+    is_free_mode = game_globals.is_free_mode()
+    if is_free_mode:
+        label = "Installed" if getattr(item, 'installed', False) else None
+    else:
+        label = "Owned" if item.owned else None
+    if label:
+        text_surf = font.render(label, True, (120, 220, 120))
         x = right_edge - padding - text_surf.get_width()
         y = row_y + (row_height - text_surf.get_height()) // 2
         surface.blit(text_surf, (x, y))
@@ -55,17 +95,20 @@ def _blit_price_or_owned(surface, item, font, row_y, row_height, right_edge, pad
 
     # Free Mode has no economy — render "Free" in green instead of the
     # coin price.  Also covers items the server priced at 0 in any mode.
-    if game_globals.is_free_mode() or item.price <= 0:
+    if is_free_mode or item.price <= 0:
         text_surf = font.render("Free", True, (120, 220, 120))
         x = right_edge - padding - text_surf.get_width()
         y = row_y + (row_height - text_surf.get_height()) // 2
         surface.blit(text_surf, (x, y))
         return x
 
-    # Progress Mode, not owned: <coin> NN, value in gold/yellow
-    value_surf = font.render(str(item.price), True, (255, 215, 80))
+    # Progress Mode, not owned: <coin> NN in gold, or <diamond> NN in blue
+    # for a price in contribution points.
+    currency = getattr(item, 'currency', CURRENCY_COINS) or CURRENCY_COINS
+    value_surf = font.render(str(item.price), True,
+                             PRICE_COLOURS.get(currency, PRICE_COLOURS[CURRENCY_COINS]))
     icon_size = max(8, value_surf.get_height())
-    coin = _scaled_coin(icon_size)
+    coin = _scaled_coin(icon_size, currency)
     gap = 2
     total_w = (coin.get_width() if coin else 0) + gap + value_surf.get_width()
     x = right_edge - padding - total_w
@@ -80,6 +123,9 @@ def _blit_price_or_owned(surface, item, font, row_y, row_height, right_edge, pad
 
 class ShopListItem:
     """Base class for shop list items."""
+    #: What the price is paid with (CURRENCY_COINS unless a Special says).
+    currency = CURRENCY_COINS
+
     def __init__(self, item_id: str, name: str, price: int, owned: bool = False):
         self.id = item_id
         self.name = name
@@ -92,8 +138,9 @@ class ShopModuleItem(ShopListItem):
     def __init__(self, item_id: str, name: str, price: int, owned: bool = False,
                  creator: str = "", version: str = "", official: bool = False,
                  description: str = "", size_mb: float = 0, contributors: str = "",
-                 updated_at: str = "", category: str = ""):
+                 updated_at: str = "", category: str = "", installed: bool = False):
         super().__init__(item_id, name, price, owned)
+        self.installed = installed
         self.creator = creator
         self.version = version
         self.official = official
@@ -143,6 +190,24 @@ class ShopCosmeticItem(ShopListItem):
         self.sprite_name = sprite_name
 
 
+class ShopSpecialItem(ShopCosmeticItem):
+    """A Special: priced in coins or contribution points; a background one
+    draws like a background cosmetic."""
+    def __init__(self, item_id: str, name: str, price: int, owned: bool = False,
+                 icon: pygame.Surface = None, preview: pygame.Surface = None,
+                 special_type: str = "", day_night: bool = False, high_res: bool = False,
+                 sprite_name: str = "", currency: str = CURRENCY_COINS,
+                 description: str = "", supported: bool = True):
+        super().__init__(item_id, name, price, owned, icon=icon, preview=preview,
+                         cosmetic_type=(special_type or "Special").capitalize(),
+                         day_night=day_night, high_res=high_res, sprite_name=sprite_name)
+        self.special_type = special_type or ""
+        self.currency = currency or CURRENCY_COINS
+        self.description = description or ""
+        #: False for a kind of Special this Omnipet cannot use yet.
+        self.supported = supported
+
+
 class ShopList(BaseList):
     """Generic shop list supporting different item types."""
     
@@ -151,6 +216,7 @@ class ShopList(BaseList):
     MODE_GAMEPLAY = "gameplay"
     MODE_ITEMS = "items"
     MODE_COSMETICS = "cosmetics"
+    MODE_SPECIALS = "specials"
     
     def __init__(self, x, y, width, height, mode=MODE_MODULES, on_item_selected=None):
         """Initialize the shop list with vertical orientation.
@@ -166,7 +232,7 @@ class ShopList(BaseList):
         self.on_item_selected_callback = on_item_selected
         
         # Custom settings for shop list
-        if mode == self.MODE_ITEMS or mode == self.MODE_COSMETICS:
+        if mode in (self.MODE_ITEMS, self.MODE_COSMETICS, self.MODE_SPECIALS):
             self.base_item_size = 36  # Height for icon-based items
         else:
             self.base_item_size = 44  # Height for text-based items (modules, gameplay)
@@ -228,7 +294,7 @@ class ShopList(BaseList):
             self._draw_gameplay_items(surface)
         elif self.mode == self.MODE_ITEMS:
             self._draw_inventory_items(surface)
-        elif self.mode == self.MODE_COSMETICS:
+        elif self.mode in (self.MODE_COSMETICS, self.MODE_SPECIALS):
             self._draw_cosmetic_items(surface)
     
     def _get_item_colors(self, index: int):
@@ -262,12 +328,17 @@ class ShopList(BaseList):
         # Simple rectangle with small cut corners
         rect = pygame.Rect(self.items_rect.x, item_y, self.items_rect.width, self.item_size)
         cut = self.manager.scale_value(self.cut_width)
-        
+
+        # rect.right equals the surface width (items_rect spans the whole
+        # component), and pixels are drawn ON the polygon points -- an edge
+        # at x == width falls outside the surface and the right border gets
+        # clipped away entirely.  Keep it on the last drawable column.
+        right = rect.right - 1
         points = [
             (rect.x + cut, rect.y),
-            (rect.right, rect.y),
-            (rect.right, rect.bottom - cut),
-            (rect.right - cut, rect.bottom),
+            (right, rect.y),
+            (right, rect.bottom - cut),
+            (right - cut, rect.bottom),
             (rect.x, rect.bottom),
             (rect.x, rect.y + cut),
         ]
@@ -296,7 +367,7 @@ class ShopList(BaseList):
 
             # Fonts
             name_font = self.get_font("text", custom_size=18 * self.manager.ui_scale)
-            small_font = self.get_font("text", custom_size=14 * self.manager.ui_scale)
+            small_font = self.get_font("text", custom_size=16 * self.manager.ui_scale)
 
             padding = self.manager.scale_value(6)
 
@@ -362,7 +433,7 @@ class ShopList(BaseList):
             self._draw_item_background(surface, item_y, fill_color, border_color)
             
             name_font = self.get_font("text", custom_size=18 * self.manager.ui_scale)
-            small_font = self.get_font("text", custom_size=14 * self.manager.ui_scale)
+            small_font = self.get_font("text", custom_size=16 * self.manager.ui_scale)
             
             padding = self.manager.scale_value(6)
             
@@ -403,7 +474,7 @@ class ShopList(BaseList):
             self._draw_item_background(surface, item_y, fill_color, border_color)
             
             name_font = self.get_font("text", custom_size=16 * self.manager.ui_scale)
-            small_font = self.get_font("text", custom_size=12 * self.manager.ui_scale)
+            small_font = self.get_font("text", custom_size=16 * self.manager.ui_scale)
             
             padding = self.manager.scale_value(4)
             
@@ -456,7 +527,7 @@ class ShopList(BaseList):
             self._draw_item_background(surface, item_y, fill_color, border_color)
             
             name_font = self.get_font("text", custom_size=16 * self.manager.ui_scale)
-            small_font = self.get_font("text", custom_size=12 * self.manager.ui_scale)
+            small_font = self.get_font("text", custom_size=16 * self.manager.ui_scale)
             
             padding = self.manager.scale_value(4)
             

@@ -37,6 +37,43 @@ def get_all_available_event_data() -> List[EventData]:
     return all_event_data
 
 
+def target_from_range(target_range) -> int:
+    """A quest's target drawn from its ``target_amount_range`` [min, max],
+    any whole number between them inclusive, as the Module Editor says
+    ("drawn between Min and Max"). It used to be ``random.choice`` of the
+    list, so [3, 5] gave 3 or 5 and never 4. A one-number range is that
+    number."""
+    values = [int(v) for v in target_range]
+    return random.randint(min(values), max(values))
+
+
+def roll_over_day(today=None) -> bool:
+    """Start a new day once the calendar date has changed: the XAI number is
+    drawn again and yesterday's quests are dropped (``ensure_daily_quests``
+    deals the new ones).
+
+    Checked when the main scene is built and about once a second while the
+    main scene or the Library is open: a game left on one screen past
+    midnight kept yesterday's quests until the main scene was rebuilt.
+    Returns whether the day changed."""
+    import datetime as _datetime
+    today = today or _datetime.date.today()
+    if game_globals.xai_date >= today:
+        return False
+    game_globals.xai = random.randint(1, 7)
+    game_globals.xai_date = today
+    game_globals.quests = []
+    runtime_globals.game_console.log(
+        f"[Quests] New day detected, XAI set to {game_globals.xai}, quests reset")
+    return True
+
+
+def ensure_daily_quests() -> None:
+    """Deal the day's quests when there are none."""
+    if game_globals.quests is None or len(game_globals.quests) == 0:
+        game_globals.quests = generate_daily_quests()
+
+
 def create_quest_instance_from_data(quest_data: QuestData, module_name: str) -> GameQuest:
     """
     Create a GameQuest instance from QuestData template.
@@ -52,8 +89,7 @@ def create_quest_instance_from_data(quest_data: QuestData, module_name: str) -> 
     target_amount = quest_data.target_amount or 1
     if quest_data.target_amount_range:
         if isinstance(quest_data.target_amount_range, list) and len(quest_data.target_amount_range) >= 1:
-            # For daily quests, we could randomize within the range
-            target_amount = random.choice(quest_data.target_amount_range)
+            target_amount = target_from_range(quest_data.target_amount_range)
     
     # Generate standardized quest name based on type and target amount
     quest_type_enum = QuestType(quest_data.type)
@@ -71,6 +107,9 @@ def create_quest_instance_from_data(quest_data: QuestData, module_name: str) -> 
         quest_name = f"Armor Evo {target_amount} Time{'s' if target_amount > 1 else ''}"
     elif quest_type_enum == QuestType.JOGRESS:
         quest_name = f"Jogress {target_amount} Time{'s' if target_amount > 1 else ''}"
+    elif quest_type_enum == QuestType.DAILY_GIFT:
+        quest_name = quest_data.name or "Daily Gift"
+        target_amount = 1
     else:
         # Fallback to original name if type is unknown
         quest_name = quest_data.name
@@ -91,7 +130,7 @@ def create_quest_instance_from_data(quest_data: QuestData, module_name: str) -> 
         reward_value = reward_item
         reward_quantity = reward_amount
     
-    return GameQuest(
+    quest = GameQuest(
         quest_id=quest_data.id,
         name=quest_name,
         module=module_name,
@@ -102,6 +141,10 @@ def create_quest_instance_from_data(quest_data: QuestData, module_name: str) -> 
         reward_value=reward_value,
         reward_quantity=reward_quantity
     )
+    if quest_type_enum == QuestType.DAILY_GIFT:
+        # Nothing to do: it is claimable from the start.
+        quest.update_progress(1)
+    return quest
 
 
 def create_event_instance_from_data(event_data: EventData, module_name: str) -> GameEvent:
@@ -134,15 +177,29 @@ def generate_daily_quests() -> List[GameQuest]:
     Generate 3 random daily quests for the player.
     Attempts to select quests with different types when possible.
     This should be called once per day.
-        
+
+    A daily gift (QuestType.DAILY_GIFT) is not drawn: each party module
+    that has one offers one of its gifts every day, in one of the three
+    slots, and the rest are drawn as before (owner, 2026-10-20: the gift
+    may take the place of another module's quest).
+
     Returns:
         List of 3 randomly selected quest instances
     """
     all_quest_data = get_all_available_quest_data()
-    
+
     if not all_quest_data:
         return []
-    
+
+    gift_ids = {q.id for q in all_quest_data if q.type == QuestType.DAILY_GIFT.value}
+    gifts_by_module = {}
+    for mod_name, module in (runtime_globals.game_modules.items() if gift_ids else ()):
+        own = [q for q in module.load_quests_json() if q.id in gift_ids]
+        if own:
+            gifts_by_module[mod_name] = own
+    gifts = [random.choice(own) for _, own in sorted(gifts_by_module.items())][:3]
+    all_quest_data = [q for q in all_quest_data if q.type != QuestType.DAILY_GIFT.value]
+
     # Organize quests by type
     quests_by_type = {}
     for quest_data in all_quest_data:
@@ -154,11 +211,11 @@ def generate_daily_quests() -> List[GameQuest]:
     # Get list of available types
     available_types = list(quests_by_type.keys())
     
-    selected_quest_data = []
+    selected_quest_data = list(gifts)
     used_types = []
     
-    # Select 3 quests, preferring different types
-    for i in range(3):
+    # Fill the 3 slots, preferring different types
+    for i in range(3 - len(gifts) if quests_by_type else 0):
         # If we have unused types, pick from them
         if available_types:
             selected_type = random.choice(available_types)
@@ -200,58 +257,10 @@ def generate_daily_quests() -> List[GameQuest]:
 
 
 def get_hourly_random_event() -> Optional[GameEvent]:
-    """
-    Get a random event for the current hour based on XAI algorithm.
-    This should be called every hour when pets are not napping.
-    
-    Returns:
-        Random event instance if one triggers, None otherwise
-    """
-    # Step 1: Roll chance based on XAI (1-7 gives 10%-70% chance)
-    xai_chance = game_globals.xai * 10  # 1->10%, 2->20%, ..., 7->70%
-    roll = random.randint(1, 100)
-    
-    if roll > xai_chance:
-        return None  # No event this hour
-    
-    # Step 2: Get modules of pets currently in the party
-    party_modules = set(pet.module for pet in game_globals.pet_list)
-
-    # Step 3: Get all modules that have events, filtered to party modules
-    modules_with_events = []
-    for module_name, module in runtime_globals.game_modules.items():
-        if module_name not in party_modules:
-            continue
-        event_data = module.load_events_json()
-        if event_data:
-            modules_with_events.append((module_name, event_data))
-    
-    if not modules_with_events:
-        return None
-    
-    # Step 4: Roll a random module from those that have events
-    selected_module_name, event_list = random.choice(modules_with_events)
-
-    # Step 5: Roll an event from the selected module using chance_percent
-    total_chance = sum(event_data.chance_percent for event_data in event_list)
-    if total_chance <= 0:
-        return None
-
-    event_roll = random.randint(1, min(100, total_chance))
-
-    cumulative_chance = 0
-    selected_event_data = None
-    for event_data in event_list:
-        cumulative_chance += event_data.chance_percent 
-        if event_roll <= cumulative_chance:
-            selected_event_data = event_data
-            break
-    
-    if not selected_event_data:
-        return None
-    
-    # Event passes all checks, create and return the instance
-    return create_event_instance_from_data(selected_event_data, selected_module_name)
+    """Select using the shared event rules; animation stays in SceneMainGame."""
+    from models.event_clock import EventClock
+    return EventClock.choose(game_globals.pet_list, runtime_globals.game_modules,
+                             game_globals.xai)
 
 
 def update_quest_progress(quest_type: QuestType, progress_amount: int = 1, module_name: str = None) -> bool:
@@ -317,9 +326,13 @@ def complete_quest(quest_id: str) -> Optional[dict]:
                     pet.vital_values = min(pet.vital_values + quest.reward_quantity, 999999)  # Cap at 999999
                 runtime_globals.game_console.log(f"All pets received +{quest.reward_quantity} vital values")
             elif quest.reward_type == RewardType.TROPHY:
-                # Add trophies to all pets
+                # Add trophies to every pet whose module shows them
+                from core import pet_stats
+                from utils.module_utils import get_module
                 for pet in game_globals.pet_list:
-                    pet.trophies += quest.reward_quantity
+                    module = get_module(pet.module)
+                    if pet_stats.tracks_trophies(getattr(module, "visible_stats", [])):
+                        pet.trophies += quest.reward_quantity
                 runtime_globals.game_console.log(f"All pets received +{quest.reward_quantity} trophies")
             elif quest.reward_type == RewardType.EXPERIENCE:
                 # Add experience to all pets using the GamePet method

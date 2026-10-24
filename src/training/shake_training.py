@@ -11,7 +11,7 @@ from ui.ui_manager import UIManager
 from ui.minigames.shake_punch import ShakePunch
 from battle import combat_constants
 import core.constants as constants
-from utils.pygame_utils import blit_with_shadow
+from utils.pygame_utils import blit_with_cache
 from utils.scene_utils import change_scene
 
 class ShakeTraining(Training):
@@ -118,11 +118,11 @@ class ShakeTraining(Training):
         """Award trophy if strength reaches maximum (20)"""
         if self.strength == 20:
             for pet in self.pets:
-                pet.trophies += 2
+                pet.award_trophies(2)
             runtime_globals.game_console.log(f"[TROPHY] Shake training excellent score achieved! Trophy awarded.")
         elif self.strength >= 15:
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Shake training great score achieved! Trophy awarded.")
 
     def draw_charge(self, surface):
@@ -142,10 +142,10 @@ class ShakeTraining(Training):
             else:
                 self.draw_pets(surface, PetFrame.ATK1)
         else:
-            blit_with_shadow(surface, self.bag1, (int(50 * runtime_globals.UI_SCALE), runtime_globals.SCREEN_HEIGHT // 2 - self.bag1.get_height() // 2))
+            blit_with_cache(surface, self.bag1, (int(50 * runtime_globals.UI_SCALE), runtime_globals.SCREEN_HEIGHT // 2 - self.bag1.get_height() // 2))
 
         for sprite, (x, y) in self.attack_positions:
-            blit_with_shadow(surface, sprite, (int(x), int(y)))
+            blit_with_cache(surface, sprite, (int(x), int(y)))
 
     def draw_result(self, surface):
         # Use AnimatedSprite component with predefined result animations
@@ -209,7 +209,9 @@ class ShakeTraining(Training):
 
     def get_attack_count(self):
         """Returns the number of attacks based on strength."""
-        if self.strength < 15:
+        if self.strength < 10:
+            return 0
+        elif self.strength < 15:
             return 1
         elif self.strength < 20:
             return 2
@@ -221,6 +223,9 @@ class ShakeTraining(Training):
             return
         
         event_type, event_data = event
+
+        if self.phase == "alert":
+            return
         
         if self.phase == "charge" and event_type in ("Y", "SHAKE"):
             # Let the minigame handle the input
@@ -230,6 +235,6 @@ class ShakeTraining(Training):
             runtime_globals.game_sound.play("cancel")
             self.animated_sprite.stop()
             self.phase = "result"
-        elif self.phase in ["alert", "charge"] and event_type == "B":
+        elif self.phase == "charge" and event_type == "B":
             runtime_globals.game_sound.play("cancel")
             change_scene("game")

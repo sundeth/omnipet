@@ -12,13 +12,17 @@ class GamePoop:
     Represents a poop entity that can be drawn and animated on screen.
     """
 
-    def __init__(self, x: int, y: int, jumbo=False, use_dot_sprite: bool = False) -> None:
+    def __init__(self, x: int, y: int, jumbo=False, use_dot_sprite: bool = False,
+                 use_hd_sprite: bool = False) -> None:
         """
         Initializes the poop object at the given (x, y) position.
 
         Args:
             x (int): X-coordinate on screen.
             y (int): Y-coordinate on screen.
+            use_dot_sprite (bool): Use the dot-style poop sprite.
+            use_hd_sprite (bool): Use the HD poop sprite. Mutually exclusive
+                with use_dot_sprite (a pet renders exactly one format).
         """
         self.x = x
         self.y = y
@@ -28,6 +32,7 @@ class GamePoop:
         self.dirty = False
         self.jumbo = jumbo
         self.use_dot_sprite = use_dot_sprite
+        self.use_hd_sprite = use_hd_sprite
 
     def update(self) -> None:
         """
@@ -50,10 +55,16 @@ class GamePoop:
         """
         
         base_key = f"JumboPoop{self.frame_index + 1}" if self.jumbo else f"Poop{self.frame_index + 1}"
-        sprite_key = f"{base_key}_dot" if self.use_dot_sprite else base_key
+        if getattr(self, "use_hd_sprite", False):
+            sprite_key = f"{base_key}_hd"
+        elif self.use_dot_sprite:
+            sprite_key = f"{base_key}_dot"
+        else:
+            sprite_key = base_key
         sprite = runtime_globals.misc_sprites.get(sprite_key)
         if sprite is None:
-            # Safety fallback to colored sprite if dot variant is unavailable.
+            # Safety fallback to base sprite if the variant is unavailable
+            # (e.g. JumboPoop has no _hd variant).
             sprite = runtime_globals.misc_sprites.get(base_key)
         if sprite is None:
             return
@@ -74,4 +85,6 @@ class GamePoop:
             self.jumbo = False
         if not hasattr(self, "use_dot_sprite"):
             self.use_dot_sprite = False
+        if not hasattr(self, "use_hd_sprite"):
+            self.use_hd_sprite = False
 

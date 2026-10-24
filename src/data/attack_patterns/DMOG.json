@@ -1,0 +1,347 @@
+{
+  "protocol": "DMOG",
+  "description": "Adventure-mode attack patterns for modules on the original Digital Monster protocol. Six attacks of 1 or 2 damage, never more: the wire has no other values, so neither does the module that reproduces it. Which pattern comes out is decided by the attacker's battle slot -- the higher the slot the more 2s, from all singles at A to all doubles at L. Several arrangements per slot so a battle is not the same twice.",
+  "pattern_length": 6,
+  "slots": [
+    {
+      "slot": "A",
+      "hex": 3,
+      "strong": 0,
+      "patterns": [
+        [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "slot": "B",
+      "hex": 4,
+      "strong": 1,
+      "patterns": [
+        [
+          1,
+          2,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          2,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "slot": "C",
+      "hex": 5,
+      "strong": 1,
+      "patterns": [
+        [
+          1,
+          2,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          2,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "slot": "D",
+      "hex": 6,
+      "strong": 2,
+      "patterns": [
+        [
+          1,
+          2,
+          1,
+          2,
+          1,
+          1
+        ],
+        [
+          1,
+          2,
+          2,
+          1,
+          1,
+          1
+        ],
+        [
+          2,
+          1,
+          1,
+          2,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "slot": "E",
+      "hex": 7,
+      "strong": 2,
+      "patterns": [
+        [
+          1,
+          2,
+          1,
+          2,
+          1,
+          1
+        ],
+        [
+          1,
+          2,
+          2,
+          1,
+          1,
+          1
+        ],
+        [
+          2,
+          1,
+          1,
+          2,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "slot": "F",
+      "hex": 8,
+      "strong": 3,
+      "patterns": [
+        [
+          1,
+          2,
+          1,
+          2,
+          1,
+          2
+        ],
+        [
+          2,
+          1,
+          2,
+          1,
+          2,
+          1
+        ],
+        [
+          1,
+          2,
+          2,
+          1,
+          2,
+          1
+        ]
+      ]
+    },
+    {
+      "slot": "G",
+      "hex": 9,
+      "strong": 3,
+      "patterns": [
+        [
+          1,
+          2,
+          1,
+          2,
+          1,
+          2
+        ],
+        [
+          2,
+          1,
+          2,
+          1,
+          2,
+          1
+        ],
+        [
+          1,
+          2,
+          2,
+          1,
+          2,
+          1
+        ]
+      ]
+    },
+    {
+      "slot": "H",
+      "hex": 10,
+      "strong": 4,
+      "patterns": [
+        [
+          2,
+          1,
+          2,
+          2,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          2,
+          2,
+          2,
+          1
+        ],
+        [
+          2,
+          2,
+          1,
+          2,
+          1,
+          2
+        ]
+      ]
+    },
+    {
+      "slot": "I",
+      "hex": 11,
+      "strong": 4,
+      "patterns": [
+        [
+          2,
+          1,
+          2,
+          2,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          2,
+          2,
+          2,
+          1
+        ],
+        [
+          2,
+          2,
+          1,
+          2,
+          1,
+          2
+        ]
+      ]
+    },
+    {
+      "slot": "J",
+      "hex": 12,
+      "strong": 5,
+      "patterns": [
+        [
+          2,
+          2,
+          1,
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          1,
+          2,
+          2
+        ],
+        [
+          1,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      ]
+    },
+    {
+      "slot": "K",
+      "hex": 13,
+      "strong": 5,
+      "patterns": [
+        [
+          2,
+          2,
+          1,
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          1,
+          2,
+          2
+        ],
+        [
+          1,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      ]
+    },
+    {
+      "slot": "L",
+      "hex": 14,
+      "strong": 6,
+      "patterns": [
+        [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      ]
+    }
+  ]
+}

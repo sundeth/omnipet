@@ -2,8 +2,18 @@
 # Creates a Batocera version
 
 param(
-    [string]$Version = "0.9.8"
+    [string]$Version = ""
 )
+
+# The release version is src/core/version.py's unless -Version is given
+if (-not $Version) {
+    if ((Get-Content (Join-Path $PSScriptRoot "..\src\core\version.py") -Raw) -match 'VERSION\s*=\s*"([^"]+)"') {
+        $Version = $matches[1]
+    } else {
+        Write-Host "[ERROR] No VERSION in src/core/version.py" -ForegroundColor Red
+        exit 1
+    }
+}
 
 $RELEASE_DIR = "..\Release"
 $BUILD_NAME = "Omnipet_Batocera_Ver_$Version"
@@ -35,8 +45,8 @@ if (-not (Test-Path "..\omnipet.pygame")) {
     exit 1
 }
 
-if (-not (Test-Path "..\utilities\input_test")) {
-    Write-Error-Message "utilities\input_test folder not found"
+if (-not (Test-Path "batocera\input_test")) {
+    Write-Error-Message "build\batocera\input_test folder not found"
     exit 1
 }
 
@@ -53,11 +63,8 @@ New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME" -Force | Out-Null
 Write-Status "Copying assets..."
 Copy-Item -Recurse "..\assets" "$TEMP_DIR\$BUILD_NAME\"
 
-# Copy and rename config files
-Write-Status "Copying configuration files..."
-New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\config" -Force | Out-Null
-Copy-Item "..\config\config_batocera.json" "$TEMP_DIR\$BUILD_NAME\config\config.json"
-Copy-Item "..\config\input_config_batocera.json" "$TEMP_DIR\$BUILD_NAME\config\input_config.json"
+# Settings live in the save (GameConfiguration): the config/ folder
+# these builds used to copy was removed in 1.0 (e09369e8).
 
 # Copy documentation
 Write-Status "Copying documentation..."
@@ -123,6 +130,12 @@ $scenesSource = (Resolve-Path "..\src\scenes").Path
 $scenesDestination = "$TEMP_DIR\$BUILD_NAME\src\scenes"
 robocopy $scenesSource $scenesDestination /E /XD "__pycache__" /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
 
+# Copy wificom directory
+Write-Status "Copying wificom directory..."
+$wificomSource = (Resolve-Path "..\src\wificom").Path
+$wificomDestination = "$TEMP_DIR\$BUILD_NAME\src\wificom"
+robocopy $wificomSource $wificomDestination /E /XD "__pycache__" /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+
 # Copy vpet.py and src __init__.py
 Write-Status "Copying vpet.py..."
 New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\src" -Force | Out-Null
@@ -146,9 +159,9 @@ Copy-Item "..\LICENSE.txt" "$TEMP_DIR\$BUILD_NAME\"
 Copy-Item "..\main.py" "$TEMP_DIR\$BUILD_NAME\"
 Copy-Item "..\omnipet.pygame" "$TEMP_DIR\$BUILD_NAME\"
 
-# Copy input_test folder from utilities
+# Copy the input test (versioned in build/batocera/)
 Write-Status "Copying input test utilities..."
-Copy-Item -Recurse "..\utilities\input_test" "$TEMP_DIR\$BUILD_NAME\"
+Copy-Item -Recurse "batocera\input_test" "$TEMP_DIR\$BUILD_NAME\"
 
 # Create the ZIP file
 Write-Status "Creating ZIP archive..."
@@ -166,7 +179,11 @@ try {
     Add-Type -AssemblyName "System.IO.Compression.FileSystem"
     $sourcePath = (Resolve-Path "$TEMP_DIR\$BUILD_NAME").Path
     $zipPath = (Resolve-Path $RELEASE_DIR).Path + "\$BUILD_NAME.zip"
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($sourcePath, $zipPath)
+    # Forward slashes and Unix permissions (scripts executable, folders
+    # writable): .NET's ZipFile wrote backslashes and no modes, which Linux
+    # unzip and Python's zipfile mis-extract (build/make_zip.py).
+    python (Join-Path $PSScriptRoot "make_zip.py") $sourcePath $zipPath
+    if ($LASTEXITCODE -ne 0) { throw "make_zip.py failed with exit code $LASTEXITCODE" }
 } catch {
     Write-Error-Message "Failed to create ZIP file: $_"
     exit 1

@@ -83,7 +83,7 @@ class RewardPopupUI(UIComponent):
             return
             
         fade_duration = 15  # 15 frames for fade
-        show_duration = 120  # 2 seconds at 60fps
+        show_duration = 120  # frames: 4 s at the default 30 fps, 2 s at 60
         
         if self.state == "fade_in":
             self.fade_timer += 1

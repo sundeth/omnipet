@@ -34,6 +34,7 @@ class AdventureView:
         self.versus_button = None
         self.armor_button = None
         self.adventure_button = None
+        self.specials_button = None
         self.exit_button = None
         
         self._setup_ui()
@@ -105,12 +106,28 @@ class AdventureView:
         )
         self.ui_manager.add_component(self.adventure_button)
         
-        # Exit button
+        # Specials button (the Specials hub) — only shown when a party pet's
+        # module offers something there: codes (codes.json) or an open shop
+        # (shop.json). See utils.specials_utils.
+        from utils.specials_utils import any_party_specials
+        has_specials = any_party_specials()
+
         exit_width = 75
         exit_height = 25
         exit_x = (ui_width - exit_width) // 2
         exit_y = adventure_y + button_height // 2 + button_spacing
-        
+
+        if has_specials:
+            # As wide as EXIT, under it; the label alone fits that width.
+            self.specials_button = Button(
+                exit_x, exit_y, exit_width, exit_height,
+                "SPECIALS", self._on_specials,
+                cut_corners={'tl': False, 'tr': False, 'bl': False, 'br': False}
+            )
+            self.ui_manager.add_component(self.specials_button)
+            exit_y += exit_height + 3
+
+        # Exit button
         self.exit_button = Button(
             exit_x, exit_y, exit_width, exit_height,
             "EXIT", self._on_exit,
@@ -143,6 +160,11 @@ class AdventureView:
         """Handle Adventure button press."""
         runtime_globals.game_sound.play("menu")
         self.change_view("adventure_module_selection")
+
+    def _on_specials(self):
+        """Handle Specials button press."""
+        runtime_globals.game_sound.play("menu")
+        self.change_view("specials")
     
     def _on_exit(self):
         """Handle Exit button press."""
@@ -165,6 +187,8 @@ class AdventureView:
             self.ui_manager.remove_component(self.armor_button)
         if self.adventure_button:
             self.ui_manager.remove_component(self.adventure_button)
+        if self.specials_button:
+            self.ui_manager.remove_component(self.specials_button)
         if self.exit_button:
             self.ui_manager.remove_component(self.exit_button)
     

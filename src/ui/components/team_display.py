@@ -64,6 +64,17 @@ class TeamDisplay(UIComponent):
         self.slot_pets = [None] * self.SLOTS
         self.needs_redraw = True
 
+    def set_slot_count(self, count):
+        """Show *count* slots (1-3): a season of solo or paired Digimon
+        draws only the slots its teams can fill."""
+        count = max(1, min(3, int(count)))
+        if count != self.SLOTS:
+            self.SLOTS = count
+            self.slot_pets = (list(self.slot_pets) + [None] * count)[:count]
+            self.slot_centers = [None] * count
+            self.needs_layout_update = True
+            self.needs_redraw = True
+
     def set_pets(self, pets):
         """Replace all slots from an ordered iterable of up to SLOTS pets."""
         pets = list(pets)[: self.SLOTS]

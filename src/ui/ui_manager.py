@@ -2,12 +2,19 @@
 UI Manager - Core component for handling UI scaling, themes, focus, and event management
 """
 import math
+import time
 import pygame
 from ui.ui_constants import *
 from core import runtime_globals
 import core.constants as constants
 from ui.components.background import Background
 from utils.asset_utils import image_load
+from utils.pygame_utils import blit_with_cache, rle_accelerate
+
+# UI sprites loaded via load_sprite_integer_scaling, shared across UIManager
+# instances and keyed by (filepath, ui_scale) — without this every call hit
+# the disk, and some draw paths request sprites per frame.
+_integer_sprite_cache = {}
 
 DEBUG_SCALE = False  # Set to True to enable detailed scaling debug logs
 
@@ -26,6 +33,10 @@ class UIManager:
         
         # Master UI cache - single surface for entire UI to reduce blits
         self.master_ui_surface = None
+        # RLE pacing of the overlay (see _pace_rle)
+        self._overlay_rle = True
+        self._rebuild_streak = 0
+        self._still_frames = 0
         self.master_ui_dirty = True  # Track if master surface needs rebuild
         
         # Shadow system configuration
@@ -581,8 +592,14 @@ class UIManager:
         event_type, event_data = event
 
         # Modal components have highest priority (like tooltips)
-        # Stats panel blocks all events while visible
+        # Stats panel blocks all events while visible.  Mouse-wise it only
+        # closes on an actual click (LCLICK) — hover/motion, scroll and drags
+        # are swallowed without closing.  Keyboard / joystick buttons keep the
+        # original close-on-any-press behaviour.
         if self.active_stats_panel and self.active_stats_panel.visible:
+            if event_type in ("MOUSE_MOTION", "RCLICK", "SCROLL",
+                              "DRAG_START", "DRAG_MOTION", "DRAG_END"):
+                return True  # Block, but keep the panel open
             self.remove_component(self.active_stats_panel)
             self.active_stats_panel = None
             runtime_globals.game_sound.play("cancel")
@@ -594,10 +611,18 @@ class UIManager:
             self.active_menu.handle_event(event)
             return True  # Always block events when menu is visible
 
+        # Tooltips dismiss on a deliberate press — a button, or a click of
+        # either mouse button. Passive pointer traffic (hover, wheel, a drag
+        # in progress) is swallowed without closing, so simply moving the
+        # mouse no longer snatches the tooltip away before it can be read.
         if self.active_tooltip:
+            if event_type in ("MOUSE_MOTION", "SCROLL",
+                              "DRAG_START", "DRAG_MOTION", "DRAG_END"):
+                return True  # Block, but keep the tooltip open
             self.hide_tooltip()
             return True
-        
+
+
         # Handle mouse motion for focus updates
         if event_type == "MOUSE_MOTION" and event_data and "pos" in event_data:
             self.update_mouse_focus(event_data["pos"])
@@ -607,8 +632,11 @@ class UIManager:
             if event_data and "pos" in event_data:
                 self.update_mouse_focus(event_data["pos"])
         
-        # Let focused component handle the event first (priority order)
-        if self.focused_index >= 0:
+        # Let focused component handle the event first (priority order).
+        # The index is bounds-checked: a view that draws itself and registers
+        # no focusable components at all (the temporary-evolution chooser)
+        # leaves the list empty while the index still points at 0.
+        if 0 <= self.focused_index < len(self.focusable_components):
             focused_component = self.focusable_components[self.focused_index]
             if focused_component.visible and hasattr(focused_component, 'handle_event'):
                 if focused_component.handle_event(event):
@@ -837,11 +865,15 @@ class UIManager:
         if direction == "UP":
             anchor = (current_rect.left, current_rect.top)  # top_left
         elif direction == "LEFT":
-            anchor = (current_rect.left, current_rect.top)  # top_left  
+            anchor = (current_rect.left, current_rect.top)  # top_left
         elif direction == "RIGHT":
             anchor = (current_rect.right, current_rect.bottom)  # bottom_right
         else:  # DOWN
-            anchor = (current_rect.left, current_rect.bottom)  # bottom_left
+            # Compare top edges (like UP does) rather than the source's
+            # bottom: a tall source whose rect overlaps the next component
+            # below made that component unreachable going down while still
+            # reachable going up (e.g. Status scene: name -> Stage skipped).
+            anchor = (current_rect.left, current_rect.top)  # top_left
         
         candidates = []
         
@@ -1091,14 +1123,20 @@ class UIManager:
                                     if hasattr(component, 'on_focus_gained'):
                                         component.on_focus_gained()
                                 
-                                # Activate the component (same as pressing A)
-                                if hasattr(component, 'handle_event'):
-                                    component.handle_event(("A", None))
-                                elif hasattr(component, 'activate'):
-                                    component.activate()
-                                elif hasattr(component, 'on_activate'):
-                                    component.on_activate()
-                                
+                                # Activate the component (same as pressing A),
+                                # unless it opts out of click-activation.  Text
+                                # entry fields (TextInput / CodeEntry) set
+                                # activate_on_click = False so a focus click does
+                                # not also press their selected virtual key (which
+                                # otherwise typed a stray "q" / cycled a letter).
+                                if getattr(component, 'activate_on_click', True):
+                                    if hasattr(component, 'handle_event'):
+                                        component.handle_event(("A", None))
+                                    elif hasattr(component, 'activate'):
+                                        component.activate()
+                                    elif hasattr(component, 'on_activate'):
+                                        component.on_activate()
+
                                 # Always return True - we handled the click by focusing and activating
                                 return True
                                 
@@ -1147,10 +1185,16 @@ class UIManager:
                 # If no component handled the mouse click, let it fall through
                 return False
 
+        # A hidden component never takes a press (DCom hid its CANCEL during
+        # the charge but left it focused; a mashed A then abandoned the battle).
+        focused_component = (self.focusable_components[self.focused_index]
+                             if 0 <= self.focused_index < len(self.focusable_components) else None)
+        if focused_component is not None and not getattr(focused_component, "visible", True):
+            focused_component = None
+
         # Handle tooltip activation for keyboard A button
         if event_type == "A":
-            if self.focused_index >= 0:
-                focused_component = self.focusable_components[self.focused_index]
+            if focused_component is not None:
                 if hasattr(focused_component, 'tooltip_text') and focused_component.tooltip_text:
                     # Toggle tooltip - hide if showing, show if hidden
                     if self.active_tooltip:
@@ -1160,8 +1204,7 @@ class UIManager:
                     return True
             
         # First, let the focused component handle the event
-        if self.focused_index >= 0:
-            focused_component = self.focusable_components[self.focused_index]
+        if focused_component is not None:
             if hasattr(focused_component, 'handle_event'):
                 if focused_component.handle_event(event):
                     return True
@@ -1226,17 +1269,22 @@ class UIManager:
                 if result:
                     return True
         
-        # If no focused component handled it, try mouse hover
+        # If no focused component handled it, try mouse hover. Invisible
+        # components must be skipped — scenes stack alternative views on the
+        # same rect (e.g. the digidex's module/pet/tree lists) and a hidden
+        # one would otherwise swallow the scroll meant for the visible one.
         mouse_pos = runtime_globals.game_input.get_mouse_position()
         for component in self.components:
+            if hasattr(component, 'visible') and not component.visible:
+                continue
             if hasattr(component, 'handle_scroll') and hasattr(component, 'rect'):
                 if component.rect.collidepoint(mouse_pos):
                     result = component.handle_scroll(event)
                     if result:
                         return True
-        
+
         return False
-    
+
     def handle_drag(self, event):
         """Handle drag events"""
         # Route to components that support dragging
@@ -1250,9 +1298,14 @@ class UIManager:
     
     def activate_focused_component(self):
         """Activate the currently focused component"""
-        if self.focused_index >= 0:
+        if 0 <= self.focused_index < len(self.focusable_components):
             focused_component = self.focusable_components[self.focused_index]
-            
+            # A hidden component never takes a press: DCom hid its CANCEL
+            # during the charge but left it focused, so a mashed A after the
+            # charge abandoned the battle.
+            if not getattr(focused_component, "visible", True):
+                return False
+
             # Hide any existing tooltip first
             self.hide_tooltip()
             
@@ -1329,26 +1382,29 @@ class UIManager:
         
         # Track if any STATIC components need redraw (dynamic components don't affect master cache)
         static_needs_redraw = False
-        redraw_components = []
+        dirty_components = None
         for component in self.components:
             component.update()
             # Only mark master surface dirty if a static component needs redraw
             # Dynamic components render separately and don't affect the cached master surface
             if not component.is_dynamic and (component.needs_redraw or component.cached_surface is None):
                 static_needs_redraw = True
-                # Include reason in component name
-                reason = "needs_redraw" if component.needs_redraw else "cached_surface_None"
-                redraw_components.append(f"{component.__class__.__name__}({reason})")
-        
-        # Log once per second to avoid spam
+                if dirty_components is None:
+                    dirty_components = []
+                dirty_components.append(component)
+
+        # Log once per second to avoid spam; the name strings are only built
+        # when a log is actually due.
         if static_needs_redraw and hasattr(self, '_last_redraw_log'):
-            import time
             current_time = time.time()
             if current_time - self._last_redraw_log >= 1.0:
-                runtime_globals.game_console.log(f"[UIManager] Static components needing redraw: {', '.join(set(redraw_components))}")
+                names = set(
+                    f"{c.__class__.__name__}({'needs_redraw' if c.needs_redraw else 'cached_surface_None'})"
+                    for c in dirty_components
+                )
+                runtime_globals.game_console.log(f"[UIManager] Static components needing redraw: {', '.join(names)}")
                 self._last_redraw_log = current_time
         elif static_needs_redraw:
-            import time
             self._last_redraw_log = time.time()
         
         # Only invalidate master cache if static components changed
@@ -1358,13 +1414,15 @@ class UIManager:
     def draw(self, surface):
         """Draw all components using master UI cache for static elements and direct rendering for dynamic elements"""
         # Rebuild master UI surface only if static components changed
+        rebuilt = False
         if self.master_ui_dirty or self.master_ui_surface is None:
             self._rebuild_master_ui_surface()
             self.master_ui_dirty = False
-        
+            rebuilt = True
+        self._pace_rle(rebuilt)
+
         # Single blit of entire static UI from cached master surface
         if self.master_ui_surface:
-            from utils.pygame_utils import blit_with_cache
             blit_with_cache(surface, self.master_ui_surface, (self.ui_offset_x, self.ui_offset_y))
         
         # Draw dynamic components separately (not cached in master surface)
@@ -1390,19 +1448,53 @@ class UIManager:
         # Draw modal components on top (menu first, then tooltip on top of everything)
         if self.active_menu and self.active_menu.visible:
             menu_surface = self.active_menu.render()
-            from utils.pygame_utils import blit_with_cache
             blit_with_cache(surface, menu_surface, (self.active_menu.rect.x, self.active_menu.rect.y))
         
         # Draw tooltip at scaled position (on top of everything including menu)
         if self.active_tooltip:
             self.active_tooltip.draw(surface)
     
+    #: Rebuilds on this many frames in a row turn the overlay's RLE off: SDL
+    #: would encode it again every frame, which cost the Pi Zero 2W more than
+    #: the blend it saves (a marquee, an animated static component). This
+    #: many frames without a rebuild turn it back on.
+    RLE_OFF_AFTER = 3
+    RLE_ON_AFTER = 30
+
+    def _pace_rle(self, rebuilt):
+        """Keep the overlay RLE-encoded while it is still, plain while it changes."""
+        surface = self.master_ui_surface
+        if surface is None:
+            return
+        if rebuilt:
+            self._rebuild_streak += 1
+            self._still_frames = 0
+            if self._overlay_rle and self._rebuild_streak >= self.RLE_OFF_AFTER:
+                surface.set_alpha(255)            # per-pixel alpha kept, RLE off
+                self._overlay_rle = False
+        else:
+            self._rebuild_streak = 0
+            self._still_frames += 1
+            if not self._overlay_rle and self._still_frames >= self.RLE_ON_AFTER:
+                rle_accelerate(surface)
+                self._overlay_rle = True
+
     def _rebuild_master_ui_surface(self):
         """Rebuild the master UI surface by rendering all static components to it."""
         # Create master surface if needed
         if self.master_ui_surface is None:
-            self.master_ui_surface = pygame.Surface((self.ui_width, self.ui_height), pygame.SRCALPHA)
-        
+            # Blitted every frame, rebuilt rarely: RLE spares the blend of
+            # every pixel (17 ms a frame on the Pi Zero 2W without it).
+            self.master_ui_surface = rle_accelerate(
+                pygame.Surface((self.ui_width, self.ui_height), pygame.SRCALPHA))
+            self._overlay_rle = True
+        elif self._overlay_rle:
+            # pygame.draw into an RLE-encoded surface (one blitted since it was
+            # encoded) is an access violation in pygame 2.6: the frame border
+            # below and any component drawing into it crashed the game on
+            # every non-square screen. Decode it for the rebuild.
+            self.master_ui_surface.set_alpha(255)
+
         # Clear the master surface
         self.master_ui_surface.fill((0, 0, 0, 0))
         
@@ -1436,7 +1528,10 @@ class UIManager:
                     border_size = 2
                     border_rect = pygame.Rect(0, 0, self.ui_width, self.ui_height)
                     pygame.draw.rect(self.master_ui_surface, border_color, border_rect, width=border_size)
-        
+
+        if self._overlay_rle:
+            rle_accelerate(self.master_ui_surface)
+
         # Mark as clean
         self.master_ui_dirty = False
     
@@ -1502,13 +1597,18 @@ class UIManager:
             filename = f"{prefix}_{name}_{sprite_scale}.png"
             
         filepath = f"assets/ui/{filename}"
-        
+
+        cache_key = (filepath, self.ui_scale)
+        cached = _integer_sprite_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         if DEBUG_SCALE:
             runtime_globals.game_console.log(f"[UIManager] Loading _1 sprite: {filepath} (will scale by ui_scale: {self.ui_scale})")
-        
+
         try:
             sprite = image_load(filepath)
-            
+
             # Apply integer scaling to match UI scale
             if self.ui_scale > 1:
                 original_size = sprite.get_size()
@@ -1516,9 +1616,10 @@ class UIManager:
                 sprite = pygame.transform.scale(sprite, new_size)
                 if DEBUG_SCALE:
                     runtime_globals.game_console.log(f"[UIManager] Scaled _1 sprite from {original_size} to {new_size} for {self.ui_scale}x UI scale")
-            
+
             if DEBUG_SCALE:
                 runtime_globals.game_console.log(f"[UIManager] Successfully loaded sprite: {filepath}")
+            _integer_sprite_cache[cache_key] = sprite
             return sprite
         except pygame.error as e:
             if DEBUG_SCALE:

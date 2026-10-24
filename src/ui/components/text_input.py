@@ -159,6 +159,10 @@ class TextInput(UIComponent):
         self.focusable = True
         self.sticky_focus = True  # Hover doesn't steal focus; click outside unfocuses
         self.is_dynamic = True  # Redraw every frame (cursor blink)
+        # A click that focuses this field must not also be treated as an "A"
+        # activation — otherwise the UI manager would press the currently
+        # selected virtual key (row 0, col 0 = "q") and type a stray character.
+        self.activate_on_click = False
 
         # Cursor blink
         self._cursor_visible = True
@@ -545,8 +549,10 @@ class TextInput(UIComponent):
         pygame.draw.rect(surface, border_color, field_rect, border_w,
                          border_radius=max(1, 3 * scale))
 
-        # Text or placeholder
-        font = self.get_font(custom_size=int(10 * scale))
+        # Text or placeholder.  ProggySmall renders pixel-perfect only at
+        # multiples of 16 (its design grid); off-grid sizes look ragged now
+        # that all text is drawn without anti-aliasing.
+        font = self.get_font(custom_size=16 * scale)
         if self.text:
             display = "*" * len(self.text) if self.is_password else self.text
             text_color = (255, 255, 255)
@@ -595,8 +601,9 @@ class TextInput(UIComponent):
         row_h = kb_h / row_count
         key_pad = max(1, scale)  # Padding between keys
 
-        font_size = max(6, int(8 * scale))
-        font = self.get_font(custom_size=font_size)
+        # 16 * scale = ProggySmall's pixel-perfect grid (ink is ~8px, so it
+        # still fits the 20-base-px key rows).
+        font = self.get_font(custom_size=16 * scale)
 
         for r_idx, row in enumerate(self._layout):
             total_span = sum(span for _, _, span in row)

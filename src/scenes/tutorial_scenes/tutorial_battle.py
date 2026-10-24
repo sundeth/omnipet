@@ -109,6 +109,11 @@ class TutorialBattle(SceneBattle):
     def _tutorial_on_go(self):
         """Tutorial-controlled GO button handler."""
         runtime_globals.game_console.log("[TutorialBattle] GO button clicked")
+        # Whatever moved the selection (a page change selects the page's
+        # first module), GO starts the Tutorial's adventure.
+        tutorial = self._tutorial_module()
+        if tutorial is not None and getattr(self.current_view, 'selected_module', None) is not tutorial:
+            self.current_view.selected_module = tutorial
         # Call original FIRST to change view
         if hasattr(self, '_original_go_callback') and self._original_go_callback:
             self._original_go_callback()
@@ -218,7 +223,9 @@ class TutorialBattle(SceneBattle):
         if not self.current_view:
             return
         
-        # Find and pre-select the Tutorial module
+        # Find and pre-select the Tutorial module; every other module's button
+        # is disabled, or a stray press toggles it and GO starts that module's
+        # real adventure (its own area style, its own battle) under the tutorial
         if hasattr(self.current_view, 'module_buttons'):
             for button in self.current_view.module_buttons:
                 if hasattr(button, 'module') and button.module:
@@ -226,13 +233,28 @@ class TutorialBattle(SceneBattle):
                         # Toggle this button on
                         button.set_toggled(True)
                         self.current_view.selected_module = button.module
-                        
+
                         # Update adventure panel
                         if hasattr(self.current_view, 'adventure_panel') and self.current_view.adventure_panel:
                             self.current_view.adventure_panel.set_module(button.module)
-                        
+
                         runtime_globals.game_console.log("[TutorialBattle] Tutorial module pre-selected")
-                        break
+                    else:
+                        button.set_enabled(False)
+        # LEFT/RIGHT on a module button cycles modules (paging included)
+        self.current_view._navigate_module = self._refuse_module_change
+
+    def _refuse_module_change(self, direction):
+        """The tutorial's adventure is the Tutorial module's only."""
+        runtime_globals.game_sound.play("cancel")
+
+    def _tutorial_module(self):
+        """The Tutorial module of the module selection view, if shown."""
+        for button in getattr(self.current_view, 'module_buttons', None) or []:
+            module = getattr(button, 'module', None)
+            if module and module.name == "Tutorial":
+                return module
+        return None
     
     def handle_event(self, event) -> bool:
         """
@@ -259,6 +281,13 @@ class TutorialBattle(SceneBattle):
             # Let all other events pass through to the battle
             return super().handle_event(event)
         
+        # B is each view's way out (to the main game, or the view before),
+        # which would leave the tutorial behind: refuse it, as TutorialStatus
+        # does while exit is not allowed.
+        if event_type == "B":
+            runtime_globals.game_sound.play("cancel")
+            return True
+
         # If adventure selection is allowed, let the UI manager handle button clicks
         if self.allow_adventure_selection or self.allow_go_selection or self.allow_fight_selection:
             return super().handle_event(event)

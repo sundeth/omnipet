@@ -125,10 +125,11 @@ class ArmorView:
         self.ui_manager.set_focused_component(self.pet_selector)
         self.pet_selector.focused_cell = 0
         
-        # If a default item is selected, check compatibility with all pets
-        if self.selected_armor_item:
-            self._update_pet_compatibility()
-        
+        # Apply eligibility up front — with or without an item selected, a pet
+        # with no armor route at all is never a candidate.
+        self._update_pet_compatibility()
+
+
         runtime_globals.game_console.log("[ArmorView] UI setup complete")
     
     def _handle_pet_activation(self):
@@ -165,7 +166,7 @@ class ArmorView:
         # Re-check if current armor item selection is valid for this pet
         can_evolve = False
         if self.selected_armor_pet is not None and self.selected_armor_item is not None:
-            pet = game_globals.pet_list[self.selected_armor_pet]
+            pet = self.pet_selector.pets[self.selected_armor_pet]
             can_evolve = self._check_armor_evolution_possible(pet, self.selected_armor_item)
         
         # Update confirm button state
@@ -195,12 +196,16 @@ class ArmorView:
             
         self.selected_armor_item = armor_game_item
         runtime_globals.game_console.log(f"[ArmorView] Armor item selected: {armor_game_item.name}")
-        
+
+        # A different item means a different set of eligible pets (and may
+        # drop the current selection).
+        self._update_pet_compatibility()
+
         # Check if the selected pet can evolve with this item
         can_evolve = False
         if self.selected_armor_pet is not None:
             from core import game_globals
-            pet = game_globals.pet_list[self.selected_armor_pet]
+            pet = self.pet_selector.pets[self.selected_armor_pet]
             can_evolve = self._check_armor_evolution_possible(pet, armor_game_item)
             
             if can_evolve:
@@ -223,42 +228,74 @@ class ArmorView:
             runtime_globals.game_sound.play("cancel")
             return
         
-        from core import game_globals
         from utils.inventory_utils import remove_from_inventory
-        
-        pet = game_globals.pet_list[self.selected_armor_pet]
+        from utils import evolution_items
+
+        # The selector lists the selected pets, so its index is into them.
+        pet = self.pet_selector.pets[self.selected_armor_pet]
         armor_item = self.selected_armor_item
-        
-        runtime_globals.game_sound.play("evolution")
-        runtime_globals.game_console.log(f"[ArmorView] Performing Armor evolution: {pet.name} + {armor_item.name}")
-        
-        # Armor evolution using the item's name
-        pet.armor_evolve(armor_item.name)
-        # Remove the armor item from inventory (pass item ID, not the object)
+
+        runtime_globals.game_console.log(f"[ArmorView] Using {armor_item.name} on {pet.name}")
+        consumed, evolved = evolution_items.use(pet, armor_item)
+        if not consumed:
+            runtime_globals.game_sound.play("cancel")
+            return
+        # An item route may want several uses (the Twin's five Bombs): a
+        # counted use without the evolution yet still spends the item.
+        runtime_globals.game_sound.play("evolution" if evolved else "menu")
         remove_from_inventory(armor_item.id)
-        runtime_globals.game_console.log(f"[ArmorView] Armor evolution completed: {pet.name} evolved using {armor_item.name}")
+        if evolved:
+            # Armor Evolution quests (they never moved: nothing reported
+            # them; 2026-10-22 doc pass).
+            from utils.quest_event_utils import update_evolution_quest_progress
+            update_evolution_quest_progress("armor", pet.module)
+        runtime_globals.game_console.log(
+            f"[ArmorView] {armor_item.name}: {pet.name} {'evolved' if evolved else 'counted a use'}")
         
         # Return to game scene
         runtime_globals.game_console.log("[ArmorView] Returning to game")
         change_scene("game")
     
+    def _pet_has_armor_evolution(self, pet):
+        """Whether any evolution item the player holds does something for
+        this pet (utils.evolution_items.can_use)."""
+        from utils.evolution_items import can_use
+        held = [getattr(entry, "game_item", None) for entry in getattr(self.armor_item_list, "items", None) or []]
+        return any(can_use(pet, item) for item in held if item is not None)
+
     def _update_pet_compatibility(self):
-        """Update which pets are compatible with the currently selected armor item."""
-        if not self.selected_armor_item or not self.pet_selector:
+        """Grey out the pets this armor item is no use to.
+
+        A pet is selectable when it has an armor route at all and — once an
+        item is chosen — when that item is the one its route asks for. This
+        used only to add pets to the enabled list and never remove any, so
+        every pet stayed selectable however unrelated it was to the item.
+        """
+        if not self.pet_selector:
             return
-        
-        from core import game_globals
-        
-        # Check each pet for compatibility
+
+        enabled = []
         for i, pet in enumerate(self.pet_selector.pets):
-            if self._check_armor_evolution_possible(pet, self.selected_armor_item):
-                # Pet is compatible - ensure it's enabled
-                if i not in self.pet_selector.enabled_pets:
-                    self.pet_selector.enabled_pets.append(i)
-            # Note: We don't disable pets here as they might have other reasons to be enabled
-        
+            if not self._pet_has_armor_evolution(pet):
+                continue
+            if (self.selected_armor_item is not None
+                    and not self._check_armor_evolution_possible(
+                        pet, self.selected_armor_item)):
+                continue
+            enabled.append(i)
+        self.pet_selector.set_enabled_pets(enabled)
+
+        # A pet that just became ineligible must not stay selected.
+        if self.selected_armor_pet is not None and self.selected_armor_pet not in enabled:
+            self.selected_armor_pet = None
+            if self.armor_display:
+                self.armor_display.clear_pet()
+                self.armor_display.needs_redraw = True
+            if self.confirm_button:
+                self.confirm_button.set_enabled(False)
+
         self.pet_selector.needs_redraw = True
-    
+
     def _check_armor_evolution_possible(self, pet, armor_item):
         """Check if the given pet can evolve using the given armor item.
         
@@ -269,27 +306,10 @@ class ArmorView:
         Returns:
             bool: True if evolution is possible, False otherwise
         """
-        if not pet or not armor_item:
-            return False
-            
-        # Check if pet has evolutions
-        if not hasattr(pet, 'evolve') or not pet.evolve:
-            return False
-            
-        # Get the item name to compare
-        item_name = armor_item.name if hasattr(armor_item, 'name') else None
-        if not item_name:
-            runtime_globals.game_console.log(f"[ArmorView] Armor item has no name")
-            return False
-            
-        # Check each evolution for item requirement matching the item's name
-        for evo in pet.evolve:
-            if "item" in evo and evo["item"] == item_name:
-                runtime_globals.game_console.log(f"[ArmorView] Found matching evolution: {evo.get('to', 'Unknown')} requires {item_name}")
-                return True
-                
-        runtime_globals.game_console.log(f"[ArmorView] No evolution found requiring {item_name}")
-        return False
+        # A route naming the item, or an evolving item's own target for
+        # this pet (utils.evolution_items).
+        from utils.evolution_items import can_use
+        return can_use(pet, armor_item)
     
     def _on_back(self):
         """Handle back button."""

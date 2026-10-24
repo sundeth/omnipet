@@ -147,7 +147,8 @@ class PartyGrid(Grid):
             if not self.manager:
                 continue
                 
-            font = self.get_font("text", custom_size=int(12 * self.manager.ui_scale))
+            # Same size the Button component uses for its text
+            font = self.get_font("text")
             text_surface = font.render(item.text, True, (255, 255, 255))
             text_width = text_surface.get_width()
             available_width = int(self.cell_width * self.manager.ui_scale) - int(4 * self.manager.ui_scale)
@@ -193,7 +194,8 @@ class PartyGrid(Grid):
         if not self.manager or not item.text:
             return None
         
-        font = self.get_font("text", custom_size=int(12 * self.manager.ui_scale))
+        # Same size the Button component uses for its text
+        font = self.get_font("text")
         text_color = (255, 255, 255)
         
         # Use scaled cell dimensions

@@ -12,7 +12,11 @@ class TutorialTraining(SceneTraining):
     Tutorial-controlled version of SceneTraining.
     Overrides input handling to give tutorial full control.
     """
-    
+
+    # Dummy in the first slot of the only page, RANDOM and MORE disabled, and
+    # no memory of the minigame last played: the focus step points at (36, 25).
+    TUTORIAL_LAYOUT = True
+
     def __init__(self) -> None:
         """Initialize the tutorial training scene."""
         super().__init__()
@@ -46,19 +50,14 @@ class TutorialTraining(SceneTraining):
     
     def _disable_non_dummy_buttons(self):
         """Disable focusability of all training buttons except dummy."""
-        # List of all non-dummy training buttons
-        button_attrs = [
-            'head_button', 'count_button', 'count_classic_button', 
-            'count_z_button', 'excite_button', 'punch_button', 
-            'mogera_button', 'exit_button'
-        ]
-        
-        for attr in button_attrs:
-            button = getattr(self, attr, None)
+        others = [button for key, button in self.mode_buttons.items() if key != "dummy"]
+        others += [self.more_button, self.random_button, self.exit_button,
+                   self.prev_page_button, self.next_page_button]
+        for button in others:
             if button:
                 button.focusable = False
-                runtime_globals.game_console.log(f"[TutorialTraining] Disabled focusability for {attr}")
-        
+        runtime_globals.game_console.log("[TutorialTraining] Disabled every button except dummy")
+
         # Ensure dummy button IS focusable and focused
         if self.dummy_button:
             self.dummy_button.focusable = True
@@ -115,6 +114,21 @@ class TutorialTraining(SceneTraining):
             for pet in get_training_targets():
                 pet.check_disturbed_sleep()
         else:
+            # No eligible pet — log why so the cause is visible (can_train needs
+            # stage>0, not dead, atk_main>0 and the pet not being sleep-blocked).
+            from utils.pet_utils import get_selected_pets
+            selected = get_selected_pets()
+            runtime_globals.game_console.log(
+                f"[TutorialTraining] Dummy blocked — no training targets "
+                f"(selected pets: {len(selected)})")
+            for pet in selected:
+                try:
+                    runtime_globals.game_console.log(
+                        f"[TutorialTraining]   {pet.name}: stage={pet.stage} "
+                        f"state={pet.state} atk_main={pet.atk_main} "
+                        f"sleep_blocked={pet._is_blocked_by_sleep()}")
+                except Exception:
+                    pass
             runtime_globals.game_sound.play("cancel")
     
     def _on_charge_complete(self):
@@ -130,6 +144,11 @@ class TutorialTraining(SceneTraining):
         if not isinstance(event, tuple) or len(event) != 2:
             return False
         event_type, event_data = event
+
+        # Tutorial input is routed before SceneTraining, so enforce the same
+        # non-skippable READY lock here as the normal training scene.
+        if self.mode and getattr(self.mode, "phase", None) == "alert":
+            return True
 
         # Handle exit - only if allowed
         if event_type == "B":
@@ -149,10 +168,13 @@ class TutorialTraining(SceneTraining):
                 return super().handle_event(event)
             
             if self.allow_button_selection:
+                was_dummy = self.phase == "dummy"
                 # Let the parent handle it
                 result = super().handle_event(event)
-                # Notify tutorial
-                if self.on_training_selected_callback:
+                # Notify the tutorial only when this press started the Dummy
+                # (on_dummy_training sets the phase): an A on the pet row or a
+                # click beside the button starts nothing.
+                if not was_dummy and self.phase == "dummy" and self.on_training_selected_callback:
                     self.on_training_selected_callback()
                 return result
             else:

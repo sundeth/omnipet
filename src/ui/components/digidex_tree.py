@@ -21,7 +21,7 @@ class DigidexTree(UIComponent):
     """
     def __init__(self, x, y, width, height, unknown_sprite, sprite_size=None):
         super().__init__(x, y, width, height)
-        self.font = get_font(int(14 * runtime_globals.UI_SCALE))
+        self.font = get_font(int(16 * runtime_globals.UI_SCALE))
         self.unknown_sprite = unknown_sprite
         self.sprite_size = sprite_size or int(48 * runtime_globals.UI_SCALE)
         self.pets = []
@@ -110,18 +110,17 @@ class DigidexTree(UIComponent):
             if pet.name in visible_names and not pet.sprite and pet.known:
                 try:
                     module = get_module(pet.module)
-                    module_path = f"modules/{module.name}"
                     sprites_dict = load_pet_sprites(
                         pet.name,
-                        module_path,
+                        module.folder_path,
                         module.name_format,
-                        module_high_definition_sprites=module.high_definition_sprites,
                         size=(self.sprite_size, self.sprite_size),
+                        primary_sprite_format=getattr(module, 'primary_sprite_format', 'Color'),
+                        secondary_sprite_format=getattr(module, 'secondary_sprite_format', 'HD'),
                     )
-                    if "0" in sprites_dict:
-                        pet.sprite = sprites_dict["0"]
-                    else:
-                        pet.sprite = self.unknown_sprite
+                    # Frame keys are ints (see load_sprites_from_directory)
+                    frame0 = sprites_dict.get(0) or sprites_dict.get("0")
+                    pet.sprite = frame0 if frame0 is not None else self.unknown_sprite
                 except Exception as e:
                     runtime_globals.game_console.log(f"[DigidexTree] Failed to load sprite {pet.name}: {e}")
                     pet.sprite = self.unknown_sprite

@@ -1,0 +1,11 @@
+# Linux test venv for tests/platform/linux/run_suite.sh, pinned to the
+# versions on the Windows development PC (python -m pip list, 2026-10-13).
+pygame==2.6.1
+pytest==8.4.1
+requests==2.32.3
+psutil==7.0.0
+pyserial==3.5
+paho-mqtt==2.1.0
+pillow==12.3.0
+# utilities/IC/game_palette.py (tests/unit/training/test_ic_minigame_art.py)
+numpy==2.2.6

@@ -8,6 +8,8 @@ Progress Mode player have their own independent progress.
 import json
 import os
 
+from utils.data_compat import availability as read_availability
+
 # Legacy path (used only as a migration fallback)
 _LEGACY_DIGIDEX_PATH = "save/digidex.json"
 
@@ -64,8 +66,13 @@ def save_digidex(entries: list[dict]) -> None:
         json.dump(entries, f, indent=2)
 
 
-def register_digidex_entry(name: str, module: str, version: int) -> None:
-    """Add a pet to the digidex if it is not already present."""
+def register_digidex_entry(name: str, module: str, version: int, reward: bool = True) -> None:
+    """Add a pet to the digidex if it is not already present.
+
+    ``reward`` controls whether the Progress-Mode "new pet" coin is granted on
+    first discovery (the digidex entry is always recorded regardless).  Scripted
+    discoveries like the tutorial pass reward=False.
+    """
     data = load_digidex()
     exists = any(
         p["name"] == name and p["module"] == module and p["version"] == version
@@ -75,6 +82,24 @@ def register_digidex_entry(name: str, module: str, version: int) -> None:
         data.append({"name": name, "module": module, "version": version})
         save_digidex(data)
 
+        # Progress Mode: reward coins the first time this pet is discovered
+        # (per module + pet + version).  No-op in Free Mode / when logged out.
+        if reward:
+            try:
+                from utils.reward_utils import reward_new_pet
+                reward_new_pet(module, name, version)
+            except Exception:
+                pass
+
+
+def known_pet_keys() -> set:
+    """(name, module, version) of every pet in the digidex, read once.
+
+    For a caller checking many pets (the Library lists thousands): one file
+    read instead of one per pet, which made opening it take a second.
+    """
+    return {(p.get("name"), p.get("module"), p.get("version")) for p in load_digidex()}
+
 
 def is_pet_unlocked(name: str, module: str, version: int) -> bool:
     """Check whether a specific pet has already been unlocked."""
@@ -83,3 +108,29 @@ def is_pet_unlocked(name: str, module: str, version: int) -> bool:
         p["name"] == name and p["module"] == module and p["version"] == version
         for p in data
     )
+
+
+def get_module_known_count(module) -> int:
+    """How many of a module's pets the player has discovered.
+
+    Mirrors the counting the digidex screen does: "Unobtainable" pets are not
+    part of the roster, and "Friend" pets are discovered by battling their
+    Friend-flagged enemy rather than by raising them.
+    """
+    data = load_digidex()
+    known = {(p["name"], p["version"]) for p in data if p["module"] == module.name}
+    friends = None
+    count = 0
+    for monster in module.get_all_monsters():
+        availability = read_availability(monster)
+        if availability == "Unobtainable":
+            continue
+        if availability == "Friend":
+            if friends is None:
+                from utils.xros_utils import get_module_friends
+                friends = get_module_friends(module.name)
+            if monster["name"] in friends:
+                count += 1
+        elif (monster["name"], monster["version"]) in known:
+            count += 1
+    return count

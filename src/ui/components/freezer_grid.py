@@ -136,7 +136,7 @@ class FreezerGrid(Grid):
                     
                     # Draw empty slot dash
                     elif not item.data and item.text and self.manager:
-                        font = self.get_font("text", custom_size=int(12 * self.manager.ui_scale))
+                        font = self.get_font("text")
                         text_surface = font.render(item.text, True, (128, 128, 128))
                         text_rect = text_surface.get_rect()
                         text_rect.center = cell_rect.center

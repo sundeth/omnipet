@@ -192,7 +192,8 @@ class SceneLogin:
 
         field_w = 200
         field_x = (w - field_w) // 2
-        y = 62
+        # Start below the title so the first field doesn't touch "CREATE ACCOUNT"
+        y = 74
 
         self._add(Label(field_x, y, "Nickname", color_override=(180, 180, 180)))
         y += 10
@@ -346,6 +347,43 @@ class SceneLogin:
         if success:
             runtime_globals.game_console.log("[SceneLogin] Login sent, show verify")
             self._build_verify()
+        elif self._is_inactive_account_error(message):
+            # The account exists but was never activated — the server
+            # refuses login until the emailed code is verified.  Instead of
+            # dead-ending the player (whose only recourse was re-registering
+            # with the same details), send a fresh activation code and drop
+            # them into the verify screen as a registration verification.
+            runtime_globals.game_console.log(
+                "[SceneLogin] Login blocked (inactive account); resending code")
+            self._verify_action = "register"
+            self._async_call(
+                lambda: omninet_service.resend_code(self._email),
+                self._on_resend_for_activation,
+            )
+        else:
+            self._show_error(message[:40])
+
+    @staticmethod
+    def _is_inactive_account_error(message) -> bool:
+        """True when a login failure is due to an unactivated account."""
+        msg = (message or "").lower()
+        return ("not active" in msg or "not activated" in msg
+                or "not verified" in msg)
+
+    def _on_resend_for_activation(self, result):
+        """Code (re)sent after an inactive-account login attempt.
+
+        Move the player to the verify screen so they can finish activating;
+        the verify action is already set to ``register`` so a correct code
+        marks the account verified + active.
+        """
+        success, message = result
+        self._build_verify()
+        if success:
+            if hasattr(self, 'error_label') and self.error_label:
+                self.error_label.color_override = (255, 200, 80)
+                self.error_label.set_text("Account not activated. New code sent.")
+                self.ui_manager.master_ui_dirty = True
         else:
             self._show_error(message[:40])
 
@@ -367,41 +405,52 @@ class SceneLogin:
         self._add(Label(120, 45, title, is_title=True,
                         color_override=(255, 255, 255), center=True))
 
-        # Instruction
+        # Instruction (pushed below the title so it doesn't touch "VERIFY EMAIL")
         truncated_email = self._email if len(self._email) <= 28 else self._email[:25] + "..."
-        self._add(Label(120, 62, f"Code sent to:", color_override=(180, 180, 180),
+        self._add(Label(120, 74, "Code sent to:", color_override=(180, 180, 180),
                         center=True))
-        self._add(Label(120, 72, truncated_email, color_override=(200, 200, 200),
+        self._add(Label(120, 84, truncated_email, color_override=(200, 200, 200),
                         center=True))
 
-        # Code entry (6 characters) — reuse CodeEntry with length=6
-        code_w = 6 * 30 + 5 * 8  # Approximate width
+        # Code entry (6 digits) — the emailed verification code is always
+        # numeric, so use the digit-only keypad.  Narrower boxes keep all six
+        # digits on screen within the 240px base resolution.
+        digit_w, digit_gap = 30, 6
+        code_w = digit_w * 6 + digit_gap * 5
         self.code_entry = self._add(
-            CodeEntry((w - code_w) // 2, 90, length=6,
+            CodeEntry((w - code_w) // 2, 98, length=6, numeric=True,
+                      char_w=digit_w, char_h=44, spacing=digit_gap,
                       callback=lambda _t: self._on_verify_submit(),
                       on_focus_callback=self._clear_error))
 
-        # Timer label
+        # Timer label (code-expiry countdown)
         self._verify_seconds = 5 * 60  # 5 minutes
+        self._verify_frame_counter = 0
         self.timer_label = self._add(Label(
-            120, 150, self._format_timer(), color_override=(150, 150, 150),
+            120, 152, self._format_timer(), color_override=(150, 150, 150),
             center=True))
 
         # Error label
         self.error_label = self._add(Label(
-            120, 163, "", color_override=(255, 80, 80), center=True,
+            120, 165, "", color_override=(255, 80, 80), center=True,
             word_wrap=True, max_width=200))
 
         # Buttons
         btn_w = 70
         btn_h = 20
         btn_y = h - btn_h - 8
-        self._add(Button((w // 2) - btn_w * 3 // 2 - 8, btn_y, btn_w, btn_h,
-                         "Resend", self._on_resend_code))
+        self.resend_button = self._add(Button(
+            (w // 2) - btn_w * 3 // 2 - 8, btn_y, btn_w, btn_h,
+            "Resend", self._on_resend_code))
         self._add(Button((w // 2) - btn_w // 2, btn_y, btn_w, btn_h,
                          "Verify", self._on_verify_submit))
         self._add(Button((w // 2) + btn_w // 2 + 8, btn_y, btn_w, btn_h,
                          "Cancel", self._on_cancel))
+
+        # A freshly sent code is still valid, so Resend stays locked until the
+        # timer expires.  This keeps the player from hammering the server's
+        # resend endpoint, which rate-limits and can stop sending mail entirely.
+        self.resend_button.set_enabled(False)
 
         self.ui_manager.set_focused_component(self.code_entry)
         runtime_globals.game_console.log("[SceneLogin] Verify form built")
@@ -416,7 +465,7 @@ class SceneLogin:
         """Submit verification code."""
         code = self.code_entry.get_text()
         if len(code) != 6:
-            self._show_error("Enter the 6-character code")
+            self._show_error("Enter the 6-digit code")
             return
 
         if self._verify_action == "register":
@@ -439,8 +488,25 @@ class SceneLogin:
         else:
             self._show_error(message[:40])
 
+    def _on_code_expired(self):
+        """Called once the verification code's 5-minute window elapses.
+
+        The timer stops at 0:00 and never auto-restarts — the only way to get
+        a new countdown is to request a fresh code via Resend, which is now
+        unlocked.
+        """
+        if hasattr(self, 'timer_label') and self.timer_label:
+            self.timer_label.color_override = (255, 140, 80)
+            self.timer_label.set_text("Code expired - tap Resend")
+        if hasattr(self, 'resend_button') and self.resend_button:
+            self.resend_button.set_enabled(True)
+        self.ui_manager.master_ui_dirty = True
+
     def _on_resend_code(self):
-        """Resend verification code."""
+        """Resend verification code (only allowed once the prior code expired)."""
+        if hasattr(self, 'resend_button') and self.resend_button \
+                and not self.resend_button.enabled:
+            return
         self._async_call(
             lambda: omninet_service.resend_code(self._email),
             self._on_resend_response,
@@ -449,8 +515,22 @@ class SceneLogin:
     def _on_resend_response(self, result):
         success, message = result
         if success:
+            # Restart the expiry countdown and clear the input so the player
+            # can type the new code.
             self._verify_seconds = 5 * 60
+            self._verify_frame_counter = 0
+            if hasattr(self, 'timer_label') and self.timer_label:
+                self.timer_label.color_override = (150, 150, 150)
+                self.timer_label.set_text(self._format_timer())
+            if hasattr(self, 'code_entry') and self.code_entry:
+                self.code_entry.reset()
+            if hasattr(self, 'resend_button') and self.resend_button:
+                self.resend_button.set_enabled(False)
             self._show_error("")  # Clear error
+            # Force an immediate rebuild of the cached UI so the cleared boxes
+            # and reset timer show right away (otherwise they only refresh when
+            # the field is next focused / hovered).
+            self.ui_manager.master_ui_dirty = True
             runtime_globals.game_sound.play("menu")
             # (suppressed) runtime_globals.game_message.add_slide("Code resent!", (0, 231, 58), 90)
         else:
@@ -557,6 +637,12 @@ class SceneLogin:
         for comp in self._components:
             if isinstance(comp, Button):
                 comp.enabled = True
+        # The verify Resend button is gated on the code-expiry timer, not on
+        # the loading state, so restore its real state after the blanket
+        # re-enable above (otherwise a resend would immediately unlock it).
+        if self.phase == "verify" and hasattr(self, 'resend_button') \
+                and self.resend_button:
+            self.resend_button.set_enabled(self._verify_seconds == 0)
 
     # ── Async helper ──────────────────────────────────────────────────
 
@@ -613,68 +699,22 @@ class SceneLogin:
         runtime_globals.game_console.log("[SceneLogin] Back")
 
     def _sync_purchases_async(self):
-        """Pull the player's purchase history from the server and merge it
-        into ``game_globals.purchases`` in a background thread.
+        """Reconcile coins, purchases and owned modules with the server in a
+        background thread.
 
-        Without this, ``GamePurchases`` only knows about purchases made
-        on this device — so on a fresh login from a different machine
-        every module shows up as Free (the first-module-free hint kicks
-        in because the local set is empty).
+        Without this, ``GamePurchases`` only knows about purchases made on this
+        device — so on a fresh login from a different machine every module
+        shows up as Free, and owned modules can't be used until their files are
+        downloaded and their local names recorded.  ``download_missing=True``
+        also fetches owned modules absent on this device.
         """
         def _worker():
             try:
-                ok, data = omninet_service.get_user_purchases()
+                from utils.module_utils import sync_account_data
+                sync_account_data(download_missing=True)
             except Exception as exc:
                 runtime_globals.game_console.log(
-                    f"[SceneLogin] purchases sync threw: {exc}")
-                return
-            if not ok or not isinstance(data, dict):
-                runtime_globals.game_console.log(
-                    f"[SceneLogin] purchases sync failed: {data!r}")
-                return
-
-            entries = data.get('purchases') or []
-            purchases = getattr(game_globals, 'purchases', None)
-            if purchases is None:
-                return
-
-            added = {'module': 0, 'cosmetic': 0, 'gameplay': 0,
-                     'item': 0, 'special': 0}
-            for entry in entries:
-                ptype = (entry.get('purchase_type') or '').lower()
-                item_id = entry.get('item_id') or entry.get('id')
-                if not item_id:
-                    continue
-                item_id = str(item_id)
-                if ptype == 'module':
-                    # Name not in this payload; populate id only — the
-                    # local name is added when the shop list resolves it
-                    # against the modules listing.
-                    purchases.add_module(item_id)
-                    added['module'] += 1
-                elif ptype == 'cosmetic':
-                    purchases.add_cosmetic(item_id)
-                    added['cosmetic'] += 1
-                elif ptype == 'gameplay':
-                    purchases.add_gameplay(item_id)
-                    added['gameplay'] += 1
-                elif ptype == 'item':
-                    # Items track quantity, not just ownership.  We don't
-                    # know the per-purchase quantity here so increment 1
-                    # per purchase row if the id isn't already known.
-                    current = purchases.items.get(item_id, 0)
-                    if current == 0:
-                        purchases.items[item_id] = 1
-                    added['item'] += 1
-                elif ptype == 'special':
-                    purchases.add_special(item_id)
-                    added['special'] += 1
-            try:
-                game_globals.save()
-            except Exception:
-                pass
-            runtime_globals.game_console.log(
-                f"[SceneLogin] Synced purchases from server: {added}")
+                    f"[SceneLogin] account sync failed: {exc}")
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -692,7 +732,9 @@ class SceneLogin:
         game_globals.migrate_legacy_saves()
         save_dir = game_globals.get_save_dir()
         os.makedirs(save_dir, exist_ok=True)
-        game_globals.load()
+        # Carry the current resolution across the save switch (→ Free Mode).
+        from utils import display_utils
+        display_utils.load_preserving_display()
         navigation_utils.route_to_next_scene(check_tutorial=True)
 
     def _complete_login(self):
@@ -721,8 +763,25 @@ class SceneLogin:
         # 3. Migrate any legacy save data into the correct directory
         game_globals.migrate_legacy_saves()
 
-        # 4. Load save data from the (now-correct) directory
-        game_globals.load()
+        # 4. Load save data from the (now-correct) directory.  Carry the
+        # current screen/render resolution across the save switch so the
+        # Progress save's pets/poops aren't left off-screen/misplaced.
+        from utils import display_utils
+        display_utils.load_preserving_display()
+
+        # 4a. Mirror the server coin balance into the local total.  load()
+        # above set coins from the local save; in Progress Mode the server is
+        # authoritative (rewards can be earned on other devices), so overwrite
+        # with the balance fetched during device validation.
+        try:
+            ui = omninet_service.get_user_info()
+            if ui and ui.get('coins') is not None:
+                game_globals.coins = int(ui['coins'])
+                if ui.get('contribution_points') is not None:
+                    game_globals.contribution_points = int(ui['contribution_points'])
+                game_globals.save()
+        except Exception:
+            pass
 
         # 4b. Sync purchases from the server so the shop knows what the
         # player already owns (otherwise modules would all appear as
@@ -803,6 +862,10 @@ class SceneLogin:
                     self._verify_seconds -= 1
                     if hasattr(self, 'timer_label') and self.timer_label:
                         self.timer_label.set_text(self._format_timer())
+                    # On hitting zero, stop the timer and unlock Resend.  It
+                    # does not auto-restart — only a successful resend does.
+                    if self._verify_seconds == 0:
+                        self._on_code_expired()
 
     def draw(self, surface: pygame.Surface) -> None:
         """Draw the scene."""
@@ -849,6 +912,12 @@ class SceneLogin:
 
         if event_type == "CANCEL" and self.phase != "menu":
             self._on_cancel()
+            return
+
+        # TAB (mapped to the SELECT action) advances to the next field on the
+        # multi-input forms, so the keyboard flows naturally between fields.
+        if event_type == "SELECT" and self.phase in ("create_account", "login"):
+            self.ui_manager.focus_next()
             return
 
         if event_type == "MOUSE_MOTION":

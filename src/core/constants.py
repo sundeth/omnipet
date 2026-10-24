@@ -128,8 +128,21 @@ FRAME_SIZE = 48  # Original pet sprite frame size
 # Note: PET_WIDTH, PET_HEIGHT now in runtime_globals
 STAGES = [
     "0-Egg", "I-Fresh", "II-In-Training", "III-Rookie",
-    "IV-Champion", "V-Ultimate", "VI-Mega", "VII-Super Ultimate"
+    "IV-Champion", "V-Ultimate", "VI-Mega", "VII-Super Ultimate",
+    # Stage 8 (module-rules: Super Ultimate+): DMX's Jesmon GX and Ogudomon
+    # (X Antibody). Without it their Status and Digidex rows raised IndexError.
+    "VIII-Super Ultimate+",
 ]
+
+
+def stage_name(stage):
+    """The screen name of an Evolution Stage number; never raises (a stage
+    past the table reads as its number)."""
+    try:
+        stage = int(stage)
+    except (TypeError, ValueError):
+        return str(stage)
+    return STAGES[stage] if 0 <= stage < len(STAGES) else str(stage)
 ATTR_COLORS = {
             "Da": (66, 165, 245),
             "Va": (102, 187, 106),
@@ -143,24 +156,28 @@ ATTR_COLORS = {
 MOVE_SPEED = 0.5  # Movement speed in subpixels/frame
 IDLE_PROBABILITY = 0.2  # 20% chance of idle vs. moving
 CLEANING_SPEED = 6  # Speed of cleaning animation
+RELIABILITY_MIN = 0
+RELIABILITY_MAX = 31
+#: How many DigiSoul DNA feeds a Digimon remembers, newest last; an older one
+#: falls out when another is fed. The leading DNA - the type it holds most
+#: of, the latest fed on a tie - is what its evolution routes read
+#: (GamePet.leading_dna). The owner is still measuring the window on the
+#: devices (2026-10-05); one feed is already enough to take a route.
+DNA_QUEUE_SIZE = 16
+
+DIGISOUL_DNA_TYPES = (
+    "Beast", "Bird", "Machine", "Water",
+    "Dragon", "Insect", "Holy", "Dark",
+)
 SLEEP_RECOVERY_HOURS = 8  # Hours needed to fully recover
 SLEEP_MANUAL_DURATION_HOURS = 1  # Duration when manually sleeping
 SLEEP_DISTURBANCE_THRESHOLD_SECONDS = 7200  # 2 hours threshold for disturbance detection
 # BOOT_TIMER_FRAMES is calculated dynamically based on frame_rate 
 
-MAX_LEVEL = {0: 0, 1: 1, 2: 3, 3: 4, 4: 6, 5: 8, 6: 10, 7: 10, 8: 10}
+# MAX_LEVEL and HP_LEVEL live in core.pet_stats, which the arena engine runs
+# without pygame on the Omninet server.
+from core.pet_stats import MAX_LEVEL, HP_LEVEL  # noqa: E402
 EXPERIENCE_LEVEL = {0: 0, 1: 0, 2: 50, 3: 150, 4: 500, 5: 800, 6: 1000, 7: 1500, 8: 2000, 9: 3000, 10:5000}
-HP_LEVEL = {
-    0: 0,    # Egg
-    1: 0,    # Fresh
-    2: 10,   # In-Training
-    3: 10,   # Rookie
-    4: 12,   # Champion
-    5: 15,   # Ultimate
-    6: 18,   # Mega
-    7: 20,   # Super Ultimate
-    8: 20    # (If used, for extra stage)
-}
 ATK_LEVEL = {
     0: 0,   # Egg
     1: 0,   # Fresh
@@ -172,6 +189,42 @@ ATK_LEVEL = {
     7: 5,   # Super Ultimate (20 // 4 = 5)
     8: 5    # Extra stage (20 // 4 = 5)
 }
+
+# Digimon Mini "terahit": the B-button count that produces the strongest
+# attack pattern, out of a maximum of 31. The Mini's whole battle is a mash
+# whose count picks Single (attack 1), Double (2), Triple (3) or Hyper (6);
+# with every Digimon on a flat 6 HP a Hyper lands as a one-shot kill, so this
+# is the device's skill ceiling, and it climbs with stage.
+#
+# Source: the official Ver.2.0+3.0 playbook, printed page 102, which gives the
+# threshold per stage. Individual Digimon sit at or above their stage's figure
+# - the per-form values are tabulated in utilities/DMM/DMM_RESEARCH.md - and the
+# guide stops at LEVEL 6, so stage 7 is taken from the two hidden forms, which
+# both read 29.
+#
+# NOT WIRED UP. get_minigame_strength grades the Dummy Bar on fixed 5/10/14
+# cutoffs shared by every module; honouring this table means scaling those
+# cutoffs by the pet's stage. Recorded now so the values are not lost.
+TERAHIT_COUNT = {
+    0: 0,    # Egg              - cannot battle
+    1: 0,    # Fresh            - cannot battle
+    2: 21,   # In-Training
+    3: 21,   # Rookie
+    4: 25,   # Champion
+    5: 27,   # Ultimate
+    6: 30,   # Mega
+    7: 29,   # Super Ultimate   - the hidden LEVEL 7 forms
+    8: 29    # Extra stage
+}
+TERAHIT_MAX_COUNT = 31  # the highest count the Mini's meter reads
+
+# Weight at which the "Burpmon" 99g effect turns the pet into Burpmon, and the
+# weight it has to fall back to before the pet returns to its own form. The
+# Digimon Twin - the only device with this effect - uses 80 g, so the trigger
+# is not the 99 g the field name suggests. The device also only lets a pet out
+# of it at 65 g or below; that hysteresis is documented but not modelled, so
+# the pet reverts as soon as it is back under the trigger.
+BURPMON_WEIGHT = 80
 #=====================================================================
 # UI Settings
 #=====================================================================
@@ -185,13 +238,16 @@ FONT_COLOR_RED = (237, 83, 80)
 FONT_COLOR_YELLOW = (255, 255, 0)
 FONT_COLOR_BLUE = (0, 0, 255)
 FONT_COLOR_ORANGE = (255, 200, 50)
+#: The status power's colour by effort tiers reached (power_bonus_rule
+#: "Effort Tiers"): none yet is the usual yellow; the last repeats past it.
+EFFORT_TIER_COLORS = ((255, 255, 0), (150, 235, 90), (70, 225, 200), (90, 160, 255),
+                      (190, 120, 255), (255, 120, 210), (255, 150, 50), (255, 80, 80))
 BACKGROUND_COLOR = (198, 203, 173)
 
 #=====================================================================
 # Paths: General Resources
 #=====================================================================
 MODULES_FOLDER = "modules"
-ARROW_IMAGE_PATH = "assets/Arrow.png"
 #FOOD_SHEET_PATH = "assets/FoodVitamin.png"
 ATK_FOLDER = "assets/atk"
 ATK_CRIT_FOLDER = "assets/atk_crit"
@@ -310,9 +366,9 @@ ROCK1_PATH = "assets/Rock1.png"
 ROCK2_PATH = "assets/Rock2.png"
 TREE1_PATH = "assets/Tree1.png"
 TREE2_PATH = "assets/Tree2.png"
-MOGERA1_PATH = "assets/Mogera1.png"
-MOGERA2_PATH = "assets/Mogera2.png"
-MOGERA3_PATH = "assets/Mogera3.png"
+MOGERA1_PATH = "assets/MOGERA1.png"
+MOGERA2_PATH = "assets/MOGERA2.png"
+MOGERA3_PATH = "assets/MOGERA3.png"
 ANTIG1_PATH = "assets/AntiG1.png"
 ANTIG2_PATH = "assets/AntiG2.png"
 TRAININGHIT1_PATH = "assets/TrainingHit1.png"
@@ -321,29 +377,8 @@ TRAININGHIT2_PATH = "assets/TrainingHit2.png"
 #=====================================================================
 # Paths: Training Sprites
 #=====================================================================
-READY_SPRITES_PATHS = {
-    1: "assets/Ready1.png",
-    2: "assets/Ready2.png",
-    3: "assets/Ready3.png"
-}
-
-COUNT_SPRITES_PATHS = {
-    4: "assets/Count4.png",
-    3: "assets/Count3.png",
-    2: "assets/Count2.png",
-    1: "assets/Count1.png"
-}
-
-MEGA_HIT_PATH = "assets/MegaHit.png"
-CLEAR1_PATH = "assets/Clear1.png"
-CLEAR2_PATH = "assets/Clear2.png"
-WARNING1_PATH = "assets/Warning1.png"
-WARNING2_PATH = "assets/Warning2.png"
 HIT_ANIMATION_PATH = "assets/Hit.png"
 KO_PATH = "assets/KO.png"
-
-ITEM_SPRITESHEET = "assets/Items.png"
-ITEM_SPRITE_SIZE = 48  # Each cell is 48x48 in a 5x7 grid
 
 #=====================================================================
 # Paths: Additional Resources (previously hardcoded)
@@ -353,8 +388,6 @@ FONT_ALT_TTF_PATH = "assets/vpet_font_alt.ttf"
 ICON_ON_PATH = "assets/IconOn.png"
 ICON_OFF_PATH = "assets/IconOff.png"
 OMNI_WIFI_PATH = "assets/OmniWifi.png"
-SLEEP_ICON_PATH = "assets/SleepIcon.png"
-WAKE_ICON_PATH = "assets/WakeIcon.png"
 EVO1_PATH = "assets/Evo1.png"
 EVO2_PATH = "assets/Evo2.png" 
 EVO3_PATH = "assets/Evo3.png"
@@ -364,6 +397,9 @@ ORB_PATH = "assets/Orb.png"
 LIGHT_SOURCE_PATH = "assets/LightSource.png"
 LIGHT_PARTICLE_PATH = "assets/LightParticle.png"
 DNA_PATH = "assets/Dna.png"
+
+#: The adapter icon, shown in the jogress slot a real device occupies.
+SERIAL_PATH = "assets/Serial.png"
 UNKNOWN_SPRITE_PATH = "assets/Unknown.png"
 TRAITED_EGG_PATH = "assets/TraitedEgg.png"
 OMNIPET_LOGO_PATH = "assets/OmnipetLogo.png"
@@ -377,11 +413,16 @@ DMC_SOUNDS_PATH = "assets/dmc_sounds"
 #=====================================================================
 # Discord / Online Settings
 #=====================================================================
-# Discord bot connection
-DISCORD_BOT_LOCAL_URL = "http://localhost:5000"
-DISCORD_BOT_MAIN_URL = "http://localhost:5000"
+# Discord bot connection: the relay runs inside Omninet (owner, 2026-10-17)
+# at <Omninet>/api/v1/discord, where the server has a bot token; the game
+# takes Omninet's address (omninet_service, OMNIPET_OMNINET_URL overrides it)
+DISCORD_API_PATH = "/api/v1/discord"
 DISCORD_ENABLED = True
-DISCORD_DEBUG = True  # Enable detailed Discord logging
+DISCORD_DEBUG = False  # Enable detailed Discord logging
+
+# WiFi-Com battles are held back for 1.0 (owner, 2026-10-13): the Connect
+# menu offers them only in debug mode, like the upcoming protocol lines
+WIFICOM_BATTLES_RELEASED = False
 
 # Discord UI
 DISCORD_ROOM_REFRESH_RATE = 5  # Seconds between room list refreshes

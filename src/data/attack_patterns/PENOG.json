@@ -1,0 +1,545 @@
+{
+  "protocol": "PENOG",
+  "description": "Attack patterns for the original Digimon Pendulum. The wire carries five rounds of weak (1 damage) or strong (2 damage).\n\n`patterns` is indexed by the pre-battle charge -- the RAW shake count from Count Match Classic, 0-40, not the banded 0-3 quality the rest of the game uses. A real device announced effort 0 alongside a strong round, which is what rules Effort out as the source. An empty meter is five weak rounds and a full one the five strong ones the document's Ikkakumon sends; the ramp between, and which rounds turn strong within a band, are ours.\n\n`enemy_patterns` is for adventure battles, where the enemy has no charge to play: it reads the enemy's stage instead, Baby I all weak through Super Ultimate all strong.",
+  "rounds": 5,
+  "max_charge": 40,
+  "patterns": [
+    {
+      "charge": 0,
+      "strong": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 1,
+      "strong": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 2,
+      "strong": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 3,
+      "strong": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 4,
+      "strong": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 5,
+      "strong": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 6,
+      "strong": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 7,
+      "strong": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 8,
+      "strong": 1,
+      "pattern": [
+        1,
+        1,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "charge": 9,
+      "strong": 1,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "charge": 10,
+      "strong": 1,
+      "pattern": [
+        2,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 11,
+      "strong": 1,
+      "pattern": [
+        1,
+        2,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 12,
+      "strong": 1,
+      "pattern": [
+        1,
+        1,
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 13,
+      "strong": 1,
+      "pattern": [
+        1,
+        1,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "charge": 14,
+      "strong": 1,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "charge": 15,
+      "strong": 1,
+      "pattern": [
+        2,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 16,
+      "strong": 2,
+      "pattern": [
+        1,
+        2,
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "charge": 17,
+      "strong": 2,
+      "pattern": [
+        1,
+        1,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "charge": 18,
+      "strong": 2,
+      "pattern": [
+        1,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "charge": 19,
+      "strong": 2,
+      "pattern": [
+        1,
+        1,
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "charge": 20,
+      "strong": 2,
+      "pattern": [
+        2,
+        2,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 21,
+      "strong": 2,
+      "pattern": [
+        2,
+        1,
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 22,
+      "strong": 2,
+      "pattern": [
+        2,
+        1,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "charge": 23,
+      "strong": 2,
+      "pattern": [
+        2,
+        1,
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "charge": 24,
+      "strong": 3,
+      "pattern": [
+        2,
+        2,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "charge": 25,
+      "strong": 3,
+      "pattern": [
+        2,
+        1,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "charge": 26,
+      "strong": 3,
+      "pattern": [
+        1,
+        2,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "charge": 27,
+      "strong": 3,
+      "pattern": [
+        1,
+        2,
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "charge": 28,
+      "strong": 3,
+      "pattern": [
+        2,
+        2,
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "charge": 29,
+      "strong": 3,
+      "pattern": [
+        2,
+        1,
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "charge": 30,
+      "strong": 3,
+      "pattern": [
+        2,
+        2,
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "charge": 31,
+      "strong": 3,
+      "pattern": [
+        2,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "charge": 32,
+      "strong": 4,
+      "pattern": [
+        2,
+        2,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "charge": 33,
+      "strong": 4,
+      "pattern": [
+        2,
+        2,
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "charge": 34,
+      "strong": 4,
+      "pattern": [
+        2,
+        1,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "charge": 35,
+      "strong": 4,
+      "pattern": [
+        2,
+        2,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "charge": 36,
+      "strong": 4,
+      "pattern": [
+        1,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "charge": 37,
+      "strong": 4,
+      "pattern": [
+        2,
+        2,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "charge": 38,
+      "strong": 4,
+      "pattern": [
+        2,
+        2,
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "charge": 39,
+      "strong": 4,
+      "pattern": [
+        2,
+        1,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "charge": 40,
+      "strong": 5,
+      "pattern": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    }
+  ],
+  "enemy_patterns": [
+    {
+      "stage": 1,
+      "name": "Baby I",
+      "strong": 0,
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "stage": 2,
+      "name": "Baby II",
+      "strong": 1,
+      "pattern": [
+        1,
+        1,
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "stage": 3,
+      "name": "Child",
+      "strong": 1,
+      "pattern": [
+        1,
+        1,
+        1,
+        2,
+        1
+      ]
+    },
+    {
+      "stage": 4,
+      "name": "Adult",
+      "strong": 2,
+      "pattern": [
+        1,
+        2,
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "stage": 5,
+      "name": "Perfect",
+      "strong": 3,
+      "pattern": [
+        2,
+        1,
+        2,
+        2,
+        1
+      ]
+    },
+    {
+      "stage": 6,
+      "name": "Ultimate",
+      "strong": 4,
+      "pattern": [
+        1,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "stage": 7,
+      "name": "Super Ultimate",
+      "strong": 5,
+      "pattern": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    }
+  ]
+}

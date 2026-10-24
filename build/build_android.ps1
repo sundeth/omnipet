@@ -1,10 +1,23 @@
 # PowerShell script to build Android APK with Buildozer (cleaned)
 param(
     [switch]$Clean = $false,
-    [switch]$Release = $false
+    [switch]$Release = $false,
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+# The release version is src/core/version.py's unless -Version is given
+# (build_all.ps1 passes it; the script used to have no such parameter, so
+# build_all's Android step failed at once and was ignored).
+if (-not $Version) {
+    if ((Get-Content (Join-Path $PSScriptRoot "..\src\core\version.py") -Raw) -match 'VERSION\s*=\s*"([^"]+)"') {
+        $Version = $matches[1]
+    } else {
+        Write-Host "[ERROR] No VERSION in src/core/version.py" -ForegroundColor Red
+        exit 1
+    }
+}
 
 Write-Host "=== Omnipet Android Build ===" -ForegroundColor Cyan
 
@@ -21,8 +34,8 @@ Write-Host "[1/4] Preparing build directory..." -ForegroundColor Yellow
 # (notably on Bluestacks where the import-resolution path differs from
 # physical Android devices).  We keep `.buildozer/`, `bin/`, `src/` and
 # the resource folders intact so incremental builds stay fast.
-wsl bash -c "if [ -d $WSLBuildDir ]; then find $WSLBuildDir -maxdepth 1 -mindepth 1 \( -name '.buildozer' -o -name 'bin' -o -name 'src' -o -name 'assets' -o -name 'modules' -o -name 'save' -o -name 'config' -o -name '_python_bundle' \) -prune -o -exec rm -rf {} +; fi"
-wsl bash -c "mkdir -p $WSLBuildDir/{src/core,src/models,src/ui,src/ui/components,src/ui/windows,src/ui/minigames,src/input,src/battle,src/battle/dcom,src/battle/sim,src/training,src/services,src/data,src/data/protocols,src/data/attack_patterns,src/utils,src/scenes,assets,modules,config,save}"
+wsl bash -c "if [ -d $WSLBuildDir ]; then find $WSLBuildDir -maxdepth 1 -mindepth 1 \( -name '.buildozer' -o -name 'bin' -o -name 'src' -o -name 'assets' -o -name 'modules' -o -name 'save' -o -name '_python_bundle' \) -prune -o -exec rm -rf {} +; fi"
+wsl bash -c "mkdir -p $WSLBuildDir/{src/core,src/models,src/ui,src/ui/components,src/ui/windows,src/ui/minigames,src/input,src/battle,src/battle/dcom,src/battle/sim,src/training,src/services,src/data,src/data/protocols,src/data/attack_patterns,src/utils,src/scenes,src/wificom,assets,modules,save}"
 
 Write-Host "[2/4] Syncing files to WSL..." -ForegroundColor Yellow
 wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/core/ $WSLBuildDir/src/core/"
@@ -35,6 +48,7 @@ wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/
 wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/data/ $WSLBuildDir/src/data/"
 wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/utils/ $WSLBuildDir/src/utils/"
 wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/scenes/ $WSLBuildDir/src/scenes/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/wificom/ $WSLBuildDir/src/wificom/"
 wsl bash -c "cp /mnt/e/Omnipet/src/vpet.py $WSLBuildDir/src/vpet.py"
 wsl bash -c "cp /mnt/e/Omnipet/src/__init__.py $WSLBuildDir/src/__init__.py"
 wsl bash -c "rsync -avu --delete /mnt/e/Omnipet/assets/ $WSLBuildDir/assets/"
@@ -43,13 +57,17 @@ wsl bash -c "rsync -avu --delete /mnt/e/Omnipet/assets/ $WSLBuildDir/assets/"
 # been there from a previous run.
 wsl bash -c "rm -rf $WSLBuildDir/modules && mkdir -p $WSLBuildDir/modules"
 # config/ folder removed from the source tree (settings live in save/
-# + core defaults); skip its rsync.
+# + core defaults); skip its rsync. Step 1 no longer keeps or recreates a
+# config/ in the WSL build folder: the old one (ten 2025 JSON files the
+# game no longer reads) went into every APK.
 # Ship an EMPTY save/ folder — dev saves, configuration, and device_key
 # must not leak into release APKs.  At runtime the app reads/writes saves
 # from android.storage.app_storage_path()/save anyway, so a bundled save
 # folder would never be used.
 wsl bash -c "rm -rf $WSLBuildDir/save && mkdir -p $WSLBuildDir/save"
 wsl bash -c "cp /mnt/e/Omnipet/main_android.py $WSLBuildDir/main.py"
+wsl bash -c "rsync -avu --delete /mnt/e/Omnipet/android_src/ $WSLBuildDir/android_src/"
+wsl bash -c "python3 /mnt/e/Omnipet/build/prepare_android_manifest.py $WSLBuildDir/android_src"
 wsl bash -c "cp /mnt/e/Omnipet/buildozer.spec $WSLBuildDir/"
 
 # Clean caches
@@ -70,9 +88,21 @@ wsl bash -c $buildCommand
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "=== Build Successful ===" -ForegroundColor Green
+    # Native sources must be compiled into the dex files (classes*.dex: the APK has
+    # several); no service payload remains.
+    wsl bash -c "unzip -p $WSLBuildDir/bin/*.apk 'classes*.dex' | strings | grep -q 'org/omnipet/offline/PetAlarmReceiver'"
+    if ($LASTEXITCODE -ne 0) {
+        throw "PetAlarmReceiver is missing from the APK's native classes."
+    }
     New-Item -ItemType Directory -Force -Path "$ProjectRoot\bin" | Out-Null
     wsl bash -c "cp $WSLBuildDir/bin/*.apk /mnt/e/Omnipet/bin/"
     Get-ChildItem "$ProjectRoot\bin\*.apk" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
+    # The release name build_all.ps1 looks for (Buildozer's own name stays in bin/)
+    $apk = Get-ChildItem "$ProjectRoot\bin\*.apk" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    New-Item -ItemType Directory -Force -Path "$ProjectRoot\Release" | Out-Null
+    Copy-Item $apk.FullName "$ProjectRoot\Release\Omnipet_Android_Ver_$Version.apk" -Force
+    Write-Host "  Release\Omnipet_Android_Ver_$Version.apk" -ForegroundColor Cyan
 } else {
     Write-Host "=== Build Failed ===" -ForegroundColor Red
+    exit 1
 }

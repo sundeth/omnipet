@@ -35,6 +35,12 @@ class LabelValue(UIComponent):
             self.value_text = text
             self.needs_redraw = True
         
+    def set_value_color(self, color):
+        """Update the value's colour"""
+        if self.value_color != color:
+            self.value_color = color
+            self.needs_redraw = True
+
     def set_tooltip(self, text):
         """Set tooltip text and make component focusable"""
         self.tooltip_text = text

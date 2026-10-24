@@ -3,13 +3,16 @@
 #=====================================================================
 
 import math
+import os
 import random
 import pygame
 from typing import List, Optional
+from ui.minigames.count_bar import CountBar
 from ui.minigames.count_match import CountMatch
 from ui.minigames.count_match_classic import CountMatchClassic
 from ui.minigames.count_match_z import CountMatchZ
 from ui.minigames.dummy_charge import DummyCharge
+from ui.minigames.rpm import RPM
 from ui.minigames.shake_punch import ShakePunch
 from ui.minigames.xai_roll import XaiRoll
 from ui.minigames.xai_bar import XaiBar
@@ -21,22 +24,65 @@ from ui.components.label_value import LabelValue
 
 from ui import ui_constants
 from core import game_globals, runtime_globals
-from models.animation import PetFrame
+from models.animation import PetFrame, frame_or_fallback
+from utils import ailments, gcell_rules
+from utils.sprite_utils import get_right_sprite
+from utils import pengz_count_match
 from battle.game_battle import GameBattle
 from battle.sim.models import Digimon, BattleProtocol
+from battle.sim import protocol_constants
 from models.game_module import sprite_load
 from utils.module_utils import get_module
-from utils.pet_utils import distribute_pets_evenly, get_battle_targets
+from utils.pet_utils import (distribute_pets_evenly, get_battle_targets,
+                             get_battle_continue_targets)
 from utils.pygame_utils import blit_with_cache, get_font, load_attack_sprites, load_crit_attack_sprites, module_attack_sprites, module_crit_attack_sprites, sprite_load_percent
 from utils.scene_utils import change_scene
 from utils.utils_unlocks import unlock_item
 from utils import inventory_utils
 from battle.sim.global_battle_simulator import GlobalBattleSimulator
+from battle.sim.battle_utils import ic_rpm_target
 from core import constants
 from battle import combat_constants
 from models.game_quest import QuestType
 from utils.quest_event_utils import update_quest_progress
 from services.omninet_service import omninet_service
+from training.training import TRAINING_READY_SOUND
+
+
+# Minigames that draw the alert phase themselves, as
+# ``battle_minigame -> (attribute the instance lives on, class)``. Count Match
+# Color puts up an attribute-specific ready sprite and Count Match Z the
+# arrows to match, both before the count begins; everything else leaves the
+# alert phase to the animated ready sprite. Built from the classes' own
+# HAS_READY_PHASE flag, so giving a minigame a ready phase is one change in
+# the minigame itself — Count Match Classic starts at "charge" and drops out
+# of this map on its own.
+READY_PHASE_MINIGAMES = {
+    name: (attribute, minigame_class)
+    for name, attribute, minigame_class in (
+        ("Count Match Color", "count_match", CountMatch),
+        ("Count Match Z", "count_match_z", CountMatchZ),
+        ("Count Match Classic", "count_match_classic", CountMatchClassic),
+    )
+    if getattr(minigame_class, "HAS_READY_PHASE", False)
+}
+
+
+def _weak_shot_field(encounter, entity):
+    """Which of *entity*'s sprite fields is its weak shot, `atk_main` or `atk_alt`.
+
+    The module the entity's values came from decides where its line says
+    (`protocol_constants.weak_shot_field`), else the battle's wire. A module
+    function rather than a method so a bare stand-in encounter can ask it.
+    """
+    modules = getattr(runtime_globals, "game_modules", None) or {}
+    name = (getattr(entity, "module", None)
+            or getattr(getattr(encounter, "module", None), "name", None))
+    module = modules.get(name) if name else None
+    wire = (getattr(encounter, "battle_format", None)
+            or getattr(encounter, "presentation_format", None)
+            or getattr(getattr(encounter, "module", None), "battle_protocol", None))
+    return protocol_constants.weak_shot_field(getattr(module, "battle_protocol", None), wire)
 
 #=====================================================================
 # BattleEncounter Class
@@ -53,13 +99,31 @@ class BattleEncounter:
     # Region: Setup & State
     #========================
 
-    def __init__(self, module, area=0, round=0, version=1, pvp_mode=False, is_special_encounter=False):
+    def __init__(self, module, area=0, round=0, version=1, pvp_mode=False, is_special_encounter=False,
+                 encounter_name=None):
         """
         Initializes the BattleEncounter, loading graphics and setting initial state.
         """
         # Load module-specific attack sprites for pets and enemies
         self.pvp_mode = pvp_mode
         self.is_special_encounter = is_special_encounter
+        # Names the exact enemy for a special encounter; a Friend event picks
+        # one specific Friend and it must be the one fought.
+        self.encounter_name = encounter_name
+        # A battle-run event (utils.event_utils, type 4): every special
+        # round of the area in turn, its reward paid after `reward_round`.
+        self.special_run = None
+        if is_special_encounter and getattr(runtime_globals, "special_run", None):
+            self.special_run = runtime_globals.special_run
+            runtime_globals.special_run = None
+        # A card-battle event (type 6): the monster it drew, fought here and
+        # paid for by utils.card_battle.
+        self.card_battle = None
+        if is_special_encounter and getattr(runtime_globals, "card_battle", None):
+            self.card_battle = runtime_globals.card_battle
+            runtime_globals.card_battle = None
+        # real pet -> its battle-only evolved form, for this battle only.
+        self.xros_forms = {}
         self.module_attack_sprites = {}
         self.module_crit_attack_sprites = {}
         self.module = get_module(module)
@@ -109,24 +173,70 @@ class BattleEncounter:
         self.hit_animation_frames = self.load_hit_animation()
         self.hit_animations = []
         self.turn_limit = 12
+        #: Frames held on the battle screen after the last blow lands, so the
+        #: hit animation and the HP bar's drain are watched rather than
+        #: glimpsed. None while the battle is still running.
+        self._battle_end_frames = None
+        #: Frames since the first PvP lane ran past the end of the battle log
+        #: (see update_battle).
+        self._log_overrun_frames = 0
         self.super_hits = 0
+        self.color_band = None
         self.strength = 0
-        
+        #: Set when the charge was already made and sent elsewhere (DCom).
+        self.skip_charge = False
+
         # Cache for result screen rendering (everything except animated pets)
         self.result_surface_cache = None
         self.result_animation_started = False
 
         # Load KO overlay sprite, scaled to pet size (preserving aspect ratio)
         self._ko_sprite = self._load_ko_sprite(runtime_globals.PET_WIDTH, runtime_globals.PET_HEIGHT)
-        boss_w = int(runtime_globals.PET_WIDTH * constants.BOSS_MULTIPLIER)
-        boss_h = int(runtime_globals.PET_HEIGHT * constants.BOSS_MULTIPLIER)
+        boss_w = runtime_globals.PET_WIDTH_BOSS
+        boss_h = runtime_globals.PET_HEIGHT_BOSS
         self._ko_sprite_boss = self._load_ko_sprite(boss_w, boss_h)
         
+
+    def _current_targets(self):
+        """The pets this encounter is fighting with right now.
+
+        Round 1 applies the full entry rule; later rounds use the looser one
+        so a pet that fell sick mid-area keeps its place instead of vanishing
+        from the layout and minigames while still being on the team.
+
+        A pet in a temporary evolution is swapped for its battle-only form
+        here, and only here — the party list itself always holds the real
+        pets. Sequential rounds rebuild the team every round, so the swap has
+        to happen on every lookup rather than once.
+        """
+        pets = (get_battle_targets() if self.round <= 1
+                else get_battle_continue_targets())
+        if not self.xros_forms:
+            return pets
+        return [self.xros_forms.get(pet, pet) for pet in pets]
+
+    def pets_in_battle(self):
+        """The player's real pets in this round, never their battle-only forms."""
+        return (get_battle_targets() if self.round <= 1
+                else get_battle_continue_targets())
+
+    def _play_shot_sound(self, team_hp):
+        """Play the attack sound for a shot, if the firing team is small.
+
+        Training plays this on every shot, but a full row of pets firing at
+        once in battle turns it into noise, which is why the battle shot was
+        silent. With two or fewer still standing the shots are sparse enough
+        that the silence is what reads as wrong, so the sound comes back.
+        """
+        if sum(1 for hp in team_hp if hp > 0) <= 2:
+            runtime_globals.game_sound.play("attack")
 
     def set_initial_state(self, area=0, round=0, version=1):
         """
         Set all non-graphic variables for (re)initialization.
         """
+        # Kept so area progress can be checked against the module's area locks.
+        self.version = version
         # --- Jumper Gate: skip to boss if status_boost is active ---
         if not self.pvp_mode:
             skip_effect = self.get_battle_effect("skip_to_boss")
@@ -147,8 +257,29 @@ class BattleEncounter:
         self.bonus_experience = 0
         self.frame_counter = 0
         self.result_timer = 0
+        #: The result has nothing to list: its banner plays, no panel follows.
+        self._result_banner_only = False
         self.enemies = []
-        
+        #: The device line this battle is fought on, for a DCom/WiFiCom
+        #: battle -- set by the scene once the exchange data is in. An
+        #: adventure or local battle leaves it None and keeps the module's
+        #: own presentation rules.
+        self.battle_format = None
+        #: The line whose presentation rules (projectile style, crit bank) a
+        #: battle uses when it has no wire -- an arena replay is fought on
+        #: OMNIPET/DMX rules while each pet keeps its own attack library.
+        self.presentation_format = None
+        #: Set for an arena replay: the battle only plays back a stored
+        #: result, so nothing may change the pets, and the scene returns to
+        #: the connect view named here instead of the main game.
+        self.replay_return = None
+
+        # Per-battle draw caches: mirrored enemy frames, 2x crit slide-in
+        # sprites, and the per-turn attack-log entries the draw loop needs.
+        self._enemy_flip_cache = {}
+        self._special_slide_cache = {}
+        self._attack_entry_cache = {}
+
         # Reset result screen cache
         self.result_surface_cache = None
         self.result_animation_started = False
@@ -228,7 +359,9 @@ class BattleEncounter:
                 self.power_bonus = power_effect.get("amount", 0)
                 runtime_globals.game_console.log(f"[BattleEncounter] Power boost applied: +{self.power_bonus}")
 
-        self.battle_player = GameBattle(get_battle_targets(), self.enemies, self.hp_boost, self.attack_boost, self.module)
+        # Round 1 of an area is the entry check; later rounds use the looser
+        # rule so a pet that fell sick mid-run is not silently dropped.
+        self.battle_player = GameBattle(self._current_targets(), self.enemies, self.hp_boost, self.attack_boost, self.module)
         # PvP ordering flag: when True, enemy actions are processed before pets
         self.enemy_first = False
         
@@ -282,10 +415,13 @@ class BattleEncounter:
         self.press_counter = 0
         self.rotation_index = 0
         self.super_hits = 0
+        self.color_band = None
         self.strength = 0
         self.xai_phase = 0
         
         # Clean up minigame instances
+        self.count_bar = None
+        self.rpm_meter = None
         self.count_match = None
         self.count_match_classic = None
         self.count_match_z = None
@@ -321,6 +457,30 @@ class BattleEncounter:
                 return default
         
         return effect
+
+    def _register_round_friends(self):
+        """Register the round's friend-flagged enemies as Friends, and show
+        the first new one on the way back (Digimon World's recruits met in
+        the adventure: World's Meramon joins the city once beaten)."""
+        try:
+            from utils.xros_utils import register_friend, friend_record
+            from utils.utils_unlocks import check_encounter_unlocks
+            joined = []
+            for enemy in (self.battle_player.team2 or []):
+                name = getattr(enemy, "name", None)
+                if not name or not getattr(enemy, "friend", False) \
+                        or not friend_record(self.module, name):
+                    continue
+                joined.append(enemy)
+                if register_friend(self.module.name, name) and \
+                        not getattr(runtime_globals, "friend_celebration", None):
+                    runtime_globals.friend_celebration = {
+                        "name": name, "module": self.module.name}
+            # A recruit's own unlock (its `unlock`), as a special encounter's.
+            if joined:
+                check_encounter_unlocks(self.module.name, joined)
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[Friend] register failed: {exc}")
 
     def setup_pvp_teams(self, my_pets, enemy_pet_data, is_host: bool = True):
         """Sets up teams for PvP battle from pet data.
@@ -363,7 +523,11 @@ class BattleEncounter:
             enemy.traited = pet_data["traited"]
             enemy.shook = pet_data["shook"]
             enemy.module = pet_data["module"]
-            
+            enemy.attack_sprite_module = pet_data.get("attack_sprite_module")
+            enemy.ic_max_reliability = pet_data.get("ic_max_reliability")
+            enemy.ic_weapon = pet_data.get("ic_weapon")
+            enemy.digisoul = pet_data.get("digisoul")
+
             # Load sprite for the enemy
             enemy.load_sprite(enemy.module, boss=False)
             
@@ -372,6 +536,11 @@ class BattleEncounter:
         # Update battle_player with PvP teams (my pets vs enemy objects)
         self.battle_player = GameBattle(my_pets, enemy_objects, 0, 0, self.module)
         self.enemies = enemy_objects
+        # The enemies did not exist when the constructor loaded sprites, and
+        # a connection opponent brings a module of its own.
+        self.load_module_attack_sprites()
+        self._enemy_flip_cache = {}
+        self._special_slide_cache = {}
         
         # Update HP bar for PvP mode
         if hasattr(self, 'hp_bar') and self.hp_bar:
@@ -398,7 +567,7 @@ class BattleEncounter:
         if not game_globals.configuration.debug_mode:
             return
         
-        num_pets = len(get_battle_targets()) if not self.pvp_mode else len(self.battle_player.team1)
+        num_pets = len(self._current_targets()) if not self.pvp_mode else len(self.battle_player.team1)
         self.debug_battle_logs = []
         for i in range(num_pets):
             self.debug_battle_logs.append({
@@ -529,7 +698,7 @@ class BattleEncounter:
         """
         Loads enemy data for the current area and round, sets up enemy positions and health.
         """
-        selected_pets = get_battle_targets()
+        selected_pets = self._current_targets()
         version_range = self.module.get_enemy_versions(self.area, self.round, special_encounter=self.is_special_encounter)
         versions = []
         for p in selected_pets:
@@ -540,7 +709,16 @@ class BattleEncounter:
             else:
                 versions.append(p.version)
 
-        self.enemies = self.module.get_enemies(self.area, self.round, versions, special_encounter=self.is_special_encounter)
+        # New enemy objects invalidate the per-entity draw caches.
+        self._enemy_flip_cache = {}
+        self._special_slide_cache = {}
+
+        if self.card_battle:
+            self.enemies = [self._card_battle_enemy()]
+        else:
+            self.enemies = self.module.get_enemies(self.area, self.round, versions,
+                                                   special_encounter=self.is_special_encounter,
+                                                   encounter_name=self.encounter_name)
         if self.boss:
             # If it's a boss, ensure we have only one enemy
             self.enemies = [self.enemies[0]] if self.enemies else []
@@ -548,6 +726,59 @@ class BattleEncounter:
         for enemy in self.enemies:
             if enemy:
                 enemy.load_sprite(self.module.name, self.boss)
+
+    def _card_battle_enemy(self):
+        """The monster a card-battle event drew, as an enemy with its own
+        monster.json stats (the BE loads the character's), or None."""
+        from models.game_enemy import GameEnemy
+        battle = self.card_battle or {}
+        name, version = battle.get("opponent"), int(battle.get("opponent_version") or 0)
+        record = next((m for m in self.module.get_all_monsters()
+                       if m.get("name") == name and int(m.get("version") or 0) == version), None)
+        if record is None:
+            runtime_globals.game_console.log(f"[CardBattle] no monster {name} v{version}")
+            return None
+        return GameEnemy(
+            name=record["name"], power=int(record.get("power", 0) or 0),
+            attribute=record.get("attribute", "") or "", area=self.area, round=self.round,
+            version=version, atk_main=int(record.get("atk_main", 0) or 0),
+            atk_alt=int(record.get("atk_alt", 0) or 0),
+            atk_alt_2=int(record.get("atk_alt_2", 0) or 0), handicap=0, id=1,
+            stage=int(record.get("stage", 0) or 0), hp=int(record.get("hp", 0) or 0),
+            unlock=None, prize=None, special_encounter=True)
+
+    def _battle_vital_values(self, won):
+        """Vital Values for an Adventure battle, by the same stage table a
+        card battle pays (utils.card_battle); a card battle pays its own in
+        _finish_card_battle. Only modules with the meter are paid."""
+        if getattr(self, "card_battle", None):
+            return
+        from utils import card_battle
+        enemy = next((e for e in (self.battle_player.team2 or []) if e), None)
+        if enemy is None:
+            return
+        real = {id(form): pet for pet, form in (getattr(self, "xros_forms", None) or {}).items()}
+        for pet in self.battle_player.team1 or []:
+            pet = real.get(id(pet), pet)
+            if hasattr(pet, "tracks_vital_values"):
+                card_battle.battle_vital_values(pet, getattr(enemy, "stage", 0), won)
+
+    def _finish_card_battle(self):
+        """Vital Values and the item a card battle pays (utils.card_battle)."""
+        from utils import card_battle
+        from utils.event_utils import _announce
+        battle = self.card_battle
+        data = next((e for e in self.module.load_events_json()
+                     if e.id == battle.get("event_id")), None)
+        enemy = next((e for e in (self.battle_player.team2 or []) if e), None)
+        if data is None or enemy is None:
+            return
+        # The pets that fought (team1), never their battle-only forms.
+        real = {id(form): pet for pet, form in self.xros_forms.items()}
+        fought = [real.get(id(pet), pet) for pet in (self.battle_player.team1 or [])]
+        for line in card_battle.finish(self.module.name, data, fought,
+                                       getattr(enemy, "stage", 0), self.victory_status == "Victory"):
+            _announce(line)
 
     def _load_ko_sprite(self, target_w, target_h):
         """Load KO.png and scale it to fit within target dimensions, preserving aspect ratio."""
@@ -581,11 +812,30 @@ class BattleEncounter:
         modules_to_load = set()
         
         # Add modules from battle targets (pets)
-        for pet in get_battle_targets():
+        for pet in self._current_targets():
             modules_to_load.add(pet.module)
         
-        # Add module from enemies (they use the same module as the battle area)
+        # The battle area's own module, for adventure enemies.
         modules_to_load.add(self.module.name)
+
+        # And the line being fought, because in a connection battle BOTH
+        # sides' shots are drawn from its library -- the id goes over the
+        # wire in its numbering. The opponent usually brings it along, but
+        # our own pet needs it whether or not the opponent resolved.
+        battle_format = getattr(self, "battle_format", None)
+        if battle_format:
+            from battle.sim.dcom_battle_simulator import module_for_format
+            line = module_for_format(battle_format)
+            if line is not None and getattr(line, "name", None):
+                modules_to_load.add(line.name)
+
+        # A connection opponent carries its own: it is a real device, and its
+        # attack sprites belong to the module that reproduces it rather than
+        # to the area being fought in.
+        for enemy in (self.enemies or []):
+            enemy_module = getattr(enemy, 'module', None)
+            if enemy_module:
+                modules_to_load.add(enemy_module)
         
         # Load sprites for each unique module (atk and atk_crit folders)
         for module_name in modules_to_load:
@@ -598,19 +848,103 @@ class BattleEncounter:
         if not enable_old:
             return False
         module_name = getattr(entity, 'module', self.module.name)
-        mod = get_module(module_name)
+        # Not get_module: that indexes the registry and raises on a name that
+        # is not loaded, so the `is None` this has always carried could never
+        # fire. A connection opponent carries the module of the device it
+        # reproduces, and a saved payload or a peer can name one this player
+        # does not own -- which would have crashed the battle here, but only
+        # for players with old sprites turned on.
+        mod = runtime_globals.game_modules.get(module_name)
         if mod is None:
             return False
         primary = getattr(mod, 'primary_sprite_format', 'Color')
         secondary = getattr(mod, 'secondary_sprite_format', 'HD')
         return primary == 'Dot' or secondary == 'Dot'
 
+    def _attack_sprite_module(self, entity):
+        """Which module's attack library a shot is drawn from.
+
+        In a **connection battle** the sprite id travels over the wire in the
+        LINE's own numbering, and the toy draws it from that line's library
+        -- so ours has to as well, or the two screens show different attacks
+        for the same id. A DMX Damemon on the Colour wire announced shot 8:
+        the device drew the Colour library's 9, a lightning bolt, and we drew
+        the DMX module's 9, which is a heart.
+
+        The opponent already came with the line's module (`parse_opponent`
+        gives it one), so this is really about our own pet, and it settles
+        both the same way. Not owning the module leaves the entity's own,
+        which is what the game has always done.
+
+        Only for a protocol battle: `battle_format` is set for versus, DCom
+        and WiFiCom and left None by an adventure battle, where a pet fights
+        on its own line and keeps its own library.
+        """
+        own = getattr(entity, 'module', self.module.name)
+        # An iC's own Digimon always draws from the iC's library: its sprites
+        # are chosen by the iC's rule (`battle.ic_attacks`), never by an id
+        # another line would have to agree on.
+        if self._ic_native(entity):
+            return own
+        battle_format = getattr(self, "battle_format", None)
+        if not battle_format:
+            return own
+        # **Unless we know which device fired it.** Several modules can
+        # reproduce one line, and a crossover edition ships its own `atk/`
+        # at the same ids as the shared library -- so a Monster Hunter
+        # opponent's shot 73 is a Monster Hunter sprite, not the Colour
+        # library's. That is only knowable for a side whose roster the
+        # opponent actually resolved on, which is what this carries; our own
+        # pet has no such claim and keeps taking the line's.
+        named = getattr(entity, 'attack_sprite_module', None)
+        if named:
+            return named
+        # **Unless the line exchanges no ids worth agreeing on.** The whole
+        # argument for a shared library is that the id travels over the wire
+        # in the line's numbering, so both screens must resolve it the same
+        # way. A line declaring `ENEMY_ATTACK_SPRITES` is saying the opposite
+        # -- its opponent draws a fixed pair because the device does, and
+        # nothing per-Digimon is exchanged -- so there is nothing to agree
+        # with and our own pet keeps its own shots. A PENC pet fighting a
+        # Digimon Mini draws Pendulum Colour shots on the Mini's ladder; it
+        # reached its own library anyway, but only because DMM's `atk/`
+        # happens to hold just the two sprites and everything else missed.
+        limits = protocol_constants.get_constants(battle_format)
+        if getattr(limits, 'ENEMY_ATTACK_SPRITES', None):
+            return own
+        # Nor does a line whose wire names no sprite at all (the iC's), so
+        # a pet from elsewhere keeps its own ids in its own library.
+        if getattr(limits, 'OWN_ATTACK_LIBRARY', False):
+            return own
+        from battle.sim.dcom_battle_simulator import module_for_format
+        line = module_for_format(battle_format)
+        return getattr(line, "name", None) or own
+
+    def _item_attack_id(self, entity, attack_id):
+        """*attack_id*, or the sprite the pet's active boost item names.
+
+        An item can carry an `attack_sprite`: while its boost is active the
+        pet throws that instead of its ordinary shots (`atk_main`,
+        `atk_alt`). Ours only -- an opponent's items are not ours to read --
+        and an iC's own Digimon is already answered by `ic_attacks`.
+        """
+        from models.game_pet import GamePet
+        if not isinstance(entity, GamePet) or self._ic_native(entity):
+            return attack_id
+        ordinary = {str(getattr(entity, field, 0) or 0)
+                    for field in ("atk_main", "atk_alt")}
+        if str(attack_id) not in ordinary:
+            return attack_id
+        from utils.inventory_utils import active_attack_sprite
+        return active_attack_sprite(entity) or attack_id
+
     def get_attack_sprite(self, entity, attack_id):
         """
         Get attack sprite for a pet or enemy, preferring module-specific sprites over defaults.
         Dot variants are selected only for entities currently rendered as dot (enable_old + Dot format).
         """
-        module_name = getattr(entity, 'module', self.module.name)
+        attack_id = self._item_attack_id(entity, attack_id)
+        module_name = self._attack_sprite_module(entity)
         is_dot = self._is_dot_entity(entity)
 
         if module_name in self.module_attack_sprites:
@@ -618,16 +952,79 @@ class BattleEncounter:
             if is_dot:
                 dot_sprite = module_dict.get(f"{attack_id}_dot")
                 if dot_sprite:
+                    self._log_attack_sprite(entity, attack_id, module_name,
+                                            f"modules/{module_name}/atk/{attack_id}_dot.png")
                     return dot_sprite
             sprite = module_dict.get(str(attack_id))
             if sprite:
+                self._log_attack_sprite(entity, attack_id, module_name,
+                                        f"modules/{module_name}/atk/{attack_id}.png")
                 return sprite
 
         if is_dot:
             dot_sprite = self.attack_sprites.get(f"{attack_id}_dot")
             if dot_sprite:
+                self._log_attack_sprite(entity, attack_id, module_name,
+                                        f"assets/atk/{attack_id}_dot.png")
                 return dot_sprite
-        return self.attack_sprites.get(str(attack_id))
+        sprite = self.attack_sprites.get(str(attack_id))
+        if sprite:
+            self._log_attack_sprite(entity, attack_id, module_name,
+                                    f"assets/atk/{attack_id}.png")
+            return sprite
+
+        # Nothing by that id. A real device can name one we simply do not
+        # have -- the Pendulum's Shot field is 8 bits and Omnipet ships 117
+        # sprites, so an opponent announcing 152 is perfectly legal on the
+        # wire and unresolvable here. This used to return None and the caller
+        # handed it straight to pygame.transform.flip, which killed the whole
+        # battle. Draw *a* shot instead: the sprite the module does have is a
+        # better answer than no battle at all.
+        fallback = self.module_attack_sprites.get(module_name, {})
+        for candidate in ("1", "2"):
+            sprite = fallback.get(candidate) or self.attack_sprites.get(candidate)
+            if sprite:
+                runtime_globals.game_console.log(
+                    f"[BattleEncounter] no attack sprite {attack_id} for "
+                    f"{module_name}; falling back to {candidate}")
+                return sprite
+        return None
+
+    def _log_attack_choice(self, side, entity, style, anim_hits, atk_id,
+                           count=None, double=None):
+        """Say how a damage value became a shot, before the sprite is fetched.
+
+        The battle log records the damage and nothing about the picture, so a
+        shot drawn with the wrong sprite reads identically to a correct one in
+        every log there was. This prints the three things that decide it: the
+        animation style the wire chose, the entity's own sprite pair, and the
+        id, count and size the ladder came out with.
+        """
+        runtime_globals.game_console.log(
+            "[BattleEncounter] attack choice (%s): %s style=%s damage=%s "
+            "atk_main=%s atk_alt=%s -> id=%s x%s%s"
+            % (side, getattr(entity, "name", "?"), style, anim_hits,
+               getattr(entity, "atk_main", None), getattr(entity, "atk_alt", None),
+               atk_id, count if count is not None else "?",
+               " @2x" if double else ""))
+
+    def _log_attack_sprite(self, entity, attack_id, module_name, source):
+        """Say which sprite file a shot actually drew from.
+
+        A shot goes wrong in three separate places -- the id the ladder
+        picks, the module whose library is searched, and whether that library
+        holds the id -- and none of them is visible in the battle log, which
+        records the damage and nothing about the picture. So this prints all
+        three together: which side, the id, the library asked, and the file
+        it came from. `assets/atk/` in that line means the module's own
+        library did not have it.
+        """
+        loaded = module_name in self.module_attack_sprites
+        runtime_globals.game_console.log(
+            "[BattleEncounter] attack sprite: %s (%s) id=%s library=%s%s -> %s"
+            % (getattr(entity, "name", "?"),
+               getattr(entity, "module", "?"), attack_id, module_name,
+               "" if loaded else " (NOT LOADED)", source))
 
     def get_crit_attack_sprite(self, entity, attack_id):
         """
@@ -636,7 +1033,7 @@ class BattleEncounter:
         Returns None if nothing found — callers should fall back to normal atk + scale2x.
         Dot variants are selected only for entities currently rendered as dot.
         """
-        module_name = getattr(entity, 'module', self.module.name)
+        module_name = self._attack_sprite_module(entity)
         is_dot = self._is_dot_entity(entity)
 
         crit_dict = self.module_crit_attack_sprites.get(module_name, {})
@@ -654,36 +1051,242 @@ class BattleEncounter:
                 return dot_sprite
         return self.crit_attack_sprites.get(str(attack_id))
 
-    def _get_advanced_atk_id(self, entity, anim_hits):
-        """
-        Get attack sprite ID for DMX/PENZ/INTERNAL_PVE protocols based on hit count.
-        
-        Strike mapping:
-        1: 1 atk_main sprite
-        2: 2 atk_main sprites
-        3: 1 atk_alt sprite (fallback: atk_main)
-        4: 2 atk_alt sprites (fallback: atk_main)
-        5: 1 atk_alt2 sprite double size (fallback: atk_alt double, then atk_main double)
-        """
-        atk_alt = getattr(entity, "atk_alt", None)
-        atk_alt2 = getattr(entity, "atk_alt_2", None)
-        has_alt = atk_alt is not None and atk_alt > 0
-        has_alt2 = atk_alt2 is not None and atk_alt2 > 0
+    #: Where the Nth sprite of a multi-sprite shot sits, relative to the
+    #: first, before UI scaling. The first three are the spacing the DMX
+    #: ladder already drew its doubles and triples with; an enemy negates
+    #: them, since it fires the other way.
+    PROJECTILE_OFFSETS = ((0, 0), (-20, -10), (-40, 10), (-60, -20), (-80, 20))
 
-        if anim_hits >= 5:
-            if has_alt2:
-                return str(atk_alt2)
-            elif has_alt:
-                return str(atk_alt)
-            else:
-                return str(getattr(entity, "atk_main", 30))
-        elif anim_hits >= 3:
-            if has_alt:
-                return str(atk_alt)
-            else:
-                return str(getattr(entity, "atk_main", 30))
-        else:
-            return str(getattr(entity, "atk_main", 30))
+    def _count_offsets(self, count, scale, mirrored=False):
+        """Offsets for a shot drawn as *count* copies of one sprite."""
+        count = max(1, min(int(count), len(self.PROJECTILE_OFFSETS)))
+        sign = -1 if mirrored else 1
+        return [(ox * scale * sign, oy * scale * sign)
+                for ox, oy in self.PROJECTILE_OFFSETS[:count]]
+
+    def _paired_shot(self, entity, anim_hits):
+        """The Ver.20th's shot for a damage value: ``(atk_id, count, double)``.
+
+        Damage rises in pairs and the sprite alternates within each -- 1 and 2
+        are one sprite, 3 and 4 are two, and the odd value of each pair draws
+        the weak sprite where the even one draws the strong. Which field is
+        the weak one is the data's (`_weak_shot_field`): **the DM20 module
+        reverses the usual pairing**, its weak attacks the alternate sprite,
+        while PEN20's keeps them in `atk_main`.
+
+        A pet with no `atk_alt` cannot make that distinction, so it separates
+        the four by count instead -- one, two and three sprites, then a single
+        sprite at double size for the strongest.
+        """
+        main = str(getattr(entity, "atk_main", 30))
+        alt = getattr(entity, "atk_alt", 0) or 0
+        damage = max(1, min(4, int(anim_hits or 1)))
+
+        if not alt:
+            return main, (damage if damage < 4 else 1), damage == 4
+        weak, strong = ((main, str(alt)) if _weak_shot_field(self, entity) == "atk_main"
+                        else (str(alt), main))
+        return (weak if damage % 2 else strong), (1 if damage <= 2 else 2), False
+
+    def _count_bar_shot(self, entity, anim_hits):
+        """The Mini / iC shot for a damage value: ``(atk_id, count, double)``.
+
+        1, 2 and 3 are that many `atk_main`; 4 is a single `atk_alt` **at
+        double size**, which is what makes the Hyper read as the one-shot kill
+        it is. A pet with no `atk_alt` draws its `atk_main` at that size
+        instead, so the strongest shot still stands apart.
+
+        The Digivice iC draws that fourth value from the crit bank instead --
+        see `_count_bar_crit_damage` and `_count_bar_sprite`, which is where
+        the two devices part company.
+        """
+        alt = getattr(entity, "atk_alt", 0) or 0
+        # A pet with no `atk_main` still has a shot if it has an alternate.
+        main = str(getattr(entity, "atk_main", 0) or alt or 30)
+        damage = max(1, min(4, int(anim_hits or 1)))
+        if damage < 4:
+            return main, damage, False
+        return (str(alt) if alt else main), 1, True
+
+    def _count_bar_crit_damage(self):
+        """The damage value this line draws from the crit bank, or None.
+
+        The Digivice iC declares 4: its Hyper has a sprite of its own, the
+        way the Digimon X's mega shot does, where the Digimon Mini just
+        scales the ordinary one up. Read off the format rather than the
+        module, because a protocol battle is fought on the device's wire.
+        """
+        battle_format = (getattr(self, "battle_format", None)
+                         or getattr(self, "presentation_format", None)
+                         or getattr(self.module, "battle_protocol", None))
+        if not battle_format:
+            return None
+        constants = protocol_constants.get_constants(battle_format)
+        return getattr(constants, "CRIT_BANK_DAMAGE", None)
+
+    def _ic_native(self, entity):
+        """Whether *entity* is a Digivice iC's own Digimon (`battle.ic_attacks`).
+
+        An adventure enemy carries no module of its own and belongs to the
+        battle's, so an IC adventure's enemies are the iC's too.
+        """
+        from battle import ic_attacks
+        return ic_attacks.is_ic_native(entity, getattr(self.module, "name", None))
+
+    def _ic_sprite(self, entity, anim_hits, critical=False):
+        """An iC Digimon's shot: ``(sprite, atk_id, count, double)``.
+
+        **The iC's own rule, on every line it fights on** (`battle.ic_attacks`):
+        1, 2 and 3 are that many of its ordinary sprite, and its Hyper is its
+        critical at its own size. Which ordinary sprite and which critical
+        follow the Max Reliability flag -- the standard pair below Reliability 31,
+        the strong shot and its own critical at it. On a 1-5 line the
+        critical is the 5 (or a flagged critical) rather than the 4.
+
+        A critical with no art behind it falls back to the ordinary sprite at
+        double size, as `_count_bar_shot` does for any pet.
+        """
+        from battle import ic_attacks
+        normal, crit = ic_attacks.attack_ids(entity)
+        value = max(1, int(anim_hits or 1))
+        crit_at = (self._count_bar_crit_damage()
+                   or (4 if self._attack_animation_style() == "count_bar" else 5))
+        if critical or value >= crit_at:
+            sprite = self.get_crit_attack_sprite(entity, crit)
+            if sprite is not None:
+                return sprite, str(crit), 1, False
+            return self.get_attack_sprite(entity, normal), str(normal), 1, True
+        count = min(value, 3)
+        return self.get_attack_sprite(entity, normal), str(normal), count, False
+
+    def _count_bar_sprite(self, entity, anim_hits, critical=False):
+        """Resolve `_count_bar_shot`, reaching the crit bank where the line
+        has one: ``(sprite, atk_id, count, double)``.
+
+        **An iC's own Digimon draws by the iC's rule** (`_ic_sprite`). Any
+        other pet keeps its own sprites: 1-3 are that many `atk_main`, and
+        the Hyper is `atk_alt_2` from the crit bank -- exactly as on the X
+        line, see `_ladder_shot` -- else `atk_alt` at double size, else
+        `atk_main` at double size. So a pet with no crit art still shows its
+        strongest shot as something bigger rather than as nothing.
+        """
+        if self._ic_native(entity):
+            return self._ic_sprite(entity, anim_hits, critical)
+        crit_at = self._count_bar_crit_damage()
+        if crit_at is not None and int(anim_hits or 0) == crit_at:
+            alt2 = getattr(entity, "atk_alt_2", 0) or 0
+            if alt2 > 0:
+                sprite = self.get_crit_attack_sprite(entity, alt2)
+                if sprite is not None:
+                    return sprite, str(alt2), 1, False
+            # No crit sprite: the X line's fallback, which is also
+            # `_count_bar_shot`'s own answer for a 4.
+        atk_id, count, double = self._count_bar_shot(entity, anim_hits)
+        return self.get_attack_sprite(entity, atk_id), atk_id, count, double
+
+    def _forced_attack_sprite(self):
+        """The one attack sprite this wire draws, whatever the pet.
+
+        The Digital Monster exchanges no sprite ids -- there is no field for
+        one -- and the device draws the same shot for every Digimon, which is
+        what every filmed battle shows. So a connection battle on that line
+        uses it for both sides rather than each pet's own.
+
+        Only for a protocol battle: ``battle_format`` is set for versus, DCom
+        and WiFiCom and left None by an adventure battle, which keeps each
+        pet's own sprite even on a DMOG module.
+        """
+        battle_format = getattr(self, "battle_format", None)
+        if not battle_format:
+            return None
+        constants = protocol_constants.get_constants(battle_format)
+        return getattr(constants, "FORCED_ATTACK_SPRITE", None)
+
+    def _attack_animation_style(self):
+        """How this battle turns a damage value into projectiles.
+
+        A protocol battle is fought on the device's wire, so the wire is what
+        decides: a format declaring ``ATTACK_ANIMATION`` owns its own
+        presentation, and "count" means N damage is N atk_main sprites --
+        what a filmed DMOG battle shows, and what DMC inherits from it.
+
+        An adventure battle has no wire, but it does have a module, and the
+        module says which device it reproduces. A DMOG module's adventure
+        battles should look like a Digital Monster's for the same reason its
+        connection battles do -- otherwise a 2 drew as one scaled-up shot
+        there while the same 2 drew as two shots over the cable.
+
+        Everything else keeps the module's own rule, where
+        ``battle_damage_limit`` says whether that module's damage values have
+        the range the five-rung sprite ladder needs. That was the *only*
+        rule until now, which is why a DCom battle used to be animated from
+        whichever pet the player brought rather than from the device it was
+        being fought against.
+        """
+        battle_format = (getattr(self, "battle_format", None)
+                         or getattr(self, "presentation_format", None)
+                         or getattr(self.module, "battle_protocol", None))
+        if battle_format:
+            constants = protocol_constants.get_constants(battle_format)
+            style = getattr(constants, "ATTACK_ANIMATION", None)
+            if style:
+                return style
+        return "simple" if self.module.battle_damage_limit < 3 else "ladder"
+
+    def _ladder_shot(self, entity, value, critical=False, crit_bank=True):
+        """The DMX/PENZ shot for a pattern value: ``(atk_id, count, double, crit)``.
+
+        The five attack types are two ladders crossed. **A weak shot draws
+        `atk_main` and a strong one `atk_alt`**, and each goes out once or
+        twice: 1 weak single, 2 strong single, 3 weak double, 4 strong
+        double. `data/attack_patterns/DMX.json` has said exactly that since
+        the damage table was read off the device's own HP bar -- a strong
+        shot is worth 3 where a weak one is worth 2, and the damage is the
+        sprite strength times the sprite count, so the pairing is what the
+        measured numbers are built on.
+
+        The code this replaces had 1 and 2 on `atk_main` and 3 and 4 on
+        `atk_alt`, which is the same ladder shifted by one: a strong single
+        drew as a weak double and a weak double as a strong single. The two
+        readings agree only at 1.
+
+        A pet with no `atk_alt` cannot make the distinction, so it adds a
+        sprite instead -- the fallback counts are the JSON's own. The fifth
+        type is the critical: the dedicated crit sprite at its own size, or
+        the best sprite the pet does have at double.
+        """
+        main = str(getattr(entity, "atk_main", 30) or 30)
+        alt = getattr(entity, "atk_alt", 0) or 0
+        alt2 = getattr(entity, "atk_alt_2", 0) or 0
+
+        if critical or value >= 5:
+            if crit_bank and alt2 > 0:
+                return str(alt2), 1, False, True
+            return (str(alt) if alt > 0 else main), 1, True, False
+        if value == 4:
+            return (str(alt), 2, False, False) if alt > 0 else (main, 3, False, False)
+        if value == 3:
+            return main, 2, False, False
+        if value == 2:
+            return (str(alt), 1, False, False) if alt > 0 else (main, 2, False, False)
+        return main, 1, False, False
+
+    def _ladder_sprite(self, entity, value, critical):
+        """Resolve `_ladder_shot` to a sprite, dropping to the ordinary bank.
+
+        `atk_alt_2` indexes the crit sprites, which are a separate folder --
+        so an id with nothing behind it must fall back to the ladder's own
+        answer rather than being handed to `get_attack_sprite`, where it
+        would name some unrelated ordinary shot.
+        """
+        atk_id, count, double, crit = self._ladder_shot(entity, value, critical)
+        if crit:
+            sprite = self.get_crit_attack_sprite(entity, atk_id)
+            if sprite is not None:
+                return sprite, atk_id, count, double
+            atk_id, count, double, crit = self._ladder_shot(
+                entity, value, critical, crit_bank=False)
+        return self.get_attack_sprite(entity, atk_id), atk_id, count, double
 
     def _has_special_frame(self, entity):
         """Check if a pet/enemy has a valid SPECIAL frame (index 15)."""
@@ -718,6 +1321,10 @@ class BattleEncounter:
             self.update_entry()
         elif self.phase == "intimidate":
             self.update_intimidate()
+        elif self.phase == "xros_select":
+            self.update_xros_select()
+        elif self.phase == "xros_anim":
+            self.update_xros_anim()
         elif self.phase == "alert":
             self.update_alert()
         elif self.phase == "charge":
@@ -728,7 +1335,7 @@ class BattleEncounter:
             self.update_clear()
         elif self.phase == "result":
             self.update_result()
-        elif self.phase == "feeding":
+        elif self.phase in ("feeding", "battle_items"):
             self.update_feeding()
         elif self.phase == "retire_check":
             self.update_retire_check()
@@ -778,65 +1385,284 @@ class BattleEncounter:
 
     def update_intimidate(self):
         """
-        Update logic for the intimidate phase, transitions to alert phase.
+        Update logic for the intimidate phase, transitions to the xros
+        selection (when any pet can temporarily evolve) or the alert phase.
         """
         if self.frame_counter >= combat_constants.IDLE_ANIM_DURATION:
-            self.phase = "alert"
-            self.frame_counter = 0
             # Stop intimidate animation when exiting phase
             self.animated_sprite.stop()
-            
-            # Reset minigames before alert phase
-            self.reset_minigames()
+            if self._start_xros_selection():
+                return
+            self._enter_alert_phase()
 
-            if self.module.ruleset == "penc":
-                # For PenC, initialize count match minigame early for alert phase drawing
-                pets = get_battle_targets()
-                self.count_match = CountMatch(self.ui_manager, pets[0], self.animated_sprite)
-                self.count_match.set_phase("ready")
+    def _enter_alert_phase(self):
+        """Enter the alert phase (from intimidate or after the xros flow)."""
+        self.phase = "alert"
+        self.frame_counter = 0
+
+        # READY sound state, same flow training uses (see Training.update_alert_phase).
+        self._ready_sound_triggered = False
+        self._ready_sound_started = False
+        self._ready_sound_fallback = False
+        self.alert_duration_frames = combat_constants.ALERT_DURATION_FRAMES
+
+        # Reset minigames before alert phase
+        self.reset_minigames()
+
+        # A minigame that owns its ready phase has to exist before the alert
+        # phase draws, so build it here rather than in setup_charge.
+        ready = READY_PHASE_MINIGAMES.get(
+            getattr(self.module, 'battle_minigame', ''))
+        if ready:
+            attribute, minigame_class = ready
+            pets = self._current_targets()
+            instance = minigame_class(self.ui_manager, pets[0] if pets else None,
+                                      self.animated_sprite)
+            instance.set_phase("ready")
+            setattr(self, attribute, instance)
+
+    # ------------------------------------------------------------------
+    # Xros / temporary evolution flow (after intimidate, before alert)
+    # ------------------------------------------------------------------
+
+    def _start_xros_selection(self) -> bool:
+        """Open the temporary-evolution selector when any pet qualifies.
+
+        Only offered once per encounter — with Battle Sequential Rounds the
+        same encounter instance runs every round, so the pets evolve at the
+        first battle and keep the form for all rounds.  Returns True when the
+        selection phase was entered.
+        """
+        if self.pvp_mode or getattr(self, 'xros_prompted', False):
+            return False
+        self.xros_prompted = True
+
+        try:
+            from utils.xros_utils import get_available_temp_evolutions
+            candidates = []
+            for pet in self.battle_player.team1:
+                options = get_available_temp_evolutions(pet, self._xros_area(pet))
+                if options:
+                    candidates.append((pet, options))
+            if not candidates:
+                return False
+
+            from ui.components.xros_selector import XrosSelector
+            self.xros_selector = XrosSelector(candidates, self.ui_manager)
+            self.phase = "xros_select"
+            self.frame_counter = 0
+            runtime_globals.game_console.log(
+                f"[Xros] Selection opened for {len(candidates)} pet(s)")
+            return True
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[Xros] selection setup failed: {exc}")
+            return False
+
+    def _xros_area(self, pet) -> int:
+        """The area a temporary evolution's `battle_area` reads for *pet*:
+        this adventure area when it is the pet's own module's (DMXW's
+        "during World 20"), 0 for a special encounter or event, or another
+        module's areas."""
+        if self.pvp_mode or self.is_special_encounter:
+            return 0
+        if getattr(pet, "module", None) != getattr(self.module, "name", None):
+            return 0
+        return int(self.area or 0)
+
+    def _on_xros_confirm(self):
+        """Apply the chosen temporary evolutions and play the animation."""
+        selections = [(pet, evo) for pet, evo in self.xros_selector.get_selections() if evo]
+        self.xros_selector = None
+        if not selections:
+            self._enter_alert_phase()
+            return
+
+        # Starts the moment the choice is made and runs over the animation's
+        # opening background segment, which is exactly as long as this sound.
+        runtime_globals.game_sound.play("xros_start")
+
+        try:
+            # Build the animation FIRST (it captures the pre-evolution
+            # sprites), then create each pet's battle-only evolved form. The
+            # party pets themselves are left exactly as they are.
+            from ui.components.xros_animation import XrosAnimation
+            from utils.xros_utils import make_xros_pet
+            self.xros_animation = XrosAnimation(selections)
+            for pet, evo in selections:
+                form = make_xros_pet(pet, evo)
+                if form is not None:
+                    self.xros_forms[pet] = form
+            # The team was built from the un-evolved pets; rebuild it so the
+            # forms are the ones that actually fight.
+            if self.xros_forms:
+                self.battle_player.team1 = self._current_targets()
+            self.phase = "xros_anim"
+            self.frame_counter = 0
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[Xros] apply failed: {exc}")
+            self._enter_alert_phase()
+
+    def _clear_xros_forms(self) -> list:
+        """End every temporary evolution; returns the pets that were in one.
+
+        Nothing is restored because nothing was changed — the forms are simply
+        dropped and the team goes back to holding the real pets.
+        """
+        if not self.xros_forms:
+            return []
+        pets = list(self.xros_forms.keys())
+        for form in self.xros_forms.values():
+            form.release()
+        self.xros_forms = {}
+        if getattr(self, "battle_player", None):
+            # Swap the forms out of the team so the result screen and anything
+            # after it sees the pets themselves.
+            self.battle_player.team1 = [
+                getattr(p, "pet", p) for p in self.battle_player.team1]
+        runtime_globals.game_console.log(
+            f"[Xros] {len(pets)} temporary evolution(s) ended")
+        return pets
+
+    def update_xros_select(self):
+        """Waits on player input (handled in handle_event)."""
+        pass
+
+    def update_xros_anim(self):
+        self.xros_animation.update()
+        if self.xros_animation.finished:
+            self.xros_animation = None
+            self._enter_alert_phase()
+
+    def draw_xros_select(self, surface):
+        surface.fill((0, 0, 0))
+        if getattr(self, 'xros_selector', None):
+            self.xros_selector.draw(surface)
+
+    def draw_xros_anim(self, surface):
+        if getattr(self, 'xros_animation', None):
+            self.xros_animation.draw(surface)
 
     def update_alert(self):
         """
         Update logic for the alert phase, prepares for charge phase after duration.
+
+        Adventure battles run the same READY as training: the phase lasts
+        exactly as long as the READY sound, and does not begin until playback
+        has actually started, so the sound and the sprite stay in step. Versus
+        and DCom keep the fixed-length alert — their timing is negotiated with
+        the other device and must not stretch to fit an audio asset.
         """
-        if self.frame_counter == int(combat_constants.ALERT_DURATION_FRAMES * 0.8):
-            runtime_globals.game_sound.play("happy")
-        elif self.frame_counter > combat_constants.ALERT_DURATION_FRAMES:
-            runtime_globals.game_console.log("Entering charge phase")
-            self.phase = "charge"
+        if self.pvp_mode:
+            if self.frame_counter == int(combat_constants.ALERT_DURATION_FRAMES * 0.8):
+                runtime_globals.game_sound.play("happy")
+            elif self.frame_counter > combat_constants.ALERT_DURATION_FRAMES:
+                self._finish_alert_phase()
+            return
+
+        if not self._ready_sound_triggered:
+            duration = runtime_globals.game_sound.get_duration(TRAINING_READY_SOUND)
+            if duration > 0:
+                self.alert_duration_frames = max(
+                    1, int(round(duration * game_globals.configuration.frame_rate)))
+
+            channel = runtime_globals.game_sound.play(TRAINING_READY_SOUND)
+            self._ready_sound_triggered = True
+
+            # Muted audio or an unavailable mixer has no playback start to
+            # observe; fall back to the asset's own length.
+            if channel is None:
+                self._ready_sound_started = True
+                self._ready_sound_fallback = True
+                self.frame_counter = 0
+
+        if not self._ready_sound_started:
+            # The mixer can lag behind play(); hold the phase at frame 0 until
+            # the sound is actually audible.
+            if runtime_globals.game_sound.is_playing(TRAINING_READY_SOUND):
+                self._ready_sound_started = True
             self.frame_counter = 0
-            self.bar_timer = pygame.time.get_ticks()
-            self.setup_charge()
+            return
+
+        if (not self._ready_sound_fallback
+                and not runtime_globals.game_sound.is_playing(TRAINING_READY_SOUND)):
+            self._finish_alert_phase()
+            return
+
+        if self.frame_counter >= self.alert_duration_frames:
+            self._finish_alert_phase()
+
+    def _finish_alert_phase(self):
+        """Leave READY for the charge minigame."""
+        runtime_globals.game_sound.stop(TRAINING_READY_SOUND)
+
+        # A DCom battle already played its charge in the connection flow and
+        # sent the result to the real device; playing it again here would ask
+        # the player to charge a second time for no effect.
+        if getattr(self, 'skip_charge', False):
+            runtime_globals.game_console.log("Charge already committed; entering battle phase")
+            self.phase = "battle"
+            self.frame_counter = 0
+            self.animated_sprite.stop()
+            self.battle_player.reset_frame_counters()
+            self._skip_grace_until = 0
+            self._last_pet_proj_tick = pygame.time.get_ticks()
+            self._last_enemy_proj_tick = pygame.time.get_ticks()
+            self.calculate_combat_for_pairs()
+            return
+
+        runtime_globals.game_console.log("Entering charge phase")
+        self.phase = "charge"
+        self.frame_counter = 0
+        self.bar_timer = pygame.time.get_ticks()
+        self.setup_charge()
 
     def setup_charge(self):
         """
         Setup logic for the charge phase, varies by module's battle_minigame setting.
-        battle_minigame options: "None", "Dummy Bar", "Count Match (Color)", "Count Match", 
-                                 "Count Match (Z)", "Xai Roll+Bar", "Xai Bar", "Punch", "Mogera"
+        battle_minigame options: "None", "Dummy Bar", "Count Bar", "RPM", "Count Match Color",
+                                 "Count Match Z", "Count Match Classic", "Xai Roll+Bar",
+                                 "Xai Bar", "Punch", "Mogera"
         """
         minigame = getattr(self.module, 'battle_minigame', 'Dummy Bar')
-        pets = get_battle_targets()
+        pets = self._current_targets()
         
         if minigame == "None":
-            # Skip charge phase, use default minigame result of 2
+            # Skip charge phase; `minigame_result` answers 2 for this one
+            # whatever it is handed, so the strength is all that is needed.
             self.strength = 2
-            self.minigame_result = 2
         elif minigame == "Dummy Bar":
             # Dummy charge minigame (A button presses)
             self.bar_level = 14
             self.battle_player.reset_frame_counters()
             self.dummy_charge = DummyCharge(self.ui_manager, "RED")
-        elif minigame == "Count Match (Color)":
+        elif minigame == "Count Bar":
+            # The Digimon Mini's charge: five seconds of pressing, and the
+            # count is the whole result -- it goes to the attack table as it
+            # stands, through raw_charge.
+            self.strength = 0
+            self.count_bar = CountBar(self.ui_manager)
+            self.count_bar.start()
+        elif minigame == "RPM":
+            # The Digivice iC's charge: a rhythm held against the Digimon's
+            # own pace. The first pet's 0-10 bar is the one shown; every
+            # other pet reads the same presses against its own pace when
+            # the battle is simulated.
+            self.strength = 0
+            self.rpm_meter = RPM(self.ui_manager, pets[0] if pets else None)
+            self.rpm_meter.start()
+        elif minigame == "Count Match Color":
             # Color count match minigame (shake-based with attribute colors)
             self.rotation_index = 3
             if not self.count_match:
                 self.count_match = CountMatch(self.ui_manager, pets[0] if pets else None, self.animated_sprite)
             self.count_match.set_phase("count")
-        elif minigame == "Count Match":
-            # Count Match Classic (shake-based, 0-14 like Dummy Bar)
+        elif minigame == "Count Match Classic":
+            # Count Match Classic (shake-based, 0-14 like Dummy Bar).
+            # Needs the shared AnimatedSprite — without it the minigame runs
+            # but draws nothing during the charge phase.
             self.bar_level = 14
-            self.count_match_classic = CountMatchClassic(self.ui_manager)
-        elif minigame == "Count Match (Z)":
+            self.count_match_classic = CountMatchClassic(self.ui_manager, self.animated_sprite)
+        elif minigame == "Count Match Z":
             # Count Match Z (arrow-based with attribute scoring)
             if not self.count_match_z:
                 self.count_match_z = CountMatchZ(self.ui_manager, pets[0] if pets else None, self.animated_sprite)
@@ -886,14 +1712,20 @@ class BattleEncounter:
         elif minigame == "Dummy Bar" and self.dummy_charge:
             self.dummy_charge.update()
             self.strength = self.dummy_charge.strength
-        elif minigame == "Count Match (Color)" and self.count_match:
+        elif minigame == "Count Bar" and self.count_bar:
+            self.count_bar.update()
+            self.strength = self.count_bar.get_count()
+        elif minigame == "RPM" and self.rpm_meter:
+            self.rpm_meter.update()
+            self.strength = self.rpm_meter.get_bars()
+        elif minigame == "Count Match Color" and self.count_match:
             self.count_match.update()
             self.press_counter = self.count_match.get_press_counter()
             self.rotation_index = self.count_match.get_rotation_index()
-        elif minigame == "Count Match" and self.count_match_classic:
+        elif minigame == "Count Match Classic" and self.count_match_classic:
             self.count_match_classic.update()
             self.strength = self.count_match_classic.strength
-        elif minigame == "Count Match (Z)" and self.count_match_z:
+        elif minigame == "Count Match Z" and self.count_match_z:
             self.count_match_z.update()
             self.press_counter = self.count_match_z.get_press_counter()
         elif minigame == "Punch" and self.shake_punch:
@@ -907,11 +1739,17 @@ class BattleEncounter:
                 self.xai_roll.update()
                 if not self.xai_roll.rolling and not self.xai_roll.stopping:
                     self.xai_phase = 2
-                    pets = get_battle_targets()
+                    pets = self._current_targets()
+                    # Read the landed face from the roll rather than relying on
+                    # the input handler having set it: the roll also stops
+                    # itself after a few seconds with no press, and that result
+                    # has to reach the bar just the same. Covers the Seven
+                    # Switch too, whose forced frame is already applied here.
+                    self.xai_number = self.xai_roll.get_result()
                     self.xai_bar = XaiBar(
                         x=runtime_globals.SCREEN_WIDTH // 2 - int(152 * runtime_globals.UI_SCALE) // 2,
                         y=runtime_globals.SCREEN_HEIGHT // 2 - int(72 * runtime_globals.UI_SCALE) // 2 + int(48 * runtime_globals.UI_SCALE),
-                        xai_number=getattr(self, 'xai_number', game_globals.xai),
+                        xai_number=self.xai_number,
                         pet=pets[0] if pets else None
                     )
                     self.xai_bar.start()
@@ -921,6 +1759,15 @@ class BattleEncounter:
                     self._do_xai_bar_stop()
                 else:
                     self.xai_bar.update()
+                # The bar lingers for half a second after stopping so the
+                # player can see which color they landed on.
+                if getattr(self.xai_bar, 'stopped', False) and self.xai_bar.is_finished():
+                    # get_result already returns 0-3; "or 1" used to turn a
+                    # missed bar into a Good, which the protocol reads as a
+                    # better charge than it was.
+                    self.strength = self.xai_bar.get_result()
+                    self.xai_phase = 3
+                    self.bar_timer = pygame.time.get_ticks()
 
         # Check if minigame time is up and transition to battle
         time_up = False
@@ -930,6 +1777,12 @@ class BattleEncounter:
             time_up = self.shake_punch.is_time_up() or self.strength >= 20
         elif minigame in ["Xai Roll+Bar", "Xai Bar"]:
             time_up = self.xai_phase == 3
+        elif minigame == "Count Bar" and self.count_bar:
+            # Its own five seconds, not the bar-hold time the meters share.
+            time_up = self.count_bar.is_time_up()
+        elif minigame == "RPM" and self.rpm_meter:
+            # Its own clock as well: counting, blinking, then held.
+            time_up = self.rpm_meter.is_time_up()
         else:
             time_up = pygame.time.get_ticks() - self.bar_timer > combat_constants.BAR_HOLD_TIME_MS
         
@@ -937,80 +1790,71 @@ class BattleEncounter:
             runtime_globals.game_console.log("Entering battle phase")
             self.phase = "battle"
             self.frame_counter = 0
+            # The dummy charge is mashed with A/LCLICK; give mouse/touch
+            # players a 1s grace before LCLICK counts as "skip battle".
+            if minigame in ("Dummy Bar", "Count Bar", "RPM"):
+                self._skip_grace_until = pygame.time.get_ticks() + 1000
+            else:
+                self._skip_grace_until = 0
             self.animated_sprite.stop()
             self.battle_player.reset_frame_counters()
             # Reset projectile delta-time trackers for the new battle phase
             self._last_pet_proj_tick = pygame.time.get_ticks()
             self._last_enemy_proj_tick = pygame.time.get_ticks()
-            if minigame == "Count Match (Color)":
+            if minigame == "Count Match Color":
                 self.calculate_results()
-            elif minigame == "Count Match (Z)" and self.count_match_z:
-                self.minigame_result = self.count_match_z.calculate_result()
+            elif minigame == "Count Match Z" and self.count_match_z:
+                # The counter is the score, so take a final reading of it --
+                # `get_minigame_strength` turns it into the 0-3. It used to
+                # be pre-scored into a `minigame_result` attribute nothing
+                # has ever read, so the charge stayed 0 and **every battle on
+                # a Pendulum Z module went out as Bad** however well it was
+                # played.
+                self.press_counter = self.count_match_z.get_press_counter()
             self.calculate_combat_for_pairs()
 
     def _do_xai_bar_stop(self):
-        """Freeze the XAI bar, record strength, and advance to the attack phase."""
+        """Freeze the XAI bar; the result is applied after its 0.5s hold."""
         self.xai_bar.stop()
-        self.strength = self.xai_bar.get_result() or 1
-        self.xai_phase = 3
-        self.bar_timer = pygame.time.get_ticks()
 
     def calculate_results(self):
+        """Score the Count Match Color result into a band and a hit count."""
+        from ui.minigames.minigame_session import (count_match_rank,
+                                                   count_match_super_hits)
         self.correct_color = self.get_first_pet_attribute()
         self.final_color = self.rotation_index
         pets = self.battle_player.team1
         if not pets:
             return
 
-        # Calculate hits for the first pet only
-        pet = pets[0]
-        shakes = self.press_counter
-        attr_type = getattr(pet, "attribute", "")
+        # Only the first pet's attribute decides the colour ranking; the
+        # result is then shared by the whole team. The band is the minigame's
+        # own answer and the super-hit count follows from it and the stage,
+        # so each pet's row is looked up with its own stage later.
+        attribute = getattr(pets[0], "attribute", "") or ""
+        self.color_band = count_match_rank(self.final_color, attribute)
+        self.super_hits = count_match_super_hits(
+            self.final_color, attribute, getattr(pets[0], "stage", 1) or 1)
 
-
-        if shakes < 2:
-            hits = 0
-        else:
-            # Color mapping: 1=Red, 2=Yellow, 3=Blue
-            color = self.final_color
-            if attr_type in ("", "Va"):
-                if color == 1:      # Red
-                    hits = 3
-                elif color == 2:    # Yellow
-                    hits = 2
-                elif color == 3:    # Blue
-                    hits = 1
-                else:
-                    hits = 0
-            elif attr_type == "Da":
-                if color == 2:      # Yellow
-                    hits = 3
-                elif color == 1:    # Red
-                    hits = 2
-                elif color == 3:    # Blue
-                    hits = 1
-                else:
-                    hits = 0
-            elif attr_type == "Vi":
-                if color == 3:      # Blue
-                    hits = 3
-                elif color == 2:    # Yellow
-                    hits = 2
-                elif color == 1:    # Red
-                    hits = 1
-                else:
-                    hits = 0
-            else:
-                hits = 0
-
-        # Assign the same result to all pets
-        self.super_hits = hits
+        # The PENGZ variant (utils.pengz_count_match), when the first pet's
+        # module plays it: each PENGZ pet throws the pool row its attribute
+        # and G-Cells give the shakes; other pets keep the reading above.
+        self.pengz_patterns = {}
+        if pengz_count_match.applies(pets[0]):
+            shakes = getattr(self, "press_counter", 0) or 0
+            for pet in pets:
+                if pengz_count_match.applies(pet):
+                    row = pengz_count_match.score(pet, shakes)
+                    self.pengz_patterns[pet] = pengz_count_match.pattern(row)
+                    if pet is pets[0]:
+                        self.super_hits = pengz_count_match.super_hits(row)
+                        self.color_band = pengz_count_match.grade(self.super_hits)
 
     def get_first_pet_attribute(self):
         """
         Get the attribute of the first pet, used for determining attack color in charge phase.
         """
-        pet = get_battle_targets()[0]
+        pet = self._current_targets()[0]
         if pet.attribute in ["", "Va"]:
             return 1
         elif pet.attribute == "Da":
@@ -1019,6 +1863,57 @@ class BattleEncounter:
             return 3
         return 1
     
+    def _lost_pair(self, index: int, side: str) -> bool:
+        """Whether *side* ("team1"/"team2") lost the pair it fought.
+
+        ``GameBattle.winners`` is per-pair and is the right answer in a battle
+        with several pets -- but nothing has ever assigned it, so it stays
+        ``[None]`` in every mode and both result animations fell through to
+        the celebrating frame. Whoever had won, **both sides played their
+        happy animation**: a pet that had just been knocked out stood up and
+        cheered next to the device that killed it.
+
+        The whole-battle verdict is the fallback, which is what the
+        horizontal result layout in ``draw_pets`` already reads. It also
+        covers an index the per-pair list does not have, since a team of one
+        pet can face several enemies.
+        """
+        winners = self.battle_player.winners
+        winner = winners[index] if index < len(winners) else None
+        if winner is not None:
+            return winner != side
+        if self.victory_status == "Victory":
+            return side == "team2"
+        if self.victory_status == "Defeat":
+            return side == "team1"
+        return False
+
+    def _expire_battle_effects(self, defeat=False):
+        """Count down this module's battle effects (`status_boost` items):
+        after the area's boss, or after every battle without sequential
+        rounds; where battle items are used every round (`battle_item_use`
+        "round", the iC's weapons), after every round, a lost one too. A
+        defeat elsewhere leaves them for the next attempt."""
+        from utils import battle_items
+        round_items = battle_items.item_use_timing(self.module) == battle_items.BATTLE_ITEM_USE_ROUND
+        if defeat and not round_items:
+            return
+        if not (self.boss or not self.module.battle_sequential_rounds or round_items):
+            return
+        to_remove = []
+        for status, effect in game_globals.battle_effects.items():
+            # Only decrement boosts for this module
+            if "module" in effect and effect["module"] != self.module.name:
+                continue
+            if "boost_time" in effect:
+                effect["boost_time"] -= 1
+                if effect["boost_time"] <= 0:
+                    to_remove.append(status)
+        if to_remove:
+            runtime_globals.game_console.log(f"[BattleEncounter] Removing expired boosts: {', '.join(to_remove)}")
+        for status in to_remove:
+            del game_globals.battle_effects[status]
+
     def process_battle_results(self):
         """
         Processes the results of a global protocol battle using the new log structure.
@@ -1027,14 +1922,22 @@ class BattleEncounter:
         if self.pvp_mode:
             runtime_globals.game_console.log("[BattleEncounter] PvP battle completed - no experience awarded")
             return
-            
+
+        # Friends are NOT registered here: this runs whatever the outcome, and
+        # a Friend is only won by beating it. See update_result().
+
+        # A win pays the round's biggest currency reward, once (below).
+        self.currency_reward = None
+
         # If defeat, no XP for anyone
         if self.victory_status == "Defeat":
             self.battle_player.xp = 0
             self.battle_player.bonus = 0
             # Call finish_battle here to update DP, battle number, and win rate for a loss.
             for i, pet in enumerate(self.battle_player.team1):
-                pet.finish_battle(self.victory_status == "Victory", self.battle_player.team2[0], self.area, (self.boss or not self.module.battle_sequential_rounds), is_special_encounter=self.is_special_encounter)
+                pet.finish_battle(self.victory_status == "Victory", self.battle_player.team2[0], self.area, (self.boss or not self.module.battle_sequential_rounds), is_special_encounter=self.is_special_encounter, enemy_module=self.module.name)
+            self._battle_vital_values(False)
+            self._expire_battle_effects(defeat=True)
             return
 
         # If victory, calculate XP for winners and bonus
@@ -1060,38 +1963,88 @@ class BattleEncounter:
             else:
                 self.battle_player.level_up[i] = False
 
-            pet.finish_battle(self.victory_status == "Victory", self.battle_player.team2[0], self.area, (self.boss or not self.module.battle_sequential_rounds), is_special_encounter=self.is_special_encounter)
+            pet.finish_battle(self.victory_status == "Victory", self.battle_player.team2[0], self.area, (self.boss or not self.module.battle_sequential_rounds), is_special_encounter=self.is_special_encounter, enemy_module=self.module.name)
+        self._battle_vital_values(True)
 
         # --- Prize logic for Victory ---
+        # One prize is drawn at random from those the round's enemies carry
+        # (an item, or a card pack), then its drop chance is rolled.
         self.prize_item = None
+        self.prize_pack = None
         if self.victory_status == "Victory":
-            # Collect all enemies with a prize
-            prize_enemies = [e for e in self.battle_player.team2 if hasattr(e, "prize") and e.prize]
-            if prize_enemies:
-                chosen_enemy = random.choice(prize_enemies)
-                prize_name = getattr(chosen_enemy, "prize", None)
-                if prize_name and hasattr(self.module, "items") and self.module.items:
+            prizes = []
+            for e in self.battle_player.team2:
+                if getattr(e, "prize", None):
+                    prizes.append((e, "item", e.prize))
+                if getattr(e, "prize_card_pack", None):
+                    prizes.append((e, "card_pack", e.prize_card_pack))
+            if prizes:
+                chosen_enemy, kind, prize_name = random.choice(prizes)
+                chance = getattr(chosen_enemy, "prize_chance", None)
+                chance = 100 if chance is None else chance
+                if random.random() * 100 >= chance:
+                    runtime_globals.game_console.log(
+                        f"[BattleEncounter] {prize_name} did not drop ({chance}%)")
+                elif kind == "card_pack":
+                    from utils.card_utils import announce_cards, find_pack, open_pack
+                    cards = open_pack(self.module.name, prize_name)
+                    if cards:
+                        self.prize_pack = find_pack(self.module.name, prize_name)
+                        announce_cards(cards, self.module.name, prize_name, wait_for_main=True)
+                elif hasattr(self.module, "items") and self.module.items:
                     matching_items = [item for item in self.module.items if item.name == prize_name]
                     if matching_items:
                         self.prize_item = random.choice(matching_items)
                         inventory_utils.add_to_inventory(self.prize_item.id, 1)
                         runtime_globals.game_console.log(f"Received item: {self.prize_item.name}")
 
-        # --- Remove expired boosts if boss or not sequential rounds ---
-        if self.boss or not self.module.battle_sequential_rounds:
-            to_remove = []
-            for status, effect in game_globals.battle_effects.items():
-                # Only decrement boosts for this module
-                if "module" in effect and effect["module"] != self.module.name:
-                    continue
-                if "boost_time" in effect:
-                    effect["boost_time"] -= 1
-                    if effect["boost_time"] <= 0:
-                        to_remove.append(status)
-            if to_remove:
-                runtime_globals.game_console.log(f"[BattleEncounter] Removing expired boosts: {', '.join(to_remove)}")
-            for status in to_remove:
-                del game_globals.battle_effects[status]
+            # --- Recruits: a friend-flagged adventure enemy becomes a Friend
+            # when beaten (Digimon World's recruits); special encounters
+            # register theirs when the battle ends ---
+            if not self.is_special_encounter:
+                self._register_round_friends()
+
+            # --- Currency for Victory: the biggest reward among the round's
+            # enemies, paid once however many there were ---
+            from utils import currency_utils
+            currency, amount = currency_utils.battle_reward(
+                [e for e in self.battle_player.team2 if e is not None])
+            if amount > 0:
+                paid = currency_utils.add_currency(self.module.name, currency, amount)
+                self.currency_reward = (currency, paid)
+                runtime_globals.game_console.log(
+                    f"[BattleEncounter] Paid {paid} {currency} for the win")
+
+        self._expire_battle_effects()
+
+    #: How long the battle screen holds after the killing blow. The result
+    #: used to replace it in the same frame the last projectile landed, so
+    #: the shot that ended the fight was never seen and the HP bar jumped
+    #: from full to empty -- on every line, not just the ones being worked on.
+    BATTLE_END_HOLD_FRAMES = int(constants.FRAME_RATE * 0.9)
+    #: And a little longer while the bar is still draining, but never past
+    #: this: a bar that somehow never settles must not strand the battle.
+    BATTLE_END_HOLD_MAX_FRAMES = int(constants.FRAME_RATE * 2.0)
+
+    def _request_battle_end(self):
+        """Note that the battle is decided; the hold does the rest.
+
+        Called instead of setting the phase directly, from all three places
+        that can end a fight -- the HP check and either side's projectiles.
+        Idempotent, because more than one of them can fire on the same frame.
+        """
+        if self._battle_end_frames is None:
+            self._battle_end_frames = 0
+
+    def _battle_end_ready(self):
+        """Has the last blow finished playing?"""
+        held = self._battle_end_frames
+        if held < self.BATTLE_END_HOLD_FRAMES:
+            return False
+        if held >= self.BATTLE_END_HOLD_MAX_FRAMES:
+            return True
+        bar = getattr(self, "hp_bar", None)
+        return not (bar is not None and bar.is_animating())
 
     def update_battle(self):
         self.battle_player.update()
@@ -1104,7 +2057,11 @@ class BattleEncounter:
         # Process attacks based on enemy_first flag
         # For DCom battles: enemy attacks first (enemy_first=True)
         # For normal PvP/battles: player attacks first (enemy_first=False)
-        if self.enemy_first:
+        # Nothing new is thrown once the battle is decided -- the hold is for
+        # watching the blow that decided it, not for fitting another round in.
+        if self._battle_end_frames is not None:
+            pass
+        elif self.enemy_first:
             # Enemy attacks first (DCom V2 protocol - device2 initiates)
             for i in range(len(self.battle_player.team2)):
                 if self.battle_player.turns[i] <= self.turn_limit and self.battle_player.team2_shot[i] and self.battle_player.phase[i] == "enemy_attack":
@@ -1135,21 +2092,55 @@ class BattleEncounter:
             # For PvP, check if simulation is complete or if we've run out of battle log entries
             max_turn = max(self.battle_player.turns)
             battle_log_length = len(self.global_battle_log.battle_log) if hasattr(self.global_battle_log, 'battle_log') else 0
-            
+
+            # Every lane plays the log out. Lanes keep their own pace, so the
+            # first one past the last round is no reason to cut the others'
+            # final shots -- but a lane that cannot move gets a few seconds
+            # rather than holding the battle open.
+            if max_turn > battle_log_length:
+                self._log_overrun_frames += 1
+            log_played = (all(turn > battle_log_length for turn in self.battle_player.turns)
+                          or self._log_overrun_frames > 10 * constants.FRAME_RATE)
+            # A team falling on screen ends a DCom battle, whose log comes
+            # from the live exchange. Any other PvP battle replays a finished
+            # simulation, where one lane can knock out the last Digimon while
+            # a slower lane still owes a shot from the round before; the log
+            # running out is what ends it.
+            if getattr(self, 'is_dcom_mode', False):
+                knocked_out = (self.battle_player.team1_total_hp <= 0
+                               or self.battle_player.team2_total_hp <= 0)
+            else:
+                knocked_out = False
+
             # Check if all pets have finished their turns, reached the end of battle log, or a team is KO'd
-            if (self.battle_player.team1_total_hp <= 0 or self.battle_player.team2_total_hp <= 0 or
-                all(turn > self.turn_limit for turn in self.battle_player.turns) or 
-                max_turn > battle_log_length or
+            if (knocked_out or
+                all(turn > self.turn_limit for turn in self.battle_player.turns) or
+                log_played or
                 all(phase == "result" for phase in self.battle_player.phase)):
-                self.phase = "result" if not self.boss else "clear"
-                self.frame_counter = 0
-                runtime_globals.game_console.log(f"PvP battle finished: max_turn={max_turn}, log_length={battle_log_length}")
+                if self._battle_end_frames is None:
+                    runtime_globals.game_console.log(
+                        f"PvP battle finished: max_turn={max_turn}, "
+                        f"log_length={battle_log_length}")
+                self._request_battle_end()
         else:
             # For PvE, use HP-based termination
             if self.battle_player.team1_total_hp <= 0 or self.battle_player.team2_total_hp <= 0 or all(turn > self.turn_limit for turn in self.battle_player.turns):
-                self.phase = "result" if not self.boss else "clear"
+                if self._battle_end_frames is None:
+                    runtime_globals.game_console.log(
+                        "All pairs finished battle, entering result phase")
+                self._request_battle_end()
+
+        # Held after the last blow so the hit animation and the HP bar drain
+        # can finish; the projectiles above keep updating throughout, so the
+        # shot that ends the fight lands on screen before the result arrives.
+        if self._battle_end_frames is not None:
+            self._battle_end_frames += 1
+            if self._battle_end_ready():
+                self._battle_end_frames = None
+                # Only a boss that was beaten gets the WIN/CLEAR; a lost boss
+                # fight used to play WIN before its LOSE.
+                self.phase = "clear" if (self.boss and self.victory_status == "Victory") else "result"
                 self.frame_counter = 0
-                runtime_globals.game_console.log("All pairs finished battle, entering result phase")
 
     def setup_pet_attack(self, pet):
         """
@@ -1226,17 +2217,59 @@ class BattleEncounter:
                    and self._has_special_frame(pet))
         self.battle_player.special_attack[pet_index] = is_crit
 
-        if self.module.battle_damage_limit < 3:
-            # DM20/PEN20/DM/DMC: 1-2 attack types, 70% atk_main / 30% atk_alt random
+        style = self._attack_animation_style()
+        forced = self._forced_attack_sprite()
+        if not forced and self._ic_native(pet):
+            # An iC's own Digimon draws by the iC's rule on any line.
+            style = "count_bar"
+        paired_count = paired_double = None
+        if forced:
+            # This wire draws one shot for every Digimon (DMOG).
+            atk_id = str(forced)
+        elif style == "count":
+            # DMOG/DMC: the shot is N copies of atk_main and nothing else --
+            # these wires never draw the alternate sprite.
+            atk_id = str(getattr(pet, "atk_main", 30))
+        elif style == "count_alt":
+            # PENOG: same one-sprite-per-damage rule, but a strong shot is
+            # drawn with atk_alt where the pet has one.
+            alt = getattr(pet, "atk_alt", 0) or 0
+            atk_id = str(alt if anim_hits >= 2 and alt > 0
+                         else getattr(pet, "atk_main", 30))
+        elif style == "paired":
+            # DM20/PEN20: see _paired_shot.
+            atk_id, paired_count, paired_double = self._paired_shot(pet, anim_hits)
+        elif style == "count_bar":
+            # DMM / IC: see _count_bar_sprite. Drawn by the paired branch
+            # below. The sprite is resolved here rather than after, because
+            # the iC's fourth value comes from a different folder.
+            (count_bar_sprite, atk_id, paired_count,
+             paired_double) = self._count_bar_sprite(
+                 pet, anim_hits, bool(getattr(attack_entry, "critical", False)))
+        elif style == "simple":
+            # DM20/PEN20: 1-2 attack types, 70% atk_main / 30% atk_alt random
             if getattr(pet, "atk_alt", 0) > 0 and random.random() < 0.3:
                 atk_id = str(pet.atk_alt)
             else:
                 atk_id = str(pet.atk_main)
+        if style not in ("count", "count_alt", "paired", "count_bar", "simple") and not forced:
+            # DMX/PENZ/INTERNAL_PVE: see _ladder_shot. The crit bank is a
+            # separate folder, so the sprite is resolved with the id.
+            atk_sprite, atk_id, ladder_count, ladder_double = self._ladder_sprite(
+                pet, anim_hits, bool(getattr(attack_entry, "critical", False)))
+            self._log_attack_choice("ours", pet, style, anim_hits, atk_id,
+                                    ladder_count, ladder_double)
         else:
-            # DMX/PENZ/INTERNAL_PVE: sprite selection based on hit count
-            # 1-2: atk_main, 3-4: atk_alt (fallback atk_main), 5: atk_alt2 (fallback atk_alt double/atk_main double)
-            atk_id = self._get_advanced_atk_id(pet, anim_hits)
-        atk_sprite = self.get_attack_sprite(pet, atk_id)
+            self._log_attack_choice("ours", pet, style, anim_hits, atk_id,
+                                    paired_count, paired_double)
+            atk_sprite = (count_bar_sprite if style == "count_bar"
+                          else self.get_attack_sprite(pet, atk_id))
+        if atk_sprite is None:
+            runtime_globals.game_console.log(
+                f"[BattleEncounter] pet has no drawable attack sprite "
+                f"({atk_id}); skipping its shot")
+            self.battle_player.shot_wait[pet_index] = True
+            return
 
         # Start position — store as character center Y so any sprite size is drawn centered
         y = self.get_y(pet_index, len(self.battle_player.team1)) + runtime_globals.PET_HEIGHT // 2
@@ -1245,7 +2278,7 @@ class BattleEncounter:
         # Target position
         if defender_idx < len(self.battle_player.team2):
             target_enemy = self.battle_player.team2[defender_idx]
-            target_x = self.get_team2_x(defender_idx) + (runtime_globals.PET_WIDTH * constants.BOSS_MULTIPLIER if self.boss else runtime_globals.PET_WIDTH) // 2
+            target_x = self.get_team2_x(defender_idx) + (runtime_globals.PET_WIDTH_BOSS if self.boss else runtime_globals.PET_WIDTH) // 2
             target_y = self.get_y(defender_idx, len(self.battle_player.team2)) + runtime_globals.PET_HEIGHT // 2
         else:
             target_x, target_y = x, y
@@ -1257,66 +2290,44 @@ class BattleEncounter:
         rotated_sprite = pygame.transform.rotate(atk_sprite, angle)
 
         self.battle_player.team1_projectiles[pet_index] = []
+        self._play_shot_sound(self.battle_player.team1_hp)
         s = runtime_globals.UI_SCALE
-        if self.module.battle_damage_limit < 3:
-            # DM20/PEN20/DM/DMC: 1 or 2 projectiles, scale2x for 2
+        if style in ("count", "count_alt"):
+            # One sprite per point of damage. A 2 is two shots, not one
+            # bigger one -- the device draws it that way.
+            offsets = self._count_offsets(anim_hits, s)
+            base_pos = [x, y - rotated_sprite.get_height() // 2]
+            base_tgt = [target_x, target_y - rotated_sprite.get_height() // 2]
+            self.battle_player.team1_projectiles[pet_index].append(
+                self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
+        elif style in ("paired", "count_bar"):
+            # DM20/PEN20: the count and the size come from the pair, not from
+            # the damage value itself.
+            if paired_double:
+                rotated_sprite = pygame.transform.scale2x(rotated_sprite.copy())
+            offsets = self._count_offsets(paired_count, s)
+            base_pos = [x, y - rotated_sprite.get_height() // 2]
+            base_tgt = [target_x, target_y - rotated_sprite.get_height() // 2]
+            self.battle_player.team1_projectiles[pet_index].append(
+                self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
+        elif style == "simple":
+            # DM20/PEN20: 1 or 2 projectiles, scale2x for 2
             if anim_hits >= 2:
                 rotated_sprite = pygame.transform.scale2x(rotated_sprite.copy())
             by = y - rotated_sprite.get_height() // 2
             bty = target_y - rotated_sprite.get_height() // 2
             self.battle_player.team1_projectiles[pet_index].append([rotated_sprite, [x, by], [target_x, bty], attack_entry])
         else:
-            # DMX/PENZ/INTERNAL_PVE: projectile patterns matching new sprite rules.
-            # The crit projectile is gated on the simulator's `critical` flag —
-            # not on dealt damage — so a buff-inflated dmg=5 doesn't accidentally
-            # use the crit sprite when the base pattern roll wasn't the max.
-            if bool(getattr(attack_entry, "critical", False)):
-                # Critical attack: prefer a dedicated atk_crit sprite (no scale2x needed).
-                # Fall back to the normal atk sprite scaled 2x when no crit sprite exists.
-                atk_alt2 = getattr(pet, "atk_alt_2", 0)
-                crit_sprite = self.get_crit_attack_sprite(pet, atk_alt2) if atk_alt2 and atk_alt2 > 0 else None
-                if crit_sprite:
-                    crit_sprite = pygame.transform.flip(crit_sprite, True, True)
-                    rotated_sprite = pygame.transform.rotate(crit_sprite, angle)
-                else:
-                    rotated_sprite = pygame.transform.scale2x(rotated_sprite.copy())
-                by = y - rotated_sprite.get_height() // 2
-                bty = target_y - rotated_sprite.get_height() // 2
-                self.battle_player.team1_projectiles[pet_index].append([rotated_sprite, [x, by], [target_x, bty], attack_entry])
-            elif anim_hits == 4:
-                # 2 atk_alt sprites, fallback: 3 atk_main sprites
-                if getattr(pet, "atk_alt", 0) > 0:
-                    offsets = [(0, 0), (-20*s, -10*s)]
-                else:
-                    offsets = [(0, 0), (-20*s, -10*s), (-40*s, 10*s)]
-                base_pos = [x, y - rotated_sprite.get_height() // 2]
-                base_tgt = [target_x, target_y - rotated_sprite.get_height() // 2]
-                self.battle_player.team1_projectiles[pet_index].append(
-                    self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
-            elif anim_hits == 3:
-                # 1 atk_alt sprite, fallback: 3 atk_main sprites
-                if getattr(pet, "atk_alt", 0) > 0:
-                    by = y - rotated_sprite.get_height() // 2
-                    bty = target_y - rotated_sprite.get_height() // 2
-                    self.battle_player.team1_projectiles[pet_index].append([rotated_sprite.copy(), [x, by], [target_x, bty], attack_entry])
-                else:
-                    offsets = [(0, 0), (-20*s, -10*s), (-40*s, 10*s)]
-                    base_pos = [x, y - rotated_sprite.get_height() // 2]
-                    base_tgt = [target_x, target_y - rotated_sprite.get_height() // 2]
-                    self.battle_player.team1_projectiles[pet_index].append(
-                        self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
-            elif anim_hits == 2:
-                # 2 atk_main sprites
-                offsets = [(0, 0), (-20*s, -10*s)]
-                base_pos = [x, y - rotated_sprite.get_height() // 2]
-                base_tgt = [target_x, target_y - rotated_sprite.get_height() // 2]
-                self.battle_player.team1_projectiles[pet_index].append(
-                    self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
-            else:
-                # 1 atk_main sprite
-                by = y - rotated_sprite.get_height() // 2
-                bty = target_y - rotated_sprite.get_height() // 2
-                self.battle_player.team1_projectiles[pet_index].append([rotated_sprite.copy(), [x, by], [target_x, bty], attack_entry])
+            # DMX/PENZ/INTERNAL_PVE: see _ladder_shot. The count and the size
+            # come with the sprite, so the crit sprite is already loaded and
+            # only a pet without one needs the double.
+            if ladder_double:
+                rotated_sprite = pygame.transform.scale2x(rotated_sprite.copy())
+            offsets = self._count_offsets(ladder_count, s)
+            base_pos = [x, y - rotated_sprite.get_height() // 2]
+            base_tgt = [target_x, target_y - rotated_sprite.get_height() // 2]
+            self.battle_player.team1_projectiles[pet_index].append(
+                self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
 
     def setup_enemy_attack(self, enemy):
         """
@@ -1377,8 +2388,8 @@ class BattleEncounter:
         # the AttackLog (set when the BASE pattern damage equals 5, before
         # buffs/level bonuses). Pet must also have a SPECIAL frame and the
         # module must allow the slide visual.
+        entry_is_crit = bool(any(getattr(a, "critical", False) for a in attack_entries))
         if enemy_index < len(self.battle_player.special_attack_enemy):
-            entry_is_crit = bool(any(getattr(a, "critical", False) for a in attack_entries))
             self.battle_player.special_attack_enemy[enemy_index] = (
                 entry_is_crit
                 and self.module.enable_special_attack_sprite
@@ -1395,26 +2406,90 @@ class BattleEncounter:
                     # Don't show hit info during attack phase, only during charge
         
         # Choose attack sprite based on protocol/ruleset
-        if self.module.battle_damage_limit < 3:
-            # DM20/PEN20/DM/DMC: 1-2 attack types, 70% atk_main / 30% atk_alt random
+        style = self._attack_animation_style()
+        forced = self._forced_attack_sprite()
+        if not forced and self._ic_native(enemy):
+            # An iC's own Digimon draws by the iC's rule on any line.
+            style = "count_bar"
+        paired_count = paired_double = None
+        if forced:
+            # This wire draws one shot for every Digimon (DMOG).
+            atk_id = str(forced)
+        elif style == "count":
+            # DMOG/DMC: the shot is N copies of atk_main and nothing else.
+            atk_id = str(getattr(enemy, "atk_main", 30))
+        elif style == "count_alt":
+            # PENOG: a strong shot is drawn with atk_alt where it has one.
+            alt = getattr(enemy, "atk_alt", 0) or 0
+            atk_id = str(alt if anim_hits >= 2 and alt > 0
+                         else getattr(enemy, "atk_main", 30))
+        elif style == "paired":
+            # DM20/PEN20: see _paired_shot.
+            atk_id, paired_count, paired_double = self._paired_shot(enemy, anim_hits)
+        elif style == "count_bar":
+            # DMM / IC: see _count_bar_sprite. Drawn by the paired branch
+            # below, and resolved here because the iC's fourth value comes
+            # from a different folder.
+            (count_bar_sprite, atk_id, paired_count,
+             paired_double) = self._count_bar_sprite(enemy, anim_hits,
+                                                     entry_is_crit)
+        elif style == "simple":
+            # DM20/PEN20: 1-2 attack types, 70% atk_main / 30% atk_alt random
             atk_alt = getattr(enemy, "atk_alt", None)
             if atk_alt is not None and atk_alt > 0 and random.random() < 0.3:
                 atk_id = str(atk_alt)
             else:
                 atk_id = str(getattr(enemy, "atk_main", 30))
+        if style not in ("count", "count_alt", "paired", "count_bar", "simple") and not forced:
+            # DMX/PENZ/INTERNAL_PVE: see _ladder_shot.
+            base_sprite, atk_id, ladder_count, ladder_double = self._ladder_sprite(
+                enemy, anim_hits, entry_is_crit)
+            self._log_attack_choice("device", enemy, style, anim_hits, atk_id,
+                                    ladder_count, ladder_double)
         else:
-            # DMX/PENZ/INTERNAL_PVE: sprite selection based on hit count
-            atk_id = self._get_advanced_atk_id(enemy, anim_hits)
-        base_sprite = self.get_attack_sprite(enemy, atk_id)
+            self._log_attack_choice("device", enemy, style, anim_hits, atk_id,
+                                    paired_count, paired_double)
+            # A count-bar Hyper may come from the crit bank, which an id
+            # lookup in the ordinary bank would miss.
+            base_sprite = (count_bar_sprite if style == "count_bar"
+                           else self.get_attack_sprite(enemy, atk_id))
+        if base_sprite is None:
+            # Nothing to draw at all: skip the volley rather than take the
+            # battle down with it.
+            runtime_globals.game_console.log(
+                f"[BattleEncounter] enemy has no drawable attack sprite "
+                f"({atk_id}); skipping its shot")
+            return
         base_sprite = pygame.transform.flip(base_sprite, True, False)
 
         y = self.get_y(enemy_index, len(self.battle_player.team2)) + runtime_globals.PET_HEIGHT // 2
-        x = self.get_team2_x(enemy_index) + (runtime_globals.PET_WIDTH * constants.BOSS_MULTIPLIER if self.boss else runtime_globals.PET_WIDTH) // 2
+        x = self.get_team2_x(enemy_index) + (runtime_globals.PET_WIDTH_BOSS if self.boss else runtime_globals.PET_WIDTH) // 2
+
+        # Once per turn, not once per target: a boss firing at several pets is
+        # still a single volley.
+        self._play_shot_sound(self.battle_player.team2_hp)
+
+        # A lone enemy (a boss) fires one volley at several pets: one slot per
+        # target, and its turn is lane 0's (update_battle_enemy_projectiles).
+        # One of several enemies fires once, from its own lane, and its shot
+        # stays in that lane's slot even when the simulator re-aimed it at
+        # another pet after its own opponent fell -- the slot is what ends
+        # the attacker's turn, and a target's slot can hold another enemy's
+        # shot in the same round.
+        # A replayed PvP battle (arena, WiFi) has no bosses: a lone opponent
+        # fired one shot a round from its own lane, like any other (an arena
+        # team of one against three).
+        own_lane = len(self.battle_player.team2) > 1 or (
+            self.pvp_mode and not self.boss and not getattr(self, "is_dcom_mode", False))
+        if own_lane:
+            self.battle_player.team2_projectiles[enemy_index] = []
 
         # For each attack entry (boss may attack multiple pets in one turn)
         for attack_entry in attack_entries:
             defender_idx = attack_entry.defender if attack_entry else 0
-            self.battle_player.team2_projectiles[defender_idx] = []
+            slot = enemy_index if own_lane else defender_idx
+            if not own_lane:
+                self.battle_player.team2_projectiles[slot] = []
             # Target position
             if defender_idx < len(self.battle_player.team1):
                 target_pet_x = self.get_team1_x(defender_idx) - (runtime_globals.PET_WIDTH // 2)
@@ -1429,67 +2504,40 @@ class BattleEncounter:
 
             # Add projectile for this attack based on protocol/ruleset
             s = runtime_globals.UI_SCALE
-            if self.module.battle_damage_limit < 3:
-                # DM20/PEN20/DM/DMC: 1 or 2 projectiles, scale2x for 2
+            if style in ("count", "count_alt"):
+                # One sprite per point of damage, mirrored because the enemy
+                # fires the other way.
+                offsets = self._count_offsets(anim_hits, s, mirrored=True)
+                base_pos = [x, y - rotated_sprite.get_height() // 2]
+                base_tgt = [target_pet_x, target_pet_y - rotated_sprite.get_height() // 2]
+                self.battle_player.team2_projectiles[slot].append(
+                    self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
+            elif style in ("paired", "count_bar"):
+                # DM20/PEN20, mirrored because the enemy fires the other way.
+                if paired_double:
+                    rotated_sprite = pygame.transform.scale2x(rotated_sprite)
+                offsets = self._count_offsets(paired_count, s, mirrored=True)
+                base_pos = [x, y - rotated_sprite.get_height() // 2]
+                base_tgt = [target_pet_x, target_pet_y - rotated_sprite.get_height() // 2]
+                self.battle_player.team2_projectiles[slot].append(
+                    self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
+            elif style == "simple":
+                # DM20/PEN20: 1 or 2 projectiles, scale2x for 2
                 if anim_hits >= 2:
                     rotated_sprite = pygame.transform.scale2x(rotated_sprite)
                 by = y - rotated_sprite.get_height() // 2
                 bty = target_pet_y - rotated_sprite.get_height() // 2
-                self.battle_player.team2_projectiles[defender_idx].append([rotated_sprite, [x, by], [target_pet_x, bty], attack_entry])
+                self.battle_player.team2_projectiles[slot].append([rotated_sprite, [x, by], [target_pet_x, bty], attack_entry])
             else:
-                # DMX/PENZ/INTERNAL_PVE: projectile patterns matching new sprite rules.
-                # Crit sprite/scale2x is gated on the simulator's `critical`
-                # flag (set when the BASE pattern damage equals the module's
-                # max), not on dealt damage which can be inflated by buffs.
-                if bool(getattr(attack_entry, "critical", False)):
-                    # Critical attack: prefer a dedicated atk_crit sprite (no scale2x needed).
-                    # Fall back to the normal atk sprite scaled 2x when no crit sprite exists.
-                    atk_alt2 = getattr(enemy, "atk_alt_2", 0)
-                    crit_sprite = self.get_crit_attack_sprite(enemy, atk_alt2) if atk_alt2 and atk_alt2 > 0 else None
-                    if crit_sprite:
-                        crit_sprite = pygame.transform.flip(crit_sprite, True, False)
-                        rotated_sprite = pygame.transform.rotate(crit_sprite, angle)
-                    else:
-                        rotated_sprite = pygame.transform.scale2x(rotated_sprite)
-                    by = y - rotated_sprite.get_height() // 2
-                    bty = target_pet_y - rotated_sprite.get_height() // 2
-                    self.battle_player.team2_projectiles[defender_idx].append([rotated_sprite, [x, by], [target_pet_x, bty], attack_entry])
-                elif anim_hits == 4:
-                    # 2 atk_alt sprites, fallback: 3 atk_main sprites
-                    atk_alt = getattr(enemy, "atk_alt", None)
-                    if atk_alt is not None and atk_alt > 0:
-                        offsets = [(0, 0), (20*s, 10*s)]
-                    else:
-                        offsets = [(0, 0), (20*s, 10*s), (40*s, -10*s)]
-                    base_pos = [x, y - rotated_sprite.get_height() // 2]
-                    base_tgt = [target_pet_x, target_pet_y - rotated_sprite.get_height() // 2]
-                    self.battle_player.team2_projectiles[defender_idx].append(
-                        self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
-                elif anim_hits == 3:
-                    # 1 atk_alt sprite, fallback: 3 atk_main sprites
-                    atk_alt = getattr(enemy, "atk_alt", None)
-                    if atk_alt is not None and atk_alt > 0:
-                        by = y - rotated_sprite.get_height() // 2
-                        bty = target_pet_y - rotated_sprite.get_height() // 2
-                        self.battle_player.team2_projectiles[defender_idx].append([rotated_sprite, [x, by], [target_pet_x, bty], attack_entry])
-                    else:
-                        offsets = [(0, 0), (20*s, 10*s), (40*s, -10*s)]
-                        base_pos = [x, y - rotated_sprite.get_height() // 2]
-                        base_tgt = [target_pet_x, target_pet_y - rotated_sprite.get_height() // 2]
-                        self.battle_player.team2_projectiles[defender_idx].append(
-                            self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
-                elif anim_hits == 2:
-                    # 2 atk_main sprites
-                    offsets = [(0, 0), (20*s, 10*s)]
-                    base_pos = [x, y - rotated_sprite.get_height() // 2]
-                    base_tgt = [target_pet_x, target_pet_y - rotated_sprite.get_height() // 2]
-                    self.battle_player.team2_projectiles[defender_idx].append(
-                        self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
-                else:
-                    # 1 atk_main sprite
-                    by = y - rotated_sprite.get_height() // 2
-                    bty = target_pet_y - rotated_sprite.get_height() // 2
-                    self.battle_player.team2_projectiles[defender_idx].append([rotated_sprite, [x, by], [target_pet_x, bty], attack_entry])
+                # DMX/PENZ/INTERNAL_PVE: see _ladder_shot. An enemy fires the
+                # other way, so the spread is mirrored.
+                if ladder_double:
+                    rotated_sprite = pygame.transform.scale2x(rotated_sprite)
+                offsets = self._count_offsets(ladder_count, s, mirrored=True)
+                base_pos = [x, y - rotated_sprite.get_height() // 2]
+                base_tgt = [target_pet_x, target_pet_y - rotated_sprite.get_height() // 2]
+                self.battle_player.team2_projectiles[slot].append(
+                    self._combine_projectile_sprites(rotated_sprite, offsets, base_pos, base_tgt, attack_entry))
 
     def _combine_projectile_sprites(self, sprite, offsets, base_pos, base_target, attack_entry):
         """Combine a sprite rendered at multiple offsets into a single projectile entry."""
@@ -1538,7 +2586,6 @@ class BattleEncounter:
             if len(main_data) == 0:
                 continue
 
-            # Move projectiles
             done = True
             for sprite_data in main_data:
                 sprite, pos, target, attack_entry = sprite_data
@@ -1551,14 +2598,20 @@ class BattleEncounter:
             if done:
                 defender_idx = attack_entry.defender
                 hit = attack_entry.hit
-                damage = attack_entry.damage
+                # `damage` is the attack-type id on some wires -- it is what
+                # the projectiles are counted from. The HP it costs is a
+                # separate scale there (a DMX critical is type 5 but takes
+                # 10 HP), so spend hp_damage when the log carries one.
+                damage = attack_entry.hp_damage
+                if damage is None:
+                    damage = attack_entry.damage
 
                 # Play hit or miss sound and animation
                 self.battle_player.shot_wait[i] = True
                 if hit:
                     enemy = self.battle_player.team2[defender_idx]
                     enemy_y = self.get_y(defender_idx, len(self.battle_player.team2))
-                    enemy_x = self.get_team2_x(defender_idx) + (runtime_globals.PET_WIDTH * constants.BOSS_MULTIPLIER if self.boss else runtime_globals.PET_WIDTH) // 2
+                    enemy_x = self.get_team2_x(defender_idx) + (runtime_globals.PET_WIDTH_BOSS if self.boss else runtime_globals.PET_WIDTH) // 2
                     self.hit_animations.append([0, [enemy_x, enemy_y + (16 * runtime_globals.UI_SCALE)]])
                     runtime_globals.game_sound.play("attack_hit")
 
@@ -1582,8 +2635,7 @@ class BattleEncounter:
 
         # Check if all pets/enemies are in result phase
         if all(phase == "result" for phase in self.battle_player.phase):
-            self.phase = "result" if not self.boss else "clear"
-            self.frame_counter = 0
+            self._request_battle_end()
 
     def update_battle_enemy_projectiles(self):
         if len(self.battle_player.team2_projectiles) == 0:
@@ -1601,7 +2653,6 @@ class BattleEncounter:
             if len(main_data) == 0:
                 continue
 
-            # Move projectiles
             done = True
             for sprite_data in main_data:
                 sprite, pos, target, attack_entry = sprite_data
@@ -1617,7 +2668,13 @@ class BattleEncounter:
                     index = 0
                 defender_idx = attack_entry.defender
                 hit = attack_entry.hit
-                damage = attack_entry.damage
+                # `damage` is the attack-type id on some wires -- it is what
+                # the projectiles are counted from. The HP it costs is a
+                # separate scale there (a DMX critical is type 5 but takes
+                # 10 HP), so spend hp_damage when the log carries one.
+                damage = attack_entry.hp_damage
+                if damage is None:
+                    damage = attack_entry.damage
                 self.battle_player.shot_wait[index] = True
                 if hit:
                     pet_y = self.get_y(defender_idx, len(self.battle_player.team1))
@@ -1642,8 +2699,7 @@ class BattleEncounter:
 
         # Check if all pets/enemies are in result phase
         if all(phase == "result" for phase in self.battle_player.phase):
-            self.phase = "result" if not self.boss else "clear"
-            self.frame_counter = 0
+            self._request_battle_end()
 
     def update_clear(self):
         """
@@ -1660,53 +2716,65 @@ class BattleEncounter:
             return True  # Always show PvP results
         if self.battle_player.xp > 0 or self.battle_player.bonus > 0:
             return True
-        if getattr(self, 'prize_item', None) is not None:
+        if getattr(self, 'prize_item', None) is not None or getattr(self, 'prize_pack', None):
+            return True
+        if getattr(self, 'currency_reward', None):
             return True
         if any(self.battle_player.level_up):
             return True
         # Check if any pet's module uses gcells and would gain/lose points
         for pet in self.battle_player.team1:
             pet_module = get_module(getattr(pet, 'module', self.module.name))
-            if getattr(pet_module, 'use_gcells', False):
-                if self.victory_status == "Victory":
-                    if getattr(pet_module, 'gcell_battle_win', 0) != 0:
-                        return True
-                else:
-                    if getattr(pet_module, 'gcell_battle_loose', 0) != 0:
-                        return True
+            if gcell_rules.gain(pet_module, pet, "battle",
+                                won=self.victory_status == "Victory",
+                                special=self.is_special_encounter):
+                return True
         return False
 
     def update_result(self):
         """
         Update logic for the result phase, handles victory or defeat actions.
         """
-        # Skip the result screen entirely if there are no rewards to show
-        if self.result_timer == 0 and not self._has_result_rewards():
-            runtime_globals.game_console.log("[BattleEncounter] No rewards to display, skipping result screen")
-            # Still need to run the post-result logic (progression, unlocks, etc.)
-            # Jump the timer past the wait threshold to fall through immediately
-            self.result_timer = int(120 * (constants.FRAME_RATE / 30))
+        wait = int(120 * (constants.FRAME_RATE / 30))
+        # Nothing to list: the empty reward panel is skipped, but the WIN or
+        # LOSE banner still plays first. Skipping the whole screen meant a
+        # loss (no Exp, no prize) never showed its LOSE. A draw, which has no
+        # banner, keeps the panel that says DRAW.
+        if (self.result_timer == 0 and self.victory_status in ("Victory", "Defeat")
+                and not self._has_result_rewards()):
+            runtime_globals.game_console.log("[BattleEncounter] No rewards to display: banner only")
+            self._result_banner_only = True
 
         # Result timer, frame-rate independent
         self.result_timer += 1
 
-        if self.result_timer < int(120 * ( constants.FRAME_RATE / 30)):
-            # pisca aviso clear
-            return
+        if self.result_timer < wait:
+            if not getattr(self, "_result_banner_only", False):
+                return
+            # Banner only: go on once it has played.
+            if not self.result_animation_started or self.animated_sprite.is_animation_playing():
+                return
 
         # For PvP battles, update per-pet PvP counters, run unlock checks, then
         # return to game after showing results. We maintain per-pet counters so
         # unlocks that rely on PvP wins/participation can reference them.
+        if self.pvp_mode and self.replay_return is not None:
+            # An arena replay only plays a stored result back: no counters,
+            # costs or unlocks, and back to the arena rather than the game.
+            runtime_globals.game_sound.play(
+                {"Victory": "happy", "Defeat": "fail"}.get(self.victory_status, "menu"))
+            self.finish_replay()
+            return
+
         if self.pvp_mode:
             # Play appropriate sound
             runtime_globals.game_sound.play("happy" if self.victory_status == "Victory" else "fail")
 
             # Update each local pet's PvP counters. Pets on team1 are the local
             # owner's pets in PvP mode.
+            connection_results = []
             for i, pet in enumerate(self.battle_player.team1):
                 try:
-                    pet.pvp_battles += 1
-                    pet._deduct_battle_cost()
                     # Determine if this pet won its pairing
                     if hasattr(self.battle_player, 'winners') and i < len(self.battle_player.winners):
                         winner = self.battle_player.winners[i]
@@ -1716,14 +2784,28 @@ class BattleEncounter:
                         # are not available
                         local_won = (self.victory_status == 'Victory')
 
-                    if local_won:
-                        pet.pvp_wins += 1
+                    # A battle like any other: the battle and win counts, the
+                    # cost, Reliability, defeat tags, G-Cells and injury
+                    # (GamePet.finish_versus), plus the connection's PvP counts.
+                    team2 = getattr(self.battle_player, 'team2', None) or []
+                    pet.finish_versus(local_won, opponent=team2[i] if i < len(team2) else None,
+                                      connection=True)
+                    connection_results.append((pet, local_won))
 
                     # Persist these counters to global save state via runtime globals
                     # so they'll be picked up on next autosave
                     runtime_globals.game_console.log(f"[PvP] Pet {getattr(pet,'name',i)} pvp_battles={pet.pvp_battles} pvp_wins={pet.pvp_wins}")
                 except Exception as e:
                     runtime_globals.game_console.log(f"[PvP] Error updating pet PvP counters: {e}")
+
+            # Connect Points and the modules' "connection" events.
+            try:
+                from utils.event_utils import after_connection
+                pvp_data = getattr(runtime_globals, "pvp_battle_data", None) or {}
+                after_connection(connection_results, pvp_data.get("opponent_device_version"),
+                                 battle_format=pvp_data.get("battle_format"))
+            except Exception as exc:
+                runtime_globals.game_console.log(f"[Events] connection trigger failed: {exc}")
 
             # Unlock logic for PvP: scan module unlock entries of type 'pvp' and
             # compare their "amount" to the pet owner's pvp_wins count.
@@ -1749,56 +2831,126 @@ class BattleEncounter:
         
         # Random encounters skip progression and return to game immediately
         if self.is_special_encounter:
+            # Beating a Friend encounter is the only way to win the Friend:
+            # it goes into the digidex and the module's Friend list, and the
+            # main game shows it celebrating on the way back. Losing registers
+            # nothing, so it stays in the pool for another attempt.
+            if self.victory_status == "Victory":
+                try:
+                    from utils.xros_utils import register_friend, friend_record
+                    from utils.utils_unlocks import check_encounter_unlocks
+                    for enemy in (self.battle_player.team2 or []):
+                        name = getattr(enemy, "name", None)
+                        if not name or not friend_record(self.module, name):
+                            continue
+                        # A raisable Digimon joins only from its own
+                        # friend-flagged encounter (a recruit).
+                        if not getattr(enemy, "friend", False) and \
+                                name in self.module.get_recruit_friends():
+                            continue
+                        if register_friend(self.module.name, name):
+                            runtime_globals.friend_celebration = {
+                                "name": name, "module": self.module.name}
+                        break
+                    # Friends register first, so an unlock counting them sees
+                    # the one just won.
+                    check_encounter_unlocks(self.module.name,
+                                            self.battle_player.team2)
+                except Exception as exc:
+                    runtime_globals.game_console.log(f"[Friend] register failed: {exc}")
+            if self.card_battle:
+                try:
+                    self._finish_card_battle()
+                except Exception as exc:
+                    runtime_globals.game_console.log(f"[CardBattle] rewards failed: {exc}")
+            if self.special_run and self.victory_status == "Victory" and self._advance_special_run():
+                return
             runtime_globals.game_sound.play("happy" if self.victory_status == "Victory" else "fail")
             self.return_to_main_scene()
             return
 
+        # Connect Points that count adventure battles (the Vital Bracelets'
+        # battle drops) and the module's "adventure" events
+        # (utils.event_utils), won or lost.
+        try:
+            from utils.event_utils import after_adventure
+            after_adventure(self.module.name, self.battle_player.team1,
+                            self.victory_status == "Victory", area=self.area)
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[Events] adventure trigger failed: {exc}")
+
         area_advanced = False
-        pets = get_battle_targets()
+        cleared_area = self.area
+        pets = get_battle_continue_targets()
+        # The saved round is the round of the furthest area reached
+        # (battle_area): a battle in an older area, replayed from the area
+        # selection, must not move it. Winning one used to write its round
+        # there, clearing one reset it to 1, and so did losing one.
+        progress_area = game_globals.battle_area.get(self.module.name, 1)
+        on_progress_area = self.area >= progress_area
         if self.victory_status == "Victory":
             if not self.boss:
-                if len(pets) == 0:
-                    # No more pets capable of continuing the battle
-                    runtime_globals.game_sound.play("fail")
-                    self._start_retire_animation()
-                    return
+                # The win is recorded first, even when it spent the last of
+                # the battle cost: retiring here used to lose the round won,
+                # the victory and its unlocks, and played "fail".
+                self.round += 1
+                # Check if the new round has enemies; if not, the area is cleared
+                next_versions = self.module.get_enemy_versions(self.area, self.round, special_encounter=self.is_special_encounter)
+                if not next_versions:
+                    # Area cleared — advance to next area
+                    cleared_area = self.area
+                    self.area += 1
+                    self.round = 1
+                    area_advanced = True
+                    target = self._next_open_area(self.area)
+                    if target is not None:
+                        self.area = target
+                        if self.area > progress_area:
+                            game_globals.battle_round[self.module.name] = self.round
+                        game_globals.battle_area[self.module.name] = max(self.area, game_globals.battle_area.get(self.module.name, 0))
+                    # Fall through to total victories, unlocks, and return_to_main_scene
                 else:
-                    self.round += 1
-                    # Check if the new round has enemies; if not, the area is cleared
-                    next_versions = self.module.get_enemy_versions(self.area, self.round, special_encounter=self.is_special_encounter)
-                    if not next_versions:
-                        # Area cleared — advance to next area
-                        self.area += 1
-                        self.round = 1
-                        area_advanced = True
-                        if self.module.area_exists(self.area):
-                            game_globals.battle_round[self.module.name] = self.round
-                            game_globals.battle_area[self.module.name] = max(self.area, game_globals.battle_area.get(self.module.name, 0))
-                        # Fall through to total victories, unlocks, and return_to_main_scene
-                    else:
-                        if self.round > game_globals.battle_round[self.module.name]:
-                            game_globals.battle_round[self.module.name] = self.round
+                    if on_progress_area and self.round > game_globals.battle_round[self.module.name]:
+                        game_globals.battle_round[self.module.name] = self.round
+                    if len(pets) == 0 and self.module.battle_sequential_rounds:
+                        # Won, but no pet can pay for the next round: the run
+                        # ends here with this round kept.
+                        self._start_retire_animation()
+                        return
+                    if len(pets) > 0:
                         self.victory_status = None
-                        if self.module.battle_sequential_rounds:
-                            # Check if feeding phase should trigger before next round
-                            if self._should_trigger_feeding():
-                                self._start_feeding_phase()
-                                return
-                            self._check_retire_or_proceed()
+                    if len(pets) > 0 and self.module.battle_sequential_rounds:
+                        # Check if feeding phase should trigger before next round
+                        if self._should_trigger_feeding():
+                            self._start_feeding_phase()
                             return
+                        self._check_retire_or_proceed()
+                        return
             else:
                 # --- Unlock adventure items of the area just won ---
                 unlocks = getattr(self.module, "unlocks", None)
                 if isinstance(unlocks, list):
+                    # An unlock with a version is that version's (VBE's
+                    # area_<n>_ver_<v>, DMX's area_36_ver_4): the versions of
+                    # the pets that won, as the encounter is built with
+                    # version 1 whatever the area. No version is every
+                    # version, and so is 0 on a module with no version-0
+                    # Digimon (D-3's backgrounds). BAT-F9: any version's
+                    # clear granted every version's unlocks.
+                    pet_versions = {getattr(p, "version", None) for p in (self.battle_player.team1 or []) if p is not None}
+                    has_version_0 = any(m.get("version") == 0 for m in (self.module.get_all_monsters() or []))
                     for unlock in unlocks:
                         unlocked = False
-                        
+                        version = unlock.get("version")
+                        if version is not None and (version != 0 or has_version_0) and version not in pet_versions:
+                            continue
+
                         # Check for area-based unlocks
                         if unlock.get("type") == "adventure" and unlock.get("area") == self.area:
                             unlocked = True
-                        
+
                         # Check for boss-specific unlock keys
-                        elif unlock.get("type") == "adventure" and "name" in unlock:
+                        if not unlocked and unlock.get("type") == "adventure" and "name" in unlock:
                             unlock_name = unlock["name"]
                             # Check if any defeated enemy has this unlock key
                             for enemy in self.battle_player.team2:
@@ -1811,12 +2963,18 @@ class BattleEncounter:
                             unlock_item(self.module.name, "adventure", unlock["name"])
                             runtime_globals.game_console.log(f"[Adventure] Unlocked: {unlock['name']}")
 
+                cleared_area = self.area
                 self.area += 1
                 self.round = 1
                 area_advanced = True
 
-                if self.module.area_exists(self.area):
-                    game_globals.battle_round[self.module.name] = self.round
+                # A locked area is skipped, or not moved into when it is the
+                # last (_next_open_area).
+                target = self._next_open_area(self.area)
+                if target is not None:
+                    self.area = target
+                    if self.area > progress_area:
+                        game_globals.battle_round[self.module.name] = self.round
                     game_globals.battle_area[self.module.name] = max(self.area, game_globals.battle_area[self.module.name])
             
             # Increment total victories for this module
@@ -1843,17 +3001,55 @@ class BattleEncounter:
                 runtime_globals.game_console.log(f"[Battle] Error processing battle unlocks: {e}")
         else:
             runtime_globals.game_sound.play("fail")
-            # perdeu
-            game_globals.battle_round[self.module.name] = 1
+            # Lost: back to round 1 of the furthest area, when it was fought
+            # there.
+            if on_progress_area:
+                game_globals.battle_round[self.module.name] = 1
 
         if area_advanced:
-            omninet_service.claim_reward("adventure", f"adventure:{self.module.name}:{self.area - 1}")
+            # The module's "area_clear" events: DMXW promises a Friend
+            # battle to a pet that cleared the area (utils.event_utils).
+            try:
+                from utils.event_utils import after_battle
+                after_battle("area_clear", self.module.name, self.battle_player.team1, True,
+                             area=cleared_area)
+            except Exception as exc:
+                runtime_globals.game_console.log(f"[Events] area_clear trigger failed: {exc}")
+            # Adventure coin rewards (Progress Mode only; no-op otherwise).
+            # Special/random encounters already returned earlier, so anything
+            # here is real adventure progression.
+            style = getattr(self.module, 'adventure_style', 'Area Selection')
+            if style in ("Next and Reset", "Area Selection"):
+                from utils.reward_utils import (reward_area_clear,
+                                                reward_adventure_complete)
+                # 1 coin the first time an area is cleared by beating its boss.
+                if self.boss:
+                    reward_area_clear(self.module.name, cleared_area)
+                # 10 coins the first time the module's whole adventure is
+                # finished — i.e. the area just cleared was the last one.
+                if not self.module.area_exists(self.area):
+                    reward_adventure_complete(self.module.name)
 
         self.return_to_main_scene()
 
     #========================
     # Region: Feeding Phase
     #========================
+
+    def _next_open_area(self, area):
+        """The area progress moves into after clearing the one before `area`.
+
+        A locked area with a later one after it is skipped: it is a side
+        area that opens when its unlock is earned (World's Factorial Town
+        and Beetle Land, reached by Whamon's ferry and Seadramon's lake),
+        and then shows among the areas already passed. A locked area with
+        none after it (PENGZ's Stage F and Omega) is not moved into.
+        Returns None when there is no area to move into.
+        """
+        version = getattr(self, "version", None)
+        while self.module.area_exists(area) and not self.module.is_area_unlocked(area, version):
+            area += 1
+        return area if self.module.area_exists(area) else None
 
     def _should_trigger_feeding(self):
         """Check if the feeding phase should trigger before the next round."""
@@ -1907,8 +3103,7 @@ class BattleEncounter:
         for i, pet in enumerate(self.battle_player.team1):
             anim_toggle = (self.frame_counter + i * 5) // int(15 * constants.FRAME_RATE / 30) % 2
             frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.HAPPY.value
-            sprite = pet.get_sprite(frame_id)
-            sprite = pygame.transform.scale(sprite, (runtime_globals.PET_WIDTH, runtime_globals.PET_HEIGHT))
+            sprite = self._sized_pet_sprite(self._pet_frame(pet, frame_id))
             x = offset_x + i * spacing
             blit_with_cache(surface, sprite, (x, y))
 
@@ -1916,20 +3111,75 @@ class BattleEncounter:
     # Region: Retire Phase
     #========================
 
+    def _special_run_rounds(self):
+        """The special-encounter rounds of this run's area, in order."""
+        enemies = self.module._parse_battle_json(os.path.join(self.module.folder_path, "battle.json"))
+        return sorted({int(e.get("round", 1)) for e in enemies
+                       if e.get("special_encounter") and int(e.get("area", -1)) == int(self.area)})
+
+    def _advance_special_run(self) -> bool:
+        """After a won round of a battle run: pay its reward if this is the
+        round that pays it (`reward_round`, 0 for the last), and go on to the
+        next round. Returns whether the run goes on."""
+        run = self.special_run
+        rounds = self._special_run_rounds()
+        won = int(self.round)
+        last = rounds[-1] if rounds else won
+        pays = int(run.get("reward_round") or 0) or last
+        if won == pays and run.get("item"):
+            from utils.inventory_utils import get_item_by_name
+            item = get_item_by_name(self.module.name, run["item"])
+            if item is not None:
+                quantity = int(run.get("item_quantity") or 1)
+                inventory_utils.add_to_inventory(item.id, quantity)
+                runtime_globals.game_message.add_slide(
+                    f"{item.name} obtained!", (255, 255, 0), 56 * runtime_globals.UI_SCALE,
+                    runtime_globals.FONT_SIZE_SMALL)
+                runtime_globals.game_console.log(f"[Run] {run.get('name')}: {quantity}x {item.name}")
+        later = [r for r in rounds if r > won]
+        if not later:
+            return False
+        self.round = later[0]
+        self.victory_status = None
+        runtime_globals.game_console.log(f"[Run] {run.get('name')}: round {self.round}")
+        self._check_retire_or_proceed()
+        return True
+
     def _check_retire_or_proceed(self):
         """Check if any team1 pets can't battle the next round; if so, show retire menu."""
-        pets = get_battle_targets()
+        pets = get_battle_continue_targets()
         if len(pets) == 0:
             # No pets can continue at all
             runtime_globals.game_sound.play("fail")
             self._start_retire_animation()
             return
         # Check if any team1 pets lost eligibility
-        retiring = [p for p in self.battle_player.team1 if not p.can_battle()]
+        retiring = [p for p in self.battle_player.team1 if not p.can_continue_battle()]
         if retiring:
+            runtime_globals.game_console.log(
+                "[BattleEncounter] Retire check — "
+                + "; ".join(f"{p.name}: {p.battle_block_reason(entering=False)}" for p in retiring))
             self._start_retire_check_phase()
         else:
-            self.set_initial_state(round=self.round, area=self.area)
+            self._next_round()
+
+    def _next_round(self):
+        """Set up the next round; where the module uses battle items every
+        round (`battle_item_use` "round": the iC's coliseum), the list of
+        them comes first (the view shows it, `end_battle_items_and_proceed`
+        goes on)."""
+        from utils import battle_items
+        if (not self.pvp_mode
+                and battle_items.offers_items_now(self.module, False, get_battle_continue_targets())):
+            self.phase = "battle_items"
+            self.frame_counter = 0
+            runtime_globals.game_console.log("[BattleEncounter] Battle items offered before the round")
+            return
+        self.set_initial_state(round=self.round, area=self.area)
+
+    def end_battle_items_and_proceed(self):
+        """The player is done with the battle items: fight the round."""
+        self.set_initial_state(round=self.round, area=self.area)
 
     def _start_retire_check_phase(self):
         """Transition to the retire_check phase — menu is managed by the view."""
@@ -1945,7 +3195,7 @@ class BattleEncounter:
     def do_continue_battle(self):
         """Player chose to continue — proceed with remaining capable pets (called by view)."""
         runtime_globals.game_console.log("[BattleEncounter] Player chose to continue")
-        self.set_initial_state(round=self.round, area=self.area)
+        self._next_round()
 
     def _start_retire_animation(self):
         """Play the retire animation before returning to main scene."""
@@ -1983,8 +3233,7 @@ class BattleEncounter:
             else:
                 frame_id = PetFrame.LOSE.value
 
-            sprite = pet.get_sprite(frame_id)
-            sprite = pygame.transform.scale(sprite, (runtime_globals.PET_WIDTH, runtime_globals.PET_HEIGHT))
+            sprite = self._sized_pet_sprite(self._pet_frame(pet, frame_id))
 
             if not can_fight:
                 sprite = sprite.copy()
@@ -2003,10 +3252,15 @@ class BattleEncounter:
         """
         self.phase = "level"
         self.result_timer  = 0
+        self._result_banner_only = False
+        # A finished battle's hold must not carry into the next round.
+        self._battle_end_frames = None
+        self._log_overrun_frames = 0
         self.press_counter = 0
         self.final_color = 3
         self.correct_color = 0
         self.super_hits = 0
+        self.color_band = None
         self.frame_counter = 0
         self.enemies = []
         self.enemy_positions = []
@@ -2017,7 +3271,8 @@ class BattleEncounter:
         Main draw loop for the battle encounter, calls phase-specific draws.
         """
         # Hide HPBar during charge phase for cleaner minigame presentation
-        if self.phase not in ["charge", "result", "feeding", "retire_check", "retire_animation"]:
+        if self.phase not in ["charge", "result", "feeding", "battle_items", "retire_check",
+                              "retire_animation", "xros_select", "xros_anim"]:
             self.draw_health_bars(surface)
         #surface.blit(self.backgroundIm, (0, 0))
 
@@ -2028,6 +3283,10 @@ class BattleEncounter:
             self.draw_entry(surface)
         elif self.phase == "intimidate":
             self.draw_intimidate(surface)
+        elif self.phase == "xros_select":
+            self.draw_xros_select(surface)
+        elif self.phase == "xros_anim":
+            self.draw_xros_anim(surface)
         elif self.phase == "alert":
             self.draw_alert(surface)
         elif self.phase == "charge":
@@ -2038,7 +3297,7 @@ class BattleEncounter:
             self.draw_clear(surface)
         elif self.phase == "result":
             self.draw_result(surface)
-        elif self.phase == "feeding":
+        elif self.phase in ("feeding", "battle_items"):
             self.draw_feeding(surface)
         elif self.phase == "retire_check":
             self.draw_retire_check(surface)
@@ -2062,7 +3321,9 @@ class BattleEncounter:
         
         # Draw area/round text using scaled font
         from ui import ui_constants
-        if self.is_special_encounter:
+        if self.card_battle:
+            area_text = str(self.card_battle.get("name") or "BATTLE").upper()
+        elif self.is_special_encounter:
             area_text = "SPECIAL ENCOUNTER"
         else:
             adventure_style = getattr(self.module, 'adventure_style', 'Area Selection')
@@ -2115,49 +3376,76 @@ class BattleEncounter:
         """
         Draws the alert phase, showing readiness sprites using AnimatedSprite component.
         """
-        if self.module.ruleset == "penc":
+        # Do not reveal READY before the sound it is timed against has actually
+        # started (adventure only — pvp keeps the fixed-length alert).
+        if not self.pvp_mode and not getattr(self, "_ready_sound_started", True):
+            return
+
+        ready = READY_PHASE_MINIGAMES.get(
+            getattr(self.module, 'battle_minigame', ''))
+        instance = getattr(self, ready[0], None) if ready else None
+        if instance is not None:
             self.animated_sprite.stop()
-            # PenC ruleset: Count match minigame shows in both alert and charge phases
-            self.count_match.set_phase("ready")
-            self.count_match.draw(surface)
-            # Don't draw the animated sprite for count match - use only minigame version
+            # The minigame shows in both the alert and the charge phase, so
+            # draw only its version here.
+            instance.set_phase("ready")
+            instance.draw(surface)
         else:
-            # For other rulesets, use animated sprite ready animation
-            # Force stop any previous animation and setup alert animation
-            self.animated_sprite.stop()
-            
+            # For other rulesets, use animated sprite ready animation. The
+            # previous animation was already stopped when leaving intimidate;
+            # stopping again here every frame restarted (and re-loaded) the
+            # ready animation on each draw.
             if not self.animated_sprite.is_animation_playing():
-                duration = 1.5  # 1.5 second alert animation
-                # Use ready animation for other rulesets
+                # Match however long the phase is actually going to last, so
+                # the animation and the READY sound finish together.
+                duration = (getattr(self, "alert_duration_frames",
+                                    combat_constants.ALERT_DURATION_FRAMES)
+                            / max(1, game_globals.configuration.frame_rate))
                 self.animated_sprite.play_ready(duration)
-            
+
             # Draw the animated sprite
             self.animated_sprite.draw(surface)
 
     def draw_charge(self, surface):
         """
         Draws the charge phase, showing strength bar, minigame, or Xai roll.
+
+        Dispatches on the module's battle_minigame — the same setting
+        setup_charge/update_charge use — so a module whose ruleset and
+        minigame don't pair up (e.g. dmc ruleset with minigame "None") can't
+        hit a minigame instance that was never created. Each branch is also
+        None-guarded for the frame between phase entry and setup.
         """
-        # Draw enemies and pets as background for most rulesets
-        if self.module.ruleset != "vb":
+        minigame = getattr(self.module, 'battle_minigame', 'Dummy Bar')
+
+        # Punch/Mogera (shake punch) render full screen and draw their own
+        # pets, and Count Bar fills the screen with its RPM gauge; every other
+        # minigame draws over the battle roster.
+        full_screen = ((minigame in ("Punch", "Mogera") and self.shake_punch) or
+                       (minigame == "Count Bar" and self.count_bar) or
+                       (minigame == "RPM" and self.rpm_meter))
+        if not full_screen:
             self.draw_enemies(surface)
             self.draw_pets(surface)
-        
-        # Draw minigame UI on top
-        if self.module.ruleset == "dmc":
-            # DMC ruleset: Dummy charge minigame
+
+        if minigame == "Dummy Bar" and self.dummy_charge:
             self.dummy_charge.draw(surface)
-        elif self.module.ruleset == "penc":
-            # PenC ruleset: Count match minigame
+        elif minigame == "Count Bar" and self.count_bar:
+            self.count_bar.draw(surface)
+        elif minigame == "RPM" and self.rpm_meter:
+            self.rpm_meter.draw(surface)
+        elif minigame == "Count Match Color" and self.count_match:
             self.count_match.draw(surface)
-        elif self.module.ruleset == "vb":
-            # VB ruleset: Shake punch minigame (full screen, draws its own pets)
+        elif minigame == "Count Match Classic" and self.count_match_classic:
+            self.count_match_classic.draw(surface)
+        elif minigame == "Count Match Z" and self.count_match_z:
+            self.count_match_z.draw(surface)
+        elif minigame in ("Punch", "Mogera") and self.shake_punch:
             self.shake_punch.draw(surface)
-        elif self.module.ruleset == "dmx":
-            # DMX ruleset: XAI roll and bar
-            if self.xai_phase == 1:
+        elif minigame in ("Xai Roll+Bar", "Xai Bar"):
+            if self.xai_phase == 1 and self.xai_roll:
                 self.xai_roll.draw(surface)
-            elif self.xai_phase >= 2:
+            elif self.xai_phase >= 2 and self.xai_bar:
                 self.xai_bar.draw(surface)
 
     def draw_battle(self, surface):
@@ -2177,7 +3465,7 @@ class BattleEncounter:
         Draws the clear of the battle, showing clear sprites using AnimatedSprite component.
         This phase is only reached for boss battles - show win animation here.
         """
-        if self.boss:
+        if self.boss and self.victory_status == "Victory":
             # Use AnimatedSprite component for win animation during clear phase
             if not self.animated_sprite.is_animation_playing():
                 duration = 1.0  # 1 second win animation (will be followed by clear in result phase)
@@ -2206,6 +3494,9 @@ class BattleEncounter:
                 # For normal victory: play win for 2 seconds
                 duration = 2.0
                 self.animated_sprite.play_win(duration)
+            elif self.victory_status == "Draw":
+                # No device has a draw screen; the result panel says it.
+                pass
             else:
                 # For defeat: play lose for 2 seconds
                 duration = 2.0
@@ -2216,9 +3507,33 @@ class BattleEncounter:
         if self.animated_sprite.is_playing:
             # Draw the animated sprite
             self.animated_sprite.draw(surface)
+        elif getattr(self, "_result_banner_only", False):
+            # Nothing to list (update_result): no panel after the banner.
+            pass
         else:
             # Build UI components once (labels for title, pet rewards, and prize)
             if self.result_surface_cache is None:
+                # End any temporary evolution now: the result screen shows a
+                # brief X_1/X_2 "devolution" flash over the pet's slot and then
+                # the normal (pre-evolution) sprite, so the pet is already back
+                # to its real form when returning to the main game scene.
+                #
+                # With Battle Sequential Rounds a non-boss victory result leads
+                # into the NEXT round of the same encounter — the evolution is
+                # kept in that case and only reverted on the final result
+                # (boss / defeat / non-sequential battles).
+                battle_may_continue = (
+                    self.victory_status == "Victory"
+                    and not self.boss
+                    and getattr(self.module, 'battle_sequential_rounds', False)
+                )
+                reverted = []
+                if not battle_may_continue:
+                    reverted = self._clear_xros_forms()
+                self.xros_devolve_pets = set(reverted)
+                self.xros_devolve_timer = int(1.0 * constants.FRAME_RATE) if reverted else 0
+                self.xros_devolve_sprites = None
+
                 # Use UI constants for colors (not theme colors)
                 win_color = ui_constants.GREEN
                 lose_color = ui_constants.RED
@@ -2230,8 +3545,8 @@ class BattleEncounter:
                 height_scale = runtime_globals.SCREEN_HEIGHT / 240
                 
                 # Title label at top center (using global positioning)
-                title_text = "WIN" if self.victory_status == "Victory" else "LOSE"
-                title_color = win_color if self.victory_status == "Victory" else lose_color
+                title_text = {"Victory": "WIN", "Draw": "DRAW"}.get(self.victory_status, "LOSE")
+                title_color = {"Victory": win_color, "Draw": yellow_color}.get(self.victory_status, lose_color)
                 title_y = int(20 * height_scale)
                 
                 # Create title label (will be centered after rendering)
@@ -2260,13 +3575,15 @@ class BattleEncounter:
                     # Total width = all sprites + gaps between them
                     total_pets_width = (total * sprite_width) + ((total - 1) * gap_between_pets)
                     
-                    # If pets don't fit, scale them down
+                    # If pets don't fit, scale them down — snapped to the
+                    # pixel-perfect ladder so the shrunk sprites stay crisp.
                     available_width = runtime_globals.SCREEN_WIDTH - (2 * margin)
                     if total_pets_width > available_width:
-                        # Recalculate sprite size to fit
-                        total_pets_width = available_width
-                        sprite_width = (available_width - ((total - 1) * gap_between_pets)) // total
+                        from utils.sprite_utils import snap_pet_sprite_size
+                        sprite_width = snap_pet_sprite_size(
+                            (available_width - ((total - 1) * gap_between_pets)) // total)
                         sprite_height = sprite_width  # Keep square
+                        total_pets_width = (total * sprite_width) + ((total - 1) * gap_between_pets)
                 else:
                     # Single pet - just the sprite width
                     total_pets_width = sprite_width
@@ -2290,12 +3607,12 @@ class BattleEncounter:
                     
                     # Check if module uses G-Cells
                     if getattr(pet_module, 'use_gcells', False):
-                        # Calculate G-Cell points gained (from finish_battle logic)
-                        if self.victory_status == "Victory":
-                            gcell_points = getattr(pet_module, 'gcell_battle_win', 0)
-                        else:
-                            gcell_points = getattr(pet_module, 'gcell_battle_loose', 0)
-                        
+                        # The G-Cell points finish_battle gives, in the
+                        # module's style (utils.gcell_rules)
+                        gcell_points = gcell_rules.gain(
+                            pet_module, pet, "battle", won=self.victory_status == "Victory",
+                            special=self.is_special_encounter)
+
                         if gcell_points != 0:
                             # Use title font for doubled size
                             gcell_label = Label(0, current_y, f"GC {gcell_points:+d}", is_title=False, color_override=win_color if gcell_points > 0 else white_color, shadow_mode="full", custom_size=int(16*runtime_globals.UI_SCALE))
@@ -2323,7 +3640,10 @@ class BattleEncounter:
                         current_y += int(28 * height_scale)  # More spacing for larger font
                         
                         # Show experience gained
-                        exp_gained = self.battle_player.xp if self.victory_status == "Victory" else 0
+                        # What each pet was given: the experience and the
+                        # +10% all-alive bonus (it showed the first alone).
+                        exp_gained = (self.battle_player.xp + self.battle_player.bonus
+                                      if self.victory_status == "Victory" else 0)
                         
                         # Check if at max level
                         if i < len(self.battle_player.team1):
@@ -2345,30 +3665,61 @@ class BattleEncounter:
                 prize_y = runtime_globals.SCREEN_HEIGHT - int(35 * height_scale)
                 prize_label_x = int(20 * width_scale)
                 
-                if self.victory_status == "Victory" and getattr(self, "prize_item", None):
-                    prize_text = self.prize_item.name
-                    prize_value_color = ui_constants.GREEN
+                # No prize is simply nothing to report — "Prize: None" is just
+                # a line of clutter along the bottom of the result screen, so
+                # the row is left out entirely in that case.
+                prize_name = (getattr(self, "prize_item", None) and self.prize_item.name
+                              or (getattr(self, "prize_pack", None) or {}).get("name"))
+                if self.victory_status == "Victory" and prize_name:
+                    self.result_prize_label_text = Label(prize_label_x, prize_y, "Prize:", is_title=False, color_override=white_color, shadow_mode="full", custom_size=int(32*runtime_globals.UI_SCALE))
+                    self.result_prize_label_text.manager = self.ui_manager
+
+                    # Create the prize value label once and cache it
+                    prize_value_x = prize_label_x + int(8 * width_scale)  # Will be adjusted after rendering "Prize:" text
+                    self.result_prize_value_label = Label(prize_value_x, prize_y, prize_name, is_title=False, color_override=ui_constants.GREEN, shadow_mode="full", custom_size=int(32*runtime_globals.UI_SCALE))
+                    self.result_prize_value_label.manager = self.ui_manager
                 else:
-                    prize_text = "None"
-                    prize_value_color = white_color
-                
-                # Create separate labels for "Prize:" and the value with title font
-                self.result_prize_label_text = Label(prize_label_x, prize_y, "Prize:", is_title=False, color_override=white_color, shadow_mode="full", custom_size=int(32*runtime_globals.UI_SCALE))
-                self.result_prize_label_text.manager = self.ui_manager
-                
-                # Create the prize value label once and cache it
-                prize_value_x = prize_label_x + int(8 * width_scale)  # Will be adjusted after rendering "Prize:" text
-                self.result_prize_value_label = Label(prize_value_x, prize_y, prize_text, is_title=False, color_override=prize_value_color, shadow_mode="full", custom_size=int(32*runtime_globals.UI_SCALE))
-                self.result_prize_value_label.manager = self.ui_manager
+                    self.result_prize_label_text = None
+                    self.result_prize_value_label = None
+
+                # The currency the win paid, on the bottom row, or above the
+                # prize when there is one.
+                self.result_currency_label = None
+                if self.victory_status == "Victory" and getattr(self, "currency_reward", None):
+                    from utils import currency_utils
+                    currency, paid = self.currency_reward
+                    unit = currency_utils.currency_unit(self.module.name, currency)
+                    text = f"{currency}: +{paid}{unit}" if unit else f"{currency}: +{paid}"
+                    currency_y = prize_y - (int(25 * height_scale) if self.result_prize_label_text else 0)
+                    # The prize row's size, shrunk to fit the screen; bright
+                    # yellow, as a shadowed Label draws ui_constants.YELLOW as
+                    # a solid block.
+                    self.result_currency_label = Label(prize_label_x, currency_y, text, is_title=False, color_override=ui_constants.YELLOW_BRIGHT, shadow_mode="full", custom_size=int(32*runtime_globals.UI_SCALE), max_width=200)
+                    self.result_currency_label.manager = self.ui_manager
                 
                 # Pre-cache scaled pet sprites to avoid per-frame scaling
                 self.result_pet_sprites_cache = {}
                 for pet in pets:
                     self.result_pet_sprites_cache[pet] = {}
                     for frame_id in [PetFrame.IDLE1.value, PetFrame.HAPPY.value, PetFrame.LOSE.value]:
-                        original_sprite = pet.get_sprite(frame_id)
+                        original_sprite = self._pet_frame(pet, frame_id)
                         scaled_sprite = pygame.transform.scale(original_sprite, (sprite_width, sprite_height))
                         self.result_pet_sprites_cache[pet][frame_id] = scaled_sprite
+
+                # Pre-scale the X_1/X_2 devolution flash sprites once
+                if self.xros_devolve_pets:
+                    try:
+                        from utils.asset_utils import image_load
+                        self.xros_devolve_sprites = [
+                            pygame.transform.scale(
+                                image_load(f"assets/X_{i}.png").convert_alpha(),
+                                (sprite_width, sprite_height))
+                            for i in (1, 2)
+                        ]
+                    except Exception as exc:
+                        runtime_globals.game_console.log(f"[Xros] X sprites load failed: {exc}")
+                        self.xros_devolve_pets = set()
+                        self.xros_devolve_timer = 0
                 
                 # Store sprite dimensions for drawing
                 self.result_sprite_width = sprite_width
@@ -2387,16 +3738,22 @@ class BattleEncounter:
                 title_x = (runtime_globals.SCREEN_WIDTH - title_surface.get_width()) // 2
                 self.result_static_text_surface.blit(title_surface, (title_x, self.result_title_label.rect.y))
                 
-                # Render prize labels at bottom
-                prize_label_surface = self.result_prize_label_text.render()
-                self.result_static_text_surface.blit(prize_label_surface, (self.result_prize_label_text.rect.x, self.result_prize_label_text.rect.y))
-                
-                # Render prize value to the right of label
-                width_scale = runtime_globals.SCREEN_WIDTH / 240
-                prize_value_x = self.result_prize_label_text.rect.x + prize_label_surface.get_width() + int(8 * width_scale)
-                self.result_prize_value_label.rect.x = prize_value_x
-                prize_value_surface = self.result_prize_value_label.render()
-                self.result_static_text_surface.blit(prize_value_surface, (prize_value_x, self.result_prize_label_text.rect.y))
+                # Render the currency paid (absent when the win paid none)
+                if getattr(self, "result_currency_label", None):
+                    currency_surface = self.result_currency_label.render()
+                    self.result_static_text_surface.blit(currency_surface, (self.result_currency_label.rect.x, self.result_currency_label.rect.y))
+
+                # Render prize labels at bottom (absent when there is no prize)
+                if self.result_prize_label_text and self.result_prize_value_label:
+                    prize_label_surface = self.result_prize_label_text.render()
+                    self.result_static_text_surface.blit(prize_label_surface, (self.result_prize_label_text.rect.x, self.result_prize_label_text.rect.y))
+
+                    # Render prize value to the right of label
+                    width_scale = runtime_globals.SCREEN_WIDTH / 240
+                    prize_value_x = self.result_prize_label_text.rect.x + prize_label_surface.get_width() + int(8 * width_scale)
+                    self.result_prize_value_label.rect.x = prize_value_x
+                    prize_value_surface = self.result_prize_value_label.render()
+                    self.result_static_text_surface.blit(prize_value_surface, (prize_value_x, self.result_prize_label_text.rect.y))
                 
                 # Render all per-pet labels to the static surface
                 for i, pet_labels in enumerate(self.result_pet_labels):
@@ -2437,30 +3794,45 @@ class BattleEncounter:
                 pet_winners = self.battle_player.winners[:len(self.battle_player.team1)]
             
             # Draw each pet sprite and their labels (using cached layout values)
+            devolve_active = getattr(self, 'xros_devolve_timer', 0) > 0 and \
+                getattr(self, 'xros_devolve_sprites', None)
             for i, pet in enumerate(pets):
                 pet_x = self.result_offset_x + (i * (self.result_sprite_width + self.result_gap_between_pets))
                 pet_center_x = pet_x + self.result_sprite_width // 2
-                
+
+                # Pets that were temporarily evolved flash the X_1/X_2 sprites
+                # briefly before their normal sprite is shown.
+                if devolve_active and pet in self.xros_devolve_pets:
+                    quarter = max(1, int(constants.FRAME_RATE * 0.25))
+                    toggle = (self.xros_devolve_timer // quarter) % 2
+                    blit_with_cache(surface, self.xros_devolve_sprites[toggle],
+                                    (pet_x, self.result_pets_y))
+                    continue
+
                 # Draw pet sprite (animated) using cached scaled sprites
                 if i < len(pet_frame_counters):
                     anim_toggle = (pet_frame_counters[i] + i * 5) // (15 * constants.FRAME_RATE / 30) % 2
                 else:
                     anim_toggle = 0
-                    
+
                 if (i < len(pet_winners) and pet_winners[i] == "team2") or self.victory_status == "Defeat":
                     frame_id = PetFrame.LOSE.value
                 else:
                     frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.HAPPY.value
-                
+
                 # Use cached scaled sprite
                 if pet in self.result_pet_sprites_cache and frame_id in self.result_pet_sprites_cache[pet]:
                     sprite = self.result_pet_sprites_cache[pet][frame_id]
                 else:
                     # Fallback if cache miss (shouldn't happen)
-                    sprite = pet.get_sprite(frame_id)
+                    sprite = self._pet_frame(pet, frame_id)
                     sprite = pygame.transform.scale(sprite, (self.result_sprite_width, self.result_sprite_height))
-                
+
                 blit_with_cache(surface, sprite, (pet_x, self.result_pets_y))
+
+            # Tick the devolution flash (once per drawn frame)
+            if getattr(self, 'xros_devolve_timer', 0) > 0:
+                self.xros_devolve_timer -= 1
 
     def draw_hit_animations(self, surface):
         """
@@ -2545,6 +3917,87 @@ class BattleEncounter:
 
         return frame.value, dx, dy, slide_x
 
+    @staticmethod
+    def _pet_frame(pet, frame_id):
+        """The pet's frame, or a related one when its set lacks it: a Mode
+        Change or DigiXros form has only the frames its device draws."""
+        return frame_or_fallback(pet.get_sprite, frame_id)
+
+    def _sized_pet_sprite(self, sprite):
+        """Return the sprite at PET size.
+
+        Pet frames are pre-scaled to (PET_WIDTH, PET_HEIGHT) at load time, so
+        this is normally a no-op; only odd-sized fallbacks pay for a rescale.
+        """
+        size = (runtime_globals.PET_WIDTH, runtime_globals.PET_HEIGHT)
+        if sprite.get_size() != size:
+            sprite = pygame.transform.scale(sprite, size)
+        return sprite
+
+    def _get_flipped_enemy_sprite(self, enemy, frame_id):
+        """Enemy frames face right but battle shows them mirrored.
+
+        Flip once per (enemy, frame) instead of allocating a new flipped
+        surface every drawn frame. Keyed by id() because GameEnemy is a
+        dataclass (auto __eq__ makes it unhashable); the cache is reset
+        whenever the enemy roster changes, so ids stay valid.
+        """
+        key = (id(enemy), frame_id)
+        cached = self._enemy_flip_cache.get(key)
+        if cached is not None:
+            return cached
+        # The set's own right-facing frame when it has one (<n>R.png).
+        flipped = frame_or_fallback(lambda index: get_right_sprite(enemy, index), frame_id)
+        if flipped is None:
+            return None
+        self._enemy_flip_cache[key] = flipped
+        return flipped
+
+    def _get_special_slide_sprite(self, entity, flip):
+        """2x-wide SPECIAL frame used by the crit slide-in.
+
+        Scaled (and mirrored for enemies) once per entity instead of on every
+        frame of the slide. id()-keyed for the same reason as the flip cache
+        (dataclass enemies are unhashable).
+        """
+        key = (id(entity), flip)
+        cached = self._special_slide_cache.get(key)
+        if cached is not None:
+            return cached
+        # Mirrored: the set's own right-facing SPECIAL (15R.png) if it has one.
+        special = (get_right_sprite(entity, PetFrame.SPECIAL.value) if flip
+                   else entity.get_sprite(PetFrame.SPECIAL.value))
+        if special is None:
+            return None
+        scaled = pygame.transform.scale(
+            special, (runtime_globals.PET_WIDTH * 2, runtime_globals.PET_HEIGHT))
+        self._special_slide_cache[key] = scaled
+        return scaled
+
+    def _get_draw_attack_entry(self, device_label, index):
+        """Attack-log entry for this combatant's current turn.
+
+        Cached per (device, index, turn) so the draw loop doesn't rescan the
+        turn log every frame; a turn advance simply produces a new key.
+        """
+        turn = self.battle_player.turns[index]
+        if turn > self.turn_limit:
+            return None
+        log = getattr(self, 'global_battle_log', None)
+        if not log or len(log.battle_log) < turn:
+            return None
+        key = (device_label, index, turn)
+        if key in self._attack_entry_cache:
+            return self._attack_entry_cache[key]
+        turn_log = log.battle_log[turn - 1]
+        entry = next(
+            (a for a in turn_log.attacks
+             if a.device == device_label and a.attacker == index),
+            None
+        )
+        self._attack_entry_cache[key] = entry
+        return entry
+
     def draw_enemies(self, surface: pygame.Surface):
         """
         Draws the enemy sprites on the screen, with animations based on the battle phase.
@@ -2557,15 +4010,8 @@ class BattleEncounter:
             anim_toggle = (self.battle_player.frame_counters[i] + i * 5) // (15 * constants.FRAME_RATE / 30) % 2
 
             attack_entry = None
-            if self.phase in ["battle"]:
-                # Check the global battle log for an attack entry
-                turn = self.battle_player.turns[i]
-                if turn <= self.turn_limit and self.global_battle_log and len(self.global_battle_log.battle_log) >= turn:
-                    turn_log = self.global_battle_log.battle_log[turn - 1]
-                    attack_entry = next(
-                        (a for a in turn_log.attacks if a.device == "device2" and a.attacker == i),
-                        None
-                    )
+            if self.phase == "battle":
+                attack_entry = self._get_draw_attack_entry("device2", i)
 
             in_attack_prep = (attack_entry
                               and self.battle_player.phase[i] == "enemy_charge"
@@ -2589,28 +4035,23 @@ class BattleEncounter:
                     enemy, i, "team2", attack_entry=attack_entry
                 )
                 if slide_x is not None:
-                    special_sprite = enemy.get_sprite(PetFrame.SPECIAL.value)
-                    if special_sprite is not None:
-                        special_w = runtime_globals.PET_WIDTH * 2
-                        special_h = runtime_globals.PET_HEIGHT
-                        special_sprite_scaled = pygame.transform.scale(special_sprite, (special_w, special_h))
-                        special_sprite_scaled = pygame.transform.flip(special_sprite_scaled, True, False)
+                    special_sprite_scaled = self._get_special_slide_sprite(enemy, flip=True)
+                    if special_sprite_scaled is not None:
                         blit_with_cache(surface, special_sprite_scaled, (slide_x, y))
                         continue
                 x += dx
                 y += dy
             elif self.battle_player.phase[i] == "result":
-                if self.battle_player.winners[i] == "team1":
+                if self._lost_pair(i, "team2"):
                     frame_id = PetFrame.LOSE.value
                 else:
                     frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.HAPPY.value
             else:
                 frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.IDLE2.value
 
-            sprite = enemy.get_sprite(frame_id)
+            sprite = self._get_flipped_enemy_sprite(enemy, frame_id)
 
             if sprite:
-                sprite = pygame.transform.flip(sprite, True, False)
                 blit_with_cache(surface, sprite, (x + (2 * runtime_globals.UI_SCALE), y))
 
     def draw_pets(self, surface: pygame.Surface):
@@ -2633,8 +4074,7 @@ class BattleEncounter:
                     frame_id = PetFrame.LOSE.value
                 else:
                     frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.HAPPY.value
-                sprite = pet.get_sprite(frame_id)
-                sprite = pygame.transform.scale(sprite, (runtime_globals.PET_WIDTH, runtime_globals.PET_HEIGHT))
+                sprite = self._sized_pet_sprite(self._pet_frame(pet, frame_id))
                 x = offset_x + i * spacing
                 blit_with_cache(surface, sprite, (x, y))
         else:
@@ -2643,15 +4083,8 @@ class BattleEncounter:
                 anim_toggle = (self.battle_player.frame_counters[i] + i * 5) // (15 * constants.FRAME_RATE / 30) % 2
                 x = self.get_team1_x(i)
                 attack_entry = None
-                if self.phase in ["battle"]:
-                    # Check the global battle log for an attack entry
-                    turn = self.battle_player.turns[i]
-                    if turn <= self.turn_limit and self.global_battle_log and len(self.global_battle_log.battle_log) >= turn:
-                        turn_log = self.global_battle_log.battle_log[turn - 1]
-                        attack_entry = next(
-                            (a for a in turn_log.attacks if a.device == "device1" and a.attacker == i),
-                            None
-                        )
+                if self.phase == "battle":
+                    attack_entry = self._get_draw_attack_entry("device1", i)
 
                 in_attack_prep = (attack_entry
                                   and self.battle_player.phase[i] == "pet_charge"
@@ -2676,25 +4109,21 @@ class BattleEncounter:
                         pet, i, "team1", attack_entry=attack_entry
                     )
                     if slide_x is not None:
-                        special_sprite = pet.get_sprite(PetFrame.SPECIAL.value)
-                        if special_sprite is not None:
-                            special_w = runtime_globals.PET_WIDTH * 2
-                            special_h = runtime_globals.PET_HEIGHT
-                            special_sprite_scaled = pygame.transform.scale(special_sprite, (special_w, special_h))
+                        special_sprite_scaled = self._get_special_slide_sprite(pet, flip=False)
+                        if special_sprite_scaled is not None:
                             blit_with_cache(surface, special_sprite_scaled, (slide_x, y))
                             continue
                     x += dx
                     y += dy
                 elif self.battle_player.phase[i] == "result":
-                    if self.battle_player.winners[i] == "team2":
+                    if self._lost_pair(i, "team1"):
                         frame_id = PetFrame.LOSE.value
                     else:
                         frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.HAPPY.value
                 else:
                     frame_id = PetFrame.IDLE1.value if anim_toggle == 0 else PetFrame.IDLE2.value
 
-                sprite = pet.get_sprite(frame_id)
-                sprite = pygame.transform.scale(sprite, (runtime_globals.PET_WIDTH, runtime_globals.PET_HEIGHT))
+                sprite = self._sized_pet_sprite(self._pet_frame(pet, frame_id))
                 blit_with_cache(surface, sprite, (x, y))
 
     def draw_projectiles(self, surface):
@@ -2776,14 +4205,14 @@ class BattleEncounter:
         # Draw enemy health bars
         total_enemies = len(self.battle_player.team2)
         if self.boss:
-            bar_offset_y = int(runtime_globals.PET_HEIGHT * constants.BOSS_MULTIPLIER) - int(6 * runtime_globals.UI_SCALE)
+            bar_offset_y = runtime_globals.PET_HEIGHT_BOSS - int(6 * runtime_globals.UI_SCALE)
         for i, enemy in enumerate(self.battle_player.team2):
             enemy_x = self.get_team2_x(i)
             enemy_y = self.get_y(i, total_enemies) + bar_offset_y
             current_hp = self.battle_player.team2_hp[i]
             max_hp = self.battle_player.team2_max_hp[i]
-            width = runtime_globals.PET_WIDTH * constants.BOSS_MULTIPLIER if self.boss else runtime_globals.PET_WIDTH
-            heigh = runtime_globals.PET_HEIGHT * constants.BOSS_MULTIPLIER if self.boss else runtime_globals.PET_HEIGHT
+            width = runtime_globals.PET_WIDTH_BOSS if self.boss else runtime_globals.PET_WIDTH
+            height = runtime_globals.PET_HEIGHT_BOSS if self.boss else runtime_globals.PET_HEIGHT
             if current_hp > 0:
                 if self.battle_player.team2_bar_counters[i] > 0:
                     enemy_hp_ratio = current_hp / max_hp if max_hp else 0
@@ -2795,13 +4224,13 @@ class BattleEncounter:
                 ko = self._ko_sprite_boss if self.boss else self._ko_sprite
                 if ko:
                     ko_x = enemy_x + (width - ko.get_width()) // 2
-                    ko_y = enemy_y + (heigh - ko.get_height()) // 2
+                    ko_y = enemy_y + (height - ko.get_height()) // 2
                     surface.blit(ko, (ko_x, ko_y))
                 else:
                     start1 = (enemy_x, enemy_y)
-                    end1 = (enemy_x + width, enemy_y + heigh)
+                    end1 = (enemy_x + width, enemy_y + height)
                     start2 = (enemy_x + width, enemy_y)
-                    end2 = (enemy_x, enemy_y + heigh)
+                    end2 = (enemy_x, enemy_y + height)
                     pygame.draw.line(surface, x_color, start1, end1, x_thickness)
                     pygame.draw.line(surface, x_color, start2, end2, x_thickness)
 
@@ -2849,20 +4278,38 @@ class BattleEncounter:
         
         event_type, event_data = event
         minigame = getattr(self.module, 'battle_minigame', 'Dummy Bar')
-        
-        # Handle string actions
-        if event_type == "B":
-            if self.phase in ("feeding", "retire_check"):
-                # B during these phases is handled by the view
-                return
-            elif self.phase in ("retire_animation",):
-                # Ignore B during retire animation
-                return
-            else:
+
+        # Temporary-evolution phases get first crack at the input.
+        if self.phase == "xros_select":
+            if event_type == "B":
+                # No cancel option on the selector; B still quits the battle
+                # (nothing was applied yet, so no revert needed).
                 runtime_globals.game_sound.play("cancel")
                 change_scene("game")
-        # Skip animation-only phases on A or LCLICK
-        elif event_type in ("A", "LCLICK") and self.phase in ("level", "entry", "intimidate", "alert", "battle"):
+                return
+            if getattr(self, 'xros_selector', None):
+                if self.xros_selector.handle_event(event) == "confirm":
+                    self._on_xros_confirm()
+            return
+        if self.phase == "xros_anim":
+            # Block input while the transformation animation plays.
+            return
+
+        # READY/alert is intentionally non-skippable. This early lock also
+        # prevents B from falling through to the general quit-battle branch.
+        if self.phase == "alert":
+            return
+
+        # Skip animation-only phases on B or LCLICK. A is reserved for the
+        # charge minigames (dummy charge mashes A) — with A doubling as skip,
+        # leftover presses from the minigame skipped the whole battle.
+        if event_type in ("B", "LCLICK") and self.phase in ("level", "entry", "intimidate", "battle"):
+            # Mouse/touch grace: the dummy charge is click-driven, so ignore
+            # clicks that land right after the minigame ends — otherwise the
+            # last mash would instantly skip the battle animation.
+            if (event_type == "LCLICK" and self.phase == "battle"
+                    and pygame.time.get_ticks() < getattr(self, '_skip_grace_until', 0)):
+                return
             if self.phase == "level":
                 self.phase = "entry"
                 self.frame_counter = 0
@@ -2878,24 +4325,36 @@ class BattleEncounter:
                 else:
                     self.animated_sprite.play_battle(duration)
             elif self.phase == "intimidate":
-                self.phase = "alert"
-                self.frame_counter = 0
+                # Skipping the intimidate animation still goes through the
+                # temporary-evolution selection when a pet qualifies.
                 self.animated_sprite.stop()
-                self.reset_minigames()
-                if self.module.ruleset == "penc":
-                    pets = get_battle_targets()
-                    self.count_match = CountMatch(self.ui_manager, pets[0], self.animated_sprite)
-                    self.count_match.set_phase("ready")
-            elif self.phase == "alert":
-                self.phase = "charge"
-                self.frame_counter = 0
-                self.bar_timer = pygame.time.get_ticks()
-                self.setup_charge()
+                if not self._start_xros_selection():
+                    self._enter_alert_phase()
             elif self.phase == "battle":
                 runtime_globals.game_sound.play("cancel")
                 self.phase = "result"
                 self.frame_counter = 0
-        elif self.phase in ("feeding", "retire_check"):
+        elif event_type == "B" and self.phase in ("clear", "result"):
+            # B only ends the result screen's wait: what the result records
+            # (the round and area won, unlocks, prizes, Connect Points, the
+            # PvP counts) runs in update_result on the next frame. Leaving the
+            # battle here skipped all of it (found by the 2026-10-22 doc pass).
+            # A boss's CLEAR goes the same way (it used to quit the battle).
+            if self.phase == "clear":
+                self.phase = "result"
+                self.frame_counter = 0
+            self.result_timer = max(self.result_timer, int(120 * (constants.FRAME_RATE / 30)) - 1)
+            return
+        elif event_type == "B":
+            if self.phase in ("feeding", "battle_items", "retire_check", "retire_animation"):
+                # Handled by the view / blocked during the retire animation
+                return
+            # Quitting mid-battle (charge, result): the temporary evolution
+            # ends with the battle.
+            self._clear_xros_forms()
+            runtime_globals.game_sound.play("cancel")
+            change_scene("game")
+        elif self.phase in ("feeding", "battle_items", "retire_check"):
             # Events for these phases are handled by the view
             return
         elif self.phase == "retire_animation":
@@ -2907,16 +4366,24 @@ class BattleEncounter:
                 if event_type in ("A", "LCLICK"):
                     if self.dummy_charge and self.dummy_charge.handle_event(event):
                         self.strength = self.dummy_charge.strength
-            elif minigame == "Count Match (Color)":
+            elif minigame == "Count Bar":
+                if event_type in ("A", "LCLICK"):
+                    if self.count_bar and self.count_bar.handle_event(event):
+                        self.strength = self.count_bar.get_count()
+            elif minigame == "RPM":
+                if event_type in ("A", "LCLICK"):
+                    if self.rpm_meter and self.rpm_meter.handle_event(event):
+                        self.strength = self.rpm_meter.get_bars()
+            elif minigame == "Count Match Color":
                 if event_type in ("Y", "SHAKE"):
                     if self.count_match and self.count_match.handle_event(event):
                         self.press_counter = self.count_match.get_press_counter()
                         self.rotation_index = self.count_match.get_rotation_index()
-            elif minigame == "Count Match":
+            elif minigame == "Count Match Classic":
                 if event_type in ("Y", "SHAKE"):
                     if self.count_match_classic and self.count_match_classic.handle_event(event):
                         self.strength = self.count_match_classic.strength
-            elif minigame == "Count Match (Z)":
+            elif minigame == "Count Match Z":
                 if event_type in ("Y", "SHAKE"):
                     if self.count_match_z and self.count_match_z.handle_event(event):
                         self.press_counter = self.count_match_z.get_press_counter()
@@ -2948,10 +4415,43 @@ class BattleEncounter:
     # Region: Utility Methods
     #========================
 
+    def finish_replay(self):
+        """Leave an arena replay for the connect view it was started from."""
+        view, kwargs = self.replay_return
+        for pet in self.battle_player.team1 if self.battle_player else []:
+            runtime_globals.pet_sprites.pop(pet, None)
+        if hasattr(runtime_globals, 'pvp_battle_data'):
+            delattr(runtime_globals, 'pvp_battle_data')
+        runtime_globals.scene_connect_initial_view = (view, kwargs)
+        change_scene("connect")
+
+    def apply_replay_hp(self, team1_hp, team2_hp):
+        """Start a replay at the HP the server fought with, pet by pet.
+
+        GameBattle fills HP in from each pet's module, but an arena battle's
+        HP was settled on the server from its own module copy.
+        """
+        bp = self.battle_player
+        for hps, current, maximum in ((team1_hp, bp.team1_hp, bp.team1_max_hp),
+                                      (team2_hp, bp.team2_hp, bp.team2_max_hp)):
+            for i, hp in enumerate(hps or []):
+                if i < len(current):
+                    current[i] = max(1, int(hp))
+                if i < len(maximum):
+                    maximum[i] = max(1, int(hp))
+        bp.team1_total_hp = bp.team1_max_total_hp = sum(bp.team1_hp)
+        bp.team2_total_hp = bp.team2_max_total_hp = sum(bp.team2_hp)
+        if getattr(self, 'hp_bar', None):
+            self.hp_bar.set_totals(bp.team2_total_hp, bp.team1_total_hp)
+            self.hp_bar.set_values(bp.team2_total_hp, bp.team1_total_hp)
+
     def return_to_main_scene(self):
         """
         Ends the battle and returns to the main game scene.
         """
+        # Safety net: no temporary evolution outlives the battle (normally
+        # already ended by the result screen's devolution flash).
+        self._clear_xros_forms()
 
         runtime_globals.game_console.log(f"[Scene_Battle] exiting to main game")
         distribute_pets_evenly()
@@ -2962,38 +4462,45 @@ class BattleEncounter:
 
         self.process_battle_results()
 
-    def get_minigame_strength(self):
+    def raw_charge(self):
+        """The charge as its own minigame counts it, not as a 0-3 band.
+
+        Three minigames measure three different things and two lines read the
+        raw number rather than the band: PENOG takes Count Match Classic's
+        0-40 shake meter, and PENC takes Count Match Color's **super hits**,
+        which are its attack pattern outright ("N super hits for 2 damage
+        each"). `self.strength` is the meter, and on a Count Match Color
+        module it is never set at all -- so passing it sent every Pendulum
+        Color battle out at charge 0 whatever the player rolled.
+
+        The band is still what `get_minigame_strength` returns and what the
+        packets carry; this is only for the tables keyed on the raw score.
         """
-        Returns the selected strength for the mini-game, defaulting to 1 if not set.
-        Maps minigame results to battle simulator strength values.
-        """
-        if self.module.ruleset == "dmc":
-            # DMC: Dummy charge strength 0-14
-            if self.strength < 5:
-                return 0
-            elif self.strength < 10:
-                return 1
-            elif self.strength < 14:
-                return 2
-            else:
-                return 3
-        elif self.module.ruleset == "dmx":
-            # DMX: XAI bar strength (varies by XAI roll)
-            return self.strength
-        elif self.module.ruleset == "penc":
-            # PenC: Count match super hits
+        minigame = getattr(self.module, 'battle_minigame', 'Dummy Bar')
+        if minigame == "Count Match Color":
             return self.super_hits
-        elif self.module.ruleset == "vb":
-            # VB: Shake punch strength 0-20
-            if self.strength < 10:
-                return 0
-            elif self.strength < 15:
-                return 1
-            elif self.strength < 20:
-                return 2
-            else:
-                return 3
-        return 1
+        if minigame == "Count Match Z":
+            return self.press_counter
+        return self.strength
+
+    def get_minigame_strength(self):
+        """The 0-3 charge quality the battle packets carry.
+
+        The bands live in ``minigame_session.minigame_result`` so the DCom
+        connection flow, which plays its charge before any battle exists,
+        scores identically.
+        """
+        from ui.minigames.minigame_session import minigame_result
+        minigame = getattr(self.module, 'battle_minigame', 'Dummy Bar')
+        pet = getattr(self.count_match_z, "pet", None)
+        if minigame == "Count Bar":
+            # The Mini grades the row the count throws, and that row is the
+            # Digimon's own -- its stage and attribute pick the column.
+            targets = self._current_targets()
+            pet = targets[0] if targets else None
+        return minigame_result(
+            minigame, self.strength, self.super_hits,
+            self.press_counter, pet, getattr(self, "color_band", None))
 
     def simulate_global_combat(self):
         # Use the BattlePlayer's teams for simulation
@@ -3012,15 +4519,28 @@ class BattleEncounter:
                 attribute=pet.attribute,
                 power=pet.get_power(self.power_bonus),
                 handicap=0,
-                buff=self.attack_boost,
+                buff=self.attack_boost + (getattr(pet, 'bonus_stats', None) or [0, 0, 0])[1],
                 mini_game=self.get_minigame_strength(),
                 level=pet.level,
                 stage=pet.stage,
-                sick=1 if pet.sick > 0 else 0,
+                sick=1 if ailments.ailing(pet) else 0,
                 shot1=pet.atk_main,
                 shot2=pet.atk_alt,
                 tag_meter=0
             ))
+            # The Colour line's adventure table is keyed on effort hearts,
+            # and `Digimon` has no field for it -- the wire never carried
+            # one, so nothing needed it until that table existed.
+            team1[-1].effort = getattr(pet, "effort", 0)
+            # A PENGZ Count Match charge names this pet's row outright.
+            pengz_pattern = (getattr(self, "pengz_patterns", None) or {}).get(pet)
+            if pengz_pattern and not self.pvp_mode:
+                team1[-1].preset_pattern = list(pengz_pattern)
+            # The iC's table is keyed on the pet's own RPM bar: the same
+            # presses, read against this Digimon's pace (as RPM training
+            # does for a team).
+            if self.rpm_meter is not None:
+                team1[-1].charge = self.rpm_meter.get_bars(ic_rpm_target(pet))
 
         # Prepare team2 (enemy Digimon)
         for i, enemy in enumerate(self.battle_player.team2):
@@ -3045,25 +4565,42 @@ class BattleEncounter:
                 attribute=enemy.attribute,
                 power=enemy_power,
                 handicap=getattr(enemy, "handicap", 0),
-                buff=0,
+                buff=(getattr(enemy, 'bonus_stats', None) or [0, 0, 0])[1],
                 mini_game=1,
                 level=getattr(enemy, 'level', enemy_level),
                 stage=enemy.stage,
-                sick=1 if getattr(enemy, 'sick', 0) > 0 else 0,
+                sick=1 if ailments.ailing(enemy) else 0,
                 shot1=enemy.atk_main,
                 shot2=enemy.atk_alt,
                 tag_meter=0
             ))
+            # A quest enemy the module gives its own attacks (battle.json
+            # attack_pattern) throws those instead of its stage's.
+            if getattr(enemy, "attack_pattern", None):
+                team2[-1].preset_pattern = list(enemy.attack_pattern)
 
         # Simulate the battle using the GlobalBattleSimulator
         sim = GlobalBattleSimulator(
-            attribute_advantage=self.module.battle_atribute_advantage,
-            damage_limit=self.module.battle_damage_limit
+            pvp_mode=self.pvp_mode,
+            max_hit_rate=getattr(self.module, 'battle_max_hit_rate', 100),
+            attribute_advantage=self.module.battle_attribute_advantage,
+            damage_limit=self.module.battle_damage_limit,
+            advantage_as_power=getattr(
+                self.module, "battle_attribute_advantage_power", False),
+            # Which attack table an adventure battle draws from: the module
+            # says which device it reproduces, and the two original lines
+            # have their own.
+            battle_format=getattr(self.module, "battle_protocol", None),
+            # The raw score, for a table that reads the number rather than a
+            # band. `mini_game` on each Digimon stays the 0-3 quality.
+            charge=self.raw_charge()
         )
         result = sim.simulate(team1, team2)
 
         # Store the result for animation/processing
         self.global_battle_log = result
+        # A fresh log invalidates the per-turn entries cached by the draw loop.
+        self._attack_entry_cache = {}
         self.victory_status = "Victory" if result.winner == "device1" else "Defeat"
         
         # Update quest progress if battle was won (skip for PvP)
@@ -3099,10 +4636,10 @@ class BattleEncounter:
             pet_x = self.get_team1_x(i)
             
             if i < len(self.battle_player.team2):
-                enemy_x = self.get_team2_x(i) + (runtime_globals.PET_WIDTH * constants.BOSS_MULTIPLIER if self.boss else runtime_globals.PET_WIDTH)
+                enemy_x = self.get_team2_x(i) + (runtime_globals.PET_WIDTH_BOSS if self.boss else runtime_globals.PET_WIDTH)
             else:
                 # For cases where there are fewer enemies than pets (boss battle)
-                enemy_x = self.get_team2_x(0) + (runtime_globals.PET_WIDTH * constants.BOSS_MULTIPLIER if self.boss else runtime_globals.PET_WIDTH)
+                enemy_x = self.get_team2_x(0) + (runtime_globals.PET_WIDTH_BOSS if self.boss else runtime_globals.PET_WIDTH)
             
             # Position debug log in the middle between enemy and pet
             log_x = (enemy_x + pet_x) // 2
@@ -3132,4 +4669,3 @@ class BattleEncounter:
                 hit_surface = font_small.render(hit_text, True, hit_color)
                 hit_rect = hit_surface.get_rect(center=(log_x, log_y + int(10 * runtime_globals.UI_SCALE)))
                 surface.blit(hit_surface, hit_rect)
-

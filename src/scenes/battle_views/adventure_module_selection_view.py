@@ -321,9 +321,10 @@ class AdventureModuleSelectionView:
             self._update_page_visibility()
 
         new_button = self.module_buttons[new_index]
+        # set_toggled fires _on_module_button_toggled, which already
+        # plays the menu sound - playing here doubled it.
         new_button.set_toggled(True)
         self.ui_manager.set_focused_component(new_button)
-        runtime_globals.game_sound.play("menu")
 
     def _on_go(self):
         """Handle GO button press."""
@@ -343,6 +344,9 @@ class AdventureModuleSelectionView:
             area = random.choice(list(limits.keys()))
             round_count = limits[area]
             round_num = random.randint(1, round_count) if round_count > 0 else 1
+            from scenes.battle_views.adventure_area_selection_view import pay_entry_or_refuse
+            if not pay_entry_or_refuse(self.selected_module, area, round_num):
+                return
             game_globals.last_adventure_module = self.selected_module.name
             game_globals.save()
             self.change_view("adventure_battle", module=self.selected_module, area=area, round_num=round_num)

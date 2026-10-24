@@ -1,10 +1,17 @@
 """
-WifiHostingView - WiFi hosting and discovery for local battles
-Handles both hosting and joining via local network
+WifiHostingView - host or join a WiFi battle on the local network.
+
+Host: the game answers discovery and waits for one opponent
+(``battle.lan_link.LanHost``), showing its code and address. Join: the
+game asks the network for hosts (``lan_link.discover``), lists the ones that
+answer and connects to the one picked. Either way the open link goes to the
+battle confirmation (``battle_confirm``), which runs the battle itself
+(``battle.lan_battle``).
+
+The searching and connecting run on worker threads that only leave their
+result on the view; update() acts on it on the game's thread.
 """
-import socket
 import threading
-import time
 
 from ui.ui_manager import UIManager
 from ui.components.title_scene import TitleScene
@@ -14,395 +21,324 @@ from ui.components.label import Label
 from ui.components.menu import Menu
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals
+from battle import lan_link
+
+
+def player_name():
+    """The Omninet nickname, when the game is linked; else nothing."""
+    try:
+        from services.omninet_service import omninet_service
+        return omninet_service.get_username() or ""
+    except Exception:
+        return ""
 
 
 class WifiHostingView:
-    """WiFi hosting view for local network battles."""
-    
-    def __init__(self, ui_manager: UIManager, change_view_callback, 
+    """WiFi hosting and joining for local network battles."""
+
+    HOST_JOIN_OPTIONS = ["Host Battle", "Join Battle", "Back"]
+
+    def __init__(self, ui_manager: UIManager, change_view_callback,
                  selected_pets=None, is_online_mode=False, discord_module=None):
         """Initialize the WiFi hosting view.
-        
+
         Args:
             ui_manager: The UI manager instance
             change_view_callback: Callback to change to another view
-            selected_pets: List of selected pets for battle
+            selected_pets: The pets that will fight
             is_online_mode: Whether this is online mode
         """
         self.ui_manager = ui_manager
         self.change_view = change_view_callback
         self.selected_pets = selected_pets or []
         self.is_online_mode = is_online_mode
-        
-        # State
-        self.phase = "host_join_menu"  # host_join_menu, hosting, joining, device_list
-        self.is_host = False
-        
-        # Network state
+
+        # host_join_menu, hosting, searching, device_list, connecting
+        self.phase = "host_join_menu"
+
+        self.host = None              # LanHost while hosting
         self.host_code = ""
-        self.server_socket = None
-        self.client_socket = None
-        self.connection_socket = None
-        self.network_thread = None
-        self.connection_established = False
-        
-        # Discovery state
-        self.discovered_devices = []
-        
-        # Enemy data
-        self.enemy_pet_count = 0
-        self.enemy_modules = []
-        
-        # UI Components
+        self.hosts = []               # what the last search found
+        self._search_stop = None      # set to end a search early
+        self._found = None            # a finished search's hosts
+        self._joined = None           # a finished connect's LanConnection
+        self._join_error = None
+        self._joining = None          # the host being connected to
+
         self.background = None
         self.title_scene = None
-        
-        # Host/Join menu
         self.host_join_menu = None
-        
-        # Hosting UI
-        self.hosting_title_label = None
-        self.hosting_code_label = None
-        self.hosting_wait_label = None
-        self.hosting_cancel_button = None
-        
-        # Discovery/Joining UI
-        self.discovery_title_label = None
-        self.discovery_status_label = None
-        self.discovery_back_button = None
-        
-        # Device list
         self.device_list_menu = None
-        
+        self.heading_label = None
+        self.code_label = None
+        self.address_label = None
+        self.status_label = None
+        self.cancel_button = None
+
         self._setup_ui()
-    
+
+    # ------------------------------------------------------------------ UI
     def _setup_ui(self):
-        """Setup the UI components."""
         ui_width = ui_height = BASE_RESOLUTION
-        
-        # Background
+
         self.background = Background(ui_width, ui_height)
         self.background.set_regions([(0, ui_height, "black")])
         self.ui_manager.add_component(self.background)
-        
-        # Title
+
         self.title_scene = TitleScene(0, 9, "CONNECT")
         self.ui_manager.add_component(self.title_scene)
-        
-        self._setup_host_join_menu()
-        self._setup_hosting_ui()
-        self._setup_discovery_ui()
-        
-        self._show_phase("host_join_menu")
-        
-        runtime_globals.game_console.log("[WifiHostingView] UI setup complete")
-    
-    def _setup_host_join_menu(self):
-        """Setup the host/join selection menu."""
+
+        # Opened before it is added: the manager only takes input to a
+        # component that is focusable when it arrives.
         self.host_join_menu = Menu(width=BASE_RESOLUTION - 40, height=100)
+        self._open_host_join_menu()
+        self.ui_manager.add_component(self.host_join_menu)
+
+        self.heading_label = Label(10, 55, "", is_title=False)
+        self.code_label = Label(10, 85, "", is_title=False)
+        self.address_label = Label(10, 110, "", is_title=False)
+        self.status_label = Label(10, 140, "", is_title=False)
+        for label in (self.heading_label, self.code_label, self.address_label, self.status_label):
+            label.visible = False
+            self.ui_manager.add_component(label)
+
+        cancel_width, cancel_height = 100, 35
+        self.cancel_button = Button(
+            (BASE_RESOLUTION - cancel_width) // 2, 190, cancel_width, cancel_height,
+            "CANCEL", self._on_cancel
+        )
+        self.cancel_button.visible = False
+        self.ui_manager.add_component(self.cancel_button)
+
+        self._show_phase("host_join_menu")
+        runtime_globals.game_console.log("[WifiHostingView] UI setup complete")
+
+    def _open_host_join_menu(self):
+        """(Re)populate the host/join menu.
+
+        Menu.close() runs on every selection and clears the option list, so
+        coming back to this phase has to rebuild the menu -- just setting it
+        visible again showed an empty box with nothing to select.
+        """
         self.host_join_menu.open(
-            options=["Host Battle", "Join Battle", "Back"],
+            options=list(self.HOST_JOIN_OPTIONS),
             on_select=self._on_host_join_select,
+            on_cancel=self._on_host_join_back,
             auto_center=True
         )
-        self.ui_manager.add_component(self.host_join_menu)
-    
-    def _setup_hosting_ui(self):
-        """Setup hosting phase UI."""
-        self.hosting_title_label = Label(10, 60, "Hosting Network Battle", is_title=False)
-        self.hosting_title_label.visible = False
-        self.ui_manager.add_component(self.hosting_title_label)
-        
-        self.hosting_code_label = Label(10, 100, "Host Code: ----", is_title=False)
-        self.hosting_code_label.visible = False
-        self.ui_manager.add_component(self.hosting_code_label)
-        
-        self.hosting_wait_label = Label(10, 140, "Waiting for other device...", is_title=False)
-        self.hosting_wait_label.visible = False
-        self.ui_manager.add_component(self.hosting_wait_label)
-        
-        cancel_width = 100
-        cancel_height = 35
-        cancel_x = (BASE_RESOLUTION - cancel_width) // 2
-        cancel_y = 190
-        
-        self.hosting_cancel_button = Button(
-            cancel_x, cancel_y, cancel_width, cancel_height,
-            "CANCEL", self._on_hosting_cancel
-        )
-        self.hosting_cancel_button.visible = False
-        self.ui_manager.add_component(self.hosting_cancel_button)
-    
-    def _setup_discovery_ui(self):
-        """Setup device discovery UI."""
-        self.discovery_title_label = Label(10, 60, "Searching for devices...", is_title=False)
-        self.discovery_title_label.visible = False
-        self.ui_manager.add_component(self.discovery_title_label)
-        
-        self.discovery_status_label = Label(10, 100, "Please wait...", is_title=False)
-        self.discovery_status_label.visible = False
-        self.ui_manager.add_component(self.discovery_status_label)
-        
-        back_width = 100
-        back_height = 35
-        back_x = (BASE_RESOLUTION - back_width) // 2
-        back_y = 190
-        
-        self.discovery_back_button = Button(
-            back_x, back_y, back_width, back_height,
-            "CANCEL", self._on_discovery_cancel
-        )
-        self.discovery_back_button.visible = False
-        self.ui_manager.add_component(self.discovery_back_button)
-    
-    def _hide_all(self):
-        """Hide all phase components."""
-        if self.host_join_menu: self.host_join_menu.visible = False
-        if self.hosting_title_label: self.hosting_title_label.visible = False
-        if self.hosting_code_label: self.hosting_code_label.visible = False
-        if self.hosting_wait_label: self.hosting_wait_label.visible = False
-        if self.hosting_cancel_button: self.hosting_cancel_button.visible = False
-        if self.discovery_title_label: self.discovery_title_label.visible = False
-        if self.discovery_status_label: self.discovery_status_label.visible = False
-        if self.discovery_back_button: self.discovery_back_button.visible = False
-        if self.device_list_menu: self.device_list_menu.visible = False
-    
-    def _show_phase(self, phase):
-        """Show the appropriate UI for the given phase."""
-        self._hide_all()
+
+    def _set_lines(self, heading="", code="", address="", status=""):
+        for label, text in ((self.heading_label, heading), (self.code_label, code),
+                            (self.address_label, address), (self.status_label, status)):
+            label.set_text(text)
+            label.visible = bool(text)
+
+    def _show_phase(self, phase, status=""):
         self.phase = phase
-        
+        self.host_join_menu.visible = False
+        if self.device_list_menu:
+            self.device_list_menu.visible = False
+        self.cancel_button.visible = phase in ("hosting", "searching", "connecting")
+        self._set_lines()
+
         if phase == "host_join_menu":
+            self._open_host_join_menu()
             self.host_join_menu.visible = True
-        elif phase == "hosting":
-            self.hosting_title_label.visible = True
-            self.hosting_code_label.visible = True
-            self.hosting_code_label.set_text(f"Host Code: {self.host_code or '----'}")
-            self.hosting_wait_label.visible = True
-            self.hosting_cancel_button.visible = True
-        elif phase == "joining":
-            self.discovery_title_label.visible = True
-            self.discovery_status_label.visible = True
-            self.discovery_back_button.visible = True
+            self.ui_manager.set_focused_component(self.host_join_menu)
+        elif self.cancel_button.visible:
+            self.ui_manager.set_focused_component(self.cancel_button)
+
+        if phase == "hosting":
+            addresses = lan_link.local_addresses()
+            self._set_lines("Hosting WiFi battle", f"Code: {self.host_code}",
+                            f"IP: {addresses[0]}" if addresses else "",
+                            status or "Waiting for opponent...")
+        elif phase == "searching":
+            self._set_lines("Join WiFi battle", status=status or "Searching for hosts...")
         elif phase == "device_list":
-            if self.device_list_menu:
-                self.device_list_menu.visible = True
-    
+            self._open_device_list(status)
+        elif phase == "connecting":
+            code = (self._joining or {}).get("code", "")
+            self._set_lines("Join WiFi battle", status=status or f"Connecting to {code}...")
+
+    def _open_device_list(self, status=""):
+        """The hosts the search found, then "Search again" and "Back"."""
+        if self.device_list_menu:
+            self.ui_manager.remove_component(self.device_list_menu)
+        options = [self._host_label(h) for h in self.hosts] + ["Search again", "Back"]
+        self.device_list_menu = Menu(width=BASE_RESOLUTION - 40, height=100)
+        self.device_list_menu.open(options=options, on_select=self._on_device_select,
+                                   on_cancel=self._on_device_list_back, auto_center=False,
+                                   max_visible=5)
+        self.ui_manager.add_component(self.device_list_menu)
+        self.device_list_menu.set_position(20, 80)
+        self.ui_manager.set_focused_component(self.device_list_menu)
+        # One line above the list: what happened, or what to do.
+        self._set_lines(status or ("Choose a host" if self.hosts else "No host found"))
+
+    @staticmethod
+    def _host_label(host):
+        name = host.get("name") or host.get("address", "")
+        return f"{host.get('code', '----')} {name}"[:22]
+
+    # -------------------------------------------------------------- actions
     def _on_host_join_select(self, index):
-        """Host/Join menu selection handler."""
-        if index == 0:  # Host
+        if index == 0:
             runtime_globals.game_sound.play("menu")
             self._start_hosting()
-        elif index == 1:  # Join
+        elif index == 1:
             runtime_globals.game_sound.play("menu")
-            self._start_joining()
-        elif index == 2:  # Back
+            self._start_search()
+        else:
             runtime_globals.game_sound.play("cancel")
             self._stop_networking()
-            self.change_view("main_menu")
-    
+            self.change_view("main_menu", initial_submenu="local_battle")
+
+    def _on_host_join_back(self):
+        """B on the Host/Join menu: back to choosing the pets."""
+        self._stop_networking()
+        self.change_view("pet_selection", is_online_mode=self.is_online_mode)
+
     def _start_hosting(self):
-        """Start hosting a network battle."""
-        self.is_host = True
-        self.host_code = self._generate_host_code()
-        self._show_phase("hosting")
-        
-        # Start network thread for hosting
-        self.network_thread = threading.Thread(target=self._host_network, daemon=True)
-        self.network_thread.start()
-    
-    def _start_joining(self):
-        """Start looking for hosts to join."""
-        self.is_host = False
-        self._show_phase("joining")
-        
-        # Start network thread for discovery
-        self.network_thread = threading.Thread(target=self._discover_devices, daemon=True)
-        self.network_thread.start()
-    
-    def _generate_host_code(self):
-        """Generate a 4-character host code."""
-        import random
-        import string
-        return ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    
-    def _host_network(self):
-        """Network hosting thread."""
+        self.host_code = lan_link.host_code()
+        self.host = lan_link.LanHost({"code": self.host_code, "name": player_name(),
+                                      "pets": len(self.selected_pets)})
         try:
-            runtime_globals.game_console.log("[WifiHostingView] Starting host network...")
-            
-            # Setup TCP server for connections
-            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.server_socket.bind(('', 5555))
-            self.server_socket.listen(1)
-            self.server_socket.settimeout(1.0)
-            
-            # Setup UDP responder for discovery
-            udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            udp_socket.bind(('', 5556))
-            udp_socket.settimeout(0.5)
-            
-            while self.phase == "hosting":
-                # Respond to discovery broadcasts
-                try:
-                    data, addr = udp_socket.recvfrom(1024)
-                    if data == b"OMNIPET_DISCOVER":
-                        response = f"OMNIPET_HOST:{self.host_code}".encode('utf-8')
-                        udp_socket.sendto(response, addr)
-                        runtime_globals.game_console.log(f"[WifiHostingView] Responded to discovery from {addr}")
-                except socket.timeout:
-                    pass
-                
-                # Check for TCP connections
-                try:
-                    conn, addr = self.server_socket.accept()
-                    runtime_globals.game_console.log(f"[WifiHostingView] Connection from {addr}")
-                    self.connection_socket = conn
-                    self.connection_established = True
-                    udp_socket.close()
-                    self.change_view("battle_confirm", 
-                                     connection_mode="wifi",
-                                     connection_socket=self.connection_socket,
-                                     selected_pet=self.selected_pets[0] if self.selected_pets else None,
-                                     enemy_name=str(addr[0]),
-                                     enemy_device="WiFi Device")
-                    break
-                except socket.timeout:
-                    continue
-                except Exception as e:
-                    runtime_globals.game_console.log(f"[WifiHostingView] Accept error: {e}")
-                    break
-        except Exception as e:
-            runtime_globals.game_console.log(f"[WifiHostingView] Host network error: {e}")
-        finally:
-            try:
-                if 'udp_socket' in locals():
-                    udp_socket.close()
-            except:
-                pass
-    
-    def _discover_devices(self):
-        """Device discovery thread."""
-        try:
-            runtime_globals.game_console.log("[WifiHostingView] Starting device discovery...")
-            # Simple broadcast discovery
-            # This is a simplified version - real implementation would use UDP broadcast
-            
-            time.sleep(2)  # Simulate discovery time
-            
-            # For now, just show empty list
-            self._discovered_devices = []
-            self._show_device_list = True
-        except Exception as e:
-            runtime_globals.game_console.log(f"[WifiHostingView] Discovery error: {e}")
-    
-    def _on_hosting_cancel(self):
-        """Cancel hosting."""
-        runtime_globals.game_sound.play("cancel")
-        self._stop_networking()
-        self._show_phase("host_join_menu")
-    
-    def _on_discovery_cancel(self):
-        """Cancel discovery."""
-        runtime_globals.game_sound.play("cancel")
-        self._stop_networking()
-        self._show_phase("host_join_menu")
-    
-    def _stop_networking(self):
-        """Stop all network operations."""
-        if self.server_socket:
-            try:
-                self.server_socket.close()
-            except:
-                pass
-            self.server_socket = None
-        
-        if self.client_socket:
-            try:
-                self.client_socket.close()
-            except:
-                pass
-            self.client_socket = None
-        
-        if self.connection_socket:
-            try:
-                self.connection_socket.close()
-            except:
-                pass
-            self.connection_socket = None
-    
-    def update(self):
-        """Update the view."""
-        # Check for device list update
-        if getattr(self, '_show_device_list', False):
-            self._show_device_list = False
-            devices = getattr(self, '_discovered_devices', [])
-            
-            if devices:
-                # Show device list menu
-                device_labels = [d.get('host_code', 'Unknown') for d in devices]
-                self.device_list_menu = Menu(width=BASE_RESOLUTION - 40, height=100)
-                self.device_list_menu.open(
-                    options=device_labels + ["Cancel"],
-                    on_select=self._on_device_select,
-                    auto_center=True
-                )
-                self.ui_manager.add_component(self.device_list_menu)
-                self._show_phase("device_list")
-            else:
-                self.discovery_status_label.set_text("No devices found")
-    
-    def _on_device_select(self, index):
-        """Device selection handler."""
-        if index < len(self.discovered_devices):
-            device = self.discovered_devices[index]
-            self._connect_to_device(device)
-        else:
-            # Cancel
-            runtime_globals.game_sound.play("cancel")
+            self.host.start()
+        except OSError as exc:
+            runtime_globals.game_console.log(f"[WifiHostingView] Cannot host: {exc}")
+            self.host = None
             self._show_phase("host_join_menu")
-    
-    def _connect_to_device(self, device):
-        """Connect to a discovered device."""
-        runtime_globals.game_console.log(f"[WifiHostingView] Connecting to {device}")
-        # TODO: Implement connection logic
-    
+            self._set_lines("Cannot host on this network")
+            return
+        runtime_globals.game_console.log(
+            f"[WifiHostingView] Hosting {self.host_code} on port {self.host.port}"
+            + (f" ({self.host.error})" if self.host.error else ""))
+        self._show_phase("hosting", "Waiting for opponent..." if self.host.discoverable
+                         else "Others cannot find this game")
+
+    def _start_search(self):
+        stop = threading.Event()
+        self._search_stop = stop
+        self._found = None
+
+        def work():
+            try:
+                found = lan_link.discover(stop=stop)
+            except OSError as exc:
+                runtime_globals.game_console.log(f"[WifiHostingView] Search failed: {exc}")
+                found = []
+            if not stop.is_set():
+                self._found = found
+
+        threading.Thread(target=work, daemon=True).start()
+        self._show_phase("searching")
+
+    def _on_device_select(self, index):
+        if index < len(self.hosts):
+            host = self.hosts[index]
+            self._joining = host
+            self._joined = self._join_error = None
+
+            def work():
+                try:
+                    self._joined = lan_link.connect(host["address"], host["port"])
+                except OSError as exc:
+                    self._join_error = str(exc) or "refused"
+
+            threading.Thread(target=work, daemon=True).start()
+            self._show_phase("connecting")
+        elif index == len(self.hosts):
+            self._start_search()
+        else:
+            self._on_device_list_back()
+
+    def _on_device_list_back(self):
+        self._show_phase("host_join_menu")
+
+    def _on_cancel(self):
+        runtime_globals.game_sound.play("cancel")
+        self._stop_networking()
+        self._show_phase("host_join_menu")
+
+    def _open_battle(self, link, is_host, enemy_name):
+        """The link is up: on to the battle confirmation."""
+        runtime_globals.game_console.log(
+            f"[WifiHostingView] Connected to {link.peer} as {'host' if is_host else 'guest'}")
+        if self.host is not None:
+            self.host.close()
+            self.host = None
+        self.change_view("battle_confirm", connection_mode="wifi", link=link,
+                         is_host=is_host, enemy_name=enemy_name,
+                         selected_pets=self.selected_pets)
+
+    def _stop_networking(self):
+        if self._search_stop is not None:
+            self._search_stop.set()
+            self._search_stop = None
+        if self.host is not None:
+            self.host.close()
+            self.host = None
+        joined, self._joined = self._joined, None
+        if joined is not None:
+            joined.close()
+        self._joining = None
+
+    # ------------------------------------------------------------- frames
+    def update(self):
+        if self.phase == "host_join_menu" and not self.host_join_menu.visible:
+            # A menu closes itself after its handler returns, so a handler
+            # that comes back to this phase (hosting refused) left it shut.
+            self._open_host_join_menu()
+            self.host_join_menu.visible = True
+            self.ui_manager.set_focused_component(self.host_join_menu)
+        if self.phase == "hosting" and self.host is not None:
+            link = self.host.poll()
+            if link is not None:
+                self._open_battle(link, True, "")
+        elif self.phase == "searching" and self._found is not None:
+            self.hosts, self._found = self._found, None
+            self._search_stop = None
+            runtime_globals.game_console.log(f"[WifiHostingView] Found {len(self.hosts)} host(s)")
+            self._show_phase("device_list")
+        elif self.phase == "connecting":
+            if self._joined is not None:
+                link, self._joined = self._joined, None
+                self._open_battle(link, False, (self._joining or {}).get("name")
+                                  or (self._joining or {}).get("code", ""))
+            elif self._join_error is not None:
+                runtime_globals.game_console.log(
+                    f"[WifiHostingView] Connection failed: {self._join_error}")
+                self._join_error = None
+                self._show_phase("device_list", "Could not connect")
+        elif self._joined is not None:
+            # A connect that finished after its cancel.
+            self._joined.close()
+            self._joined = None
+
     def draw(self, surface):
-        """Draw additional elements."""
         pass
-    
+
     def handle_event(self, event):
-        """Handle input events."""
         if not isinstance(event, tuple) or len(event) != 2:
             return
-        
-        event_type, event_data = event
-        
+        event_type, _event_data = event
         if event_type == "B":
-            if self.phase == "hosting":
-                self._on_hosting_cancel()
-            elif self.phase == "joining":
-                self._on_discovery_cancel()
+            if self.phase in ("hosting", "searching", "connecting"):
+                self._on_cancel()
             elif self.phase == "host_join_menu":
+                self._stop_networking()
                 self.change_view("pet_selection", is_online_mode=self.is_online_mode)
             return True
-    
+
     def cleanup(self):
-        """Cleanup when view is destroyed."""
         self._stop_networking()
-        
         components = [
-            self.background, self.title_scene, self.host_join_menu,
-            self.hosting_title_label, self.hosting_code_label,
-            self.hosting_wait_label, self.hosting_cancel_button,
-            self.discovery_title_label, self.discovery_status_label,
-            self.discovery_back_button, self.device_list_menu,
+            self.background, self.title_scene, self.host_join_menu, self.device_list_menu,
+            self.heading_label, self.code_label, self.address_label, self.status_label,
+            self.cancel_button,
         ]
-        
         for comp in components:
             if comp and comp in self.ui_manager.components:
                 self.ui_manager.remove_component(comp)
-        
         runtime_globals.game_console.log("[WifiHostingView] Cleanup complete")

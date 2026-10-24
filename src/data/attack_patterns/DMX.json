@@ -2,6 +2,7 @@
   "attack_types": {
     "SINGLE_WEAK": {
       "value": 1,
+      "damage": 2,
       "description": "1 sprite of pet.atk_main",
       "sprite_count": 1,
       "sprite_type": "atk_main",
@@ -9,6 +10,7 @@
     },
     "SINGLE_STRONG": {
       "value": 2,
+      "damage": 3,
       "description": "1 sprite of pet.atk_alt if > 0, or 2 sprites of pet.atk_main",
       "sprite_count": 1,
       "sprite_type": "atk_alt",
@@ -18,6 +20,7 @@
     },
     "DOUBLE_WEAK": {
       "value": 3,
+      "damage": 4,
       "description": "2 sprites of pet.atk_main",
       "sprite_count": 2,
       "sprite_type": "atk_main",
@@ -25,6 +28,7 @@
     },
     "DOUBLE_STRONG": {
       "value": 4,
+      "damage": 6,
       "description": "2 sprites of pet.atk_alt if > 0, or 3 sprites of pet.atk_main",
       "sprite_count": 2,
       "sprite_type": "atk_alt",
@@ -34,145 +38,530 @@
     },
     "CRITICAL": {
       "value": 5,
-      "description": "1 sprite of pet.atk_alt2 if > 0, or pet.atk_main at double size",
+      "damage": 10,
+      "description": "1 sprite of pet.atk_alt2 from the crit bank if > 0, or pet.atk_alt (then pet.atk_main) at double size",
       "sprite_count": 1,
       "sprite_type": "atk_alt2",
-      "fallback_sprite_type": "atk_main",
+      "fallback_sprite_type": "atk_alt",
       "fallback_sprite_count": 1,
-      "scale": 2.0
+      "scale": 2.0,
+      "damage_note": "HP cost. Measured off the device's own HP bar across nine filmed battles; it is the sprite strength times the sprite count (atk_main 2, atk_alt 3, atk_alt2 5; a critical's double size counts as two)."
     }
   },
+  "note": "Keyed on the attacker's STAGE and a three-tier band of its LEVEL, then the charge -- not on the level alone, which is what the table this replaced assumed. The attribute plays no part: stage 3 was read on a Data pet and a Virus pet and came out identical at every level and charge. Every stage has exactly three tiers and the top one is always the max level on its own. Read off real hardware two ways, the training minigame and map_dmx_attacks.py, agreeing on all six cells measured both. Every value is a reading: nothing here is inferred, and the three cells where two readings disagreed were settled by a re-run against the device's HP bar. Stage 1 is the one entry with a single tier: a Baby I has one level and cannot battle at all, so its row was read off the training minigame instead of the wire. It came back identical to stage 2's first tier, which is what the clamp already gave it -- so it is recorded rather than inferred, and nothing about the game changed when it went in.",
   "patterns": [
     {
       "id": 1,
-      "pattern": [1, 1, 1, 1, 1],
-      "comment": "All SINGLE_WEAK (damage 1 each)"
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
     },
     {
       "id": 2,
-      "pattern": [1, 4, 3, 1, 3],
-      "comment": "SINGLE_WEAK, DOUBLE_STRONG, DOUBLE_WEAK, SINGLE_WEAK, DOUBLE_WEAK"
+      "pattern": [
+        1,
+        1,
+        1,
+        1,
+        3
+      ]
     },
     {
       "id": 3,
-      "pattern": [3, 4, 4, 3, 3],
-      "comment": "DOUBLE_WEAK, DOUBLE_STRONG, DOUBLE_STRONG, DOUBLE_WEAK, DOUBLE_WEAK"
+      "pattern": [
+        1,
+        3,
+        3,
+        1,
+        3
+      ]
     },
     {
       "id": 4,
-      "pattern": [5, 4, 4, 2, 4],
-      "comment": "CRITICAL, DOUBLE_STRONG, DOUBLE_STRONG, SINGLE_STRONG, DOUBLE_STRONG"
+      "pattern": [
+        1,
+        5,
+        3,
+        3,
+        3
+      ]
     },
     {
       "id": 5,
-      "pattern": [1, 2, 2, 1, 4],
-      "comment": "SINGLE_WEAK, SINGLE_STRONG, SINGLE_STRONG, SINGLE_WEAK, DOUBLE_STRONG"
+      "pattern": [
+        1,
+        3,
+        3,
+        3,
+        5
+      ]
     },
     {
       "id": 6,
-      "pattern": [2, 4, 3, 2, 4],
-      "comment": "SINGLE_STRONG, DOUBLE_STRONG, DOUBLE_WEAK, SINGLE_STRONG, DOUBLE_STRONG"
+      "pattern": [
+        5,
+        3,
+        3,
+        1,
+        3
+      ]
     },
     {
       "id": 7,
-      "pattern": [2, 5, 4, 4, 3],
-      "comment": "SINGLE_STRONG, CRITICAL, DOUBLE_STRONG, DOUBLE_STRONG, DOUBLE_WEAK"
+      "pattern": [
+        1,
+        3,
+        1,
+        1,
+        1
+      ]
     },
     {
       "id": 8,
-      "pattern": [2, 1, 1, 2, 1],
-      "comment": "SINGLE_STRONG, SINGLE_WEAK, SINGLE_WEAK, SINGLE_STRONG, SINGLE_WEAK"
+      "pattern": [
+        3,
+        3,
+        5,
+        3,
+        3
+      ]
     },
     {
       "id": 9,
-      "pattern": [2, 3, 3, 3, 5],
-      "comment": "SINGLE_STRONG, DOUBLE_WEAK, DOUBLE_WEAK, DOUBLE_WEAK, CRITICAL"
+      "pattern": [
+        5,
+        3,
+        3,
+        5,
+        3
+      ]
     },
     {
       "id": 10,
-      "pattern": [2, 3, 2, 1, 1],
-      "comment": "SINGLE_STRONG, DOUBLE_WEAK, SINGLE_STRONG, SINGLE_WEAK, SINGLE_WEAK"
+      "pattern": [
+        1,
+        2,
+        2,
+        1,
+        4
+      ]
     },
     {
       "id": 11,
-      "pattern": [3, 4, 5, 3, 3],
-      "comment": "DOUBLE_WEAK, DOUBLE_STRONG, CRITICAL, DOUBLE_WEAK, DOUBLE_WEAK"
+      "pattern": [
+        2,
+        4,
+        3,
+        2,
+        4
+      ]
     },
     {
       "id": 12,
-      "pattern": [5, 4, 4, 5, 4],
-      "comment": "CRITICAL, DOUBLE_STRONG, DOUBLE_STRONG, CRITICAL, DOUBLE_STRONG"
+      "pattern": [
+        2,
+        5,
+        4,
+        4,
+        3
+      ]
     },
     {
       "id": 13,
-      "pattern": [2, 4, 5, 4, 5],
-      "comment": "SINGLE_STRONG, DOUBLE_STRONG, CRITICAL, DOUBLE_STRONG, CRITICAL"
+      "pattern": [
+        2,
+        1,
+        1,
+        2,
+        1
+      ]
     },
     {
       "id": 14,
-      "pattern": [4, 5, 4, 3, 5],
-      "comment": "DOUBLE_STRONG, CRITICAL, DOUBLE_STRONG, DOUBLE_WEAK, CRITICAL"
+      "pattern": [
+        1,
+        4,
+        3,
+        1,
+        3
+      ]
     },
     {
       "id": 15,
-      "pattern": [3, 3, 1, 4, 3],
-      "comment": "DOUBLE_WEAK, DOUBLE_WEAK, SINGLE_WEAK, DOUBLE_STRONG, DOUBLE_WEAK"
+      "pattern": [
+        2,
+        3,
+        3,
+        3,
+        5
+      ]
     },
     {
       "id": 16,
-      "pattern": [3, 2, 2, 5, 4],
-      "comment": "DOUBLE_WEAK, SINGLE_STRONG, SINGLE_STRONG, CRITICAL, DOUBLE_STRONG"
+      "pattern": [
+        5,
+        4,
+        4,
+        2,
+        4
+      ]
+    },
+    {
+      "id": 17,
+      "pattern": [
+        2,
+        3,
+        2,
+        1,
+        1
+      ]
+    },
+    {
+      "id": 18,
+      "pattern": [
+        3,
+        4,
+        5,
+        3,
+        3
+      ]
+    },
+    {
+      "id": 19,
+      "pattern": [
+        5,
+        4,
+        4,
+        5,
+        4
+      ]
+    },
+    {
+      "id": 20,
+      "pattern": [
+        3,
+        4,
+        4,
+        3,
+        3
+      ]
+    },
+    {
+      "id": 21,
+      "pattern": [
+        2,
+        4,
+        5,
+        4,
+        5
+      ]
+    },
+    {
+      "id": 22,
+      "pattern": [
+        3,
+        3,
+        1,
+        4,
+        3
+      ]
+    },
+    {
+      "id": 23,
+      "pattern": [
+        5,
+        4,
+        4,
+        1,
+        4
+      ]
+    },
+    {
+      "id": 24,
+      "pattern": [
+        4,
+        5,
+        4,
+        3,
+        5
+      ]
+    },
+    {
+      "id": 25,
+      "pattern": [
+        3,
+        2,
+        2,
+        5,
+        4
+      ]
+    },
+    {
+      "id": 26,
+      "pattern": [
+        2,
+        1,
+        1,
+        4,
+        1
+      ]
     }
   ],
-  "assignments": [
-    {"level": 1, "mini-game": 0, "pattern_id": 1, "comment": "Level 1, Bad"},
-    {"level": 1, "mini-game": 1, "pattern_id": 2, "comment": "Level 1, Good"},
-    {"level": 1, "mini-game": 2, "pattern_id": 3, "comment": "Level 1, Great"},
-    {"level": 1, "mini-game": 3, "pattern_id": 4, "comment": "Level 1, Excellent"},
-
-    {"level": 2, "mini-game": 0, "pattern_id": 1, "comment": "Level 2, Bad"},
-    {"level": 2, "mini-game": 1, "pattern_id": 5, "comment": "Level 2, Good"},
-    {"level": 2, "mini-game": 2, "pattern_id": 6, "comment": "Level 2, Great"},
-    {"level": 2, "mini-game": 3, "pattern_id": 7, "comment": "Level 2, Excellent"},
-
-    {"level": 3, "mini-game": 0, "pattern_id": 8, "comment": "Level 3, Bad"},
-    {"level": 3, "mini-game": 1, "pattern_id": 2, "comment": "Level 3, Good"},
-    {"level": 3, "mini-game": 2, "pattern_id": 9, "comment": "Level 3, Great"},
-    {"level": 3, "mini-game": 3, "pattern_id": 4, "comment": "Level 3, Excellent"},
-
-    {"level": 4, "mini-game": 0, "pattern_id": 10, "comment": "Level 4, Bad"},
-    {"level": 4, "mini-game": 1, "pattern_id": 6, "comment": "Level 4, Good"},
-    {"level": 4, "mini-game": 2, "pattern_id": 11, "comment": "Level 4, Great"},
-    {"level": 4, "mini-game": 3, "pattern_id": 12, "comment": "Level 4, Excellent"},
-
-    {"level": 5, "mini-game": 0, "pattern_id": 10, "comment": "Level 5, Bad"},
-    {"level": 5, "mini-game": 1, "pattern_id": 6, "comment": "Level 5, Good"},
-    {"level": 5, "mini-game": 2, "pattern_id": 11, "comment": "Level 5, Great"},
-    {"level": 5, "mini-game": 3, "pattern_id": 13, "comment": "Level 5, Excellent"},
-
-    {"level": 6, "mini-game": 0, "pattern_id": 5, "comment": "Level 6, Bad"},
-    {"level": 6, "mini-game": 1, "pattern_id": 3, "comment": "Level 6, Good"},
-    {"level": 6, "mini-game": 2, "pattern_id": 4, "comment": "Level 6, Great"},
-    {"level": 6, "mini-game": 3, "pattern_id": 12, "comment": "Level 6, Excellent"},
-
-    {"level": 7, "mini-game": 0, "pattern_id": 10, "comment": "Level 7, Bad"},
-    {"level": 7, "mini-game": 1, "pattern_id": 6, "comment": "Level 7, Good"},
-    {"level": 7, "mini-game": 2, "pattern_id": 7, "comment": "Level 7, Great"},
-    {"level": 7, "mini-game": 3, "pattern_id": 13, "comment": "Level 7, Excellent"},
-
-    {"level": 8, "mini-game": 0, "pattern_id": 8, "comment": "Level 8, Bad"},
-    {"level": 8, "mini-game": 1, "pattern_id": 9, "comment": "Level 8, Good"},
-    {"level": 8, "mini-game": 2, "pattern_id": 11, "comment": "Level 8, Great"},
-    {"level": 8, "mini-game": 3, "pattern_id": 14, "comment": "Level 8, Excellent"},
-
-    {"level": 9, "mini-game": 0, "pattern_id": 8, "comment": "Level 9, Bad"},
-    {"level": 9, "mini-game": 1, "pattern_id": 9, "comment": "Level 9, Good"},
-    {"level": 9, "mini-game": 2, "pattern_id": 11, "comment": "Level 9, Great"},
-    {"level": 9, "mini-game": 3, "pattern_id": 14, "comment": "Level 9, Excellent"},
-
-    {"level": 10, "mini-game": 0, "pattern_id": 15, "comment": "Level 10, Bad"},
-    {"level": 10, "mini-game": 1, "pattern_id": 16, "comment": "Level 10, Good"},
-    {"level": 10, "mini-game": 2, "pattern_id": 13, "comment": "Level 10, Great"},
-    {"level": 10, "mini-game": 3, "pattern_id": 12, "comment": "Level 10, Excellent"}
+  "tiers": [
+    {
+      "stage": 1,
+      "levels": [
+        1,
+        1
+      ],
+      "patterns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "comment": "Baby I, read off the training minigame -- a Baby I cannot battle, so the wire has no value for it. One tier because a Baby I has one level. Identical to stage 2's first tier, which is what the lookup's clamp was already giving it."
+    },
+    {
+      "stage": 2,
+      "levels": [
+        1,
+        1
+      ],
+      "patterns": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "stage": 2,
+      "levels": [
+        2,
+        2
+      ],
+      "patterns": [
+        1,
+        3,
+        5,
+        6
+      ]
+    },
+    {
+      "stage": 2,
+      "levels": [
+        3,
+        3
+      ],
+      "patterns": [
+        7,
+        3,
+        8,
+        9
+      ]
+    },
+    {
+      "stage": 3,
+      "levels": [
+        1,
+        2
+      ],
+      "patterns": [
+        1,
+        10,
+        11,
+        12
+      ]
+    },
+    {
+      "stage": 3,
+      "levels": [
+        3,
+        3
+      ],
+      "patterns": [
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    {
+      "stage": 3,
+      "levels": [
+        4,
+        4
+      ],
+      "patterns": [
+        17,
+        11,
+        18,
+        19
+      ]
+    },
+    {
+      "stage": 4,
+      "levels": [
+        1,
+        2
+      ],
+      "patterns": [
+        1,
+        17,
+        20,
+        16
+      ]
+    },
+    {
+      "stage": 4,
+      "levels": [
+        3,
+        5
+      ],
+      "patterns": [
+        17,
+        11,
+        18,
+        21
+      ],
+      "note": "lv5 Bad first read `ss dw ss dw dw`, two tokens from lv3 and lv4; a re-run of both came back identical, so that was a misreading and lv3-5 is one tier"
+    },
+    {
+      "stage": 4,
+      "levels": [
+        6,
+        6
+      ],
+      "patterns": [
+        10,
+        20,
+        16,
+        19
+      ]
+    },
+    {
+      "stage": 5,
+      "levels": [
+        1,
+        3
+      ],
+      "patterns": [
+        1,
+        22,
+        20,
+        12
+      ],
+      "note": "lv3 Great first read `sw ds ds dw dw`, one token from lv1 and lv2; a re-run of both agreed on `dw`"
+    },
+    {
+      "stage": 5,
+      "levels": [
+        4,
+        7
+      ],
+      "patterns": [
+        17,
+        11,
+        12,
+        21
+      ]
+    },
+    {
+      "stage": 5,
+      "levels": [
+        8,
+        8
+      ],
+      "patterns": [
+        14,
+        18,
+        23,
+        19
+      ]
+    },
+    {
+      "stage": 6,
+      "levels": [
+        1,
+        4
+      ],
+      "patterns": [
+        1,
+        14,
+        20,
+        16
+      ],
+      "note": "Good's fourth attack is the one place a reading was overruled. Three harness runs at lv1-3 read it `ss`; the training screen at lv4 and filmed battle 6 both said `sw`, and battle 6 was the only hard evidence of the three -- we landed turns 1, 2 and 4 and the device's bar went 18 to 8, which is 2+6+2 and not 2+6+3. A re-run reading the bar rather than the sprite settled it as `sw`. Weak against strong is a sprite judgement; the bar is arithmetic"
+    },
+    {
+      "stage": 6,
+      "levels": [
+        5,
+        9
+      ],
+      "patterns": [
+        13,
+        15,
+        18,
+        24
+      ]
+    },
+    {
+      "stage": 6,
+      "levels": [
+        10,
+        10
+      ],
+      "patterns": [
+        22,
+        25,
+        21,
+        19
+      ]
+    },
+    {
+      "stage": 7,
+      "levels": [
+        1,
+        4
+      ],
+      "patterns": [
+        1,
+        14,
+        20,
+        21
+      ]
+    },
+    {
+      "stage": 7,
+      "levels": [
+        5,
+        9
+      ],
+      "patterns": [
+        26,
+        15,
+        12,
+        24
+      ]
+    },
+    {
+      "stage": 7,
+      "levels": [
+        10,
+        10
+      ],
+      "patterns": [
+        22,
+        25,
+        16,
+        19
+      ]
+    }
   ]
 }

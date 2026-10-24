@@ -12,7 +12,7 @@ from ui.components.title_scene import TitleScene
 from ui.components.button import Button
 from ui.components.label import Label
 from ui.components.background import Background
-from ui.components.text_panel import TextPanel
+from ui.components.tooltip_bar import TooltipBar
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals, game_globals, constants
 from utils.scene_utils import change_scene
@@ -52,12 +52,15 @@ class MainMenuView:
         self._shop_available = None
         self._wifi_available = None
         self._dcom_available = None
+        self._wificom_available = None
         
         # Periodic check timers
         self.last_wifi_check_time = 0
         self.last_dcom_check_time = 0
+        self.last_wificom_check_time = 0
         self.wifi_check_interval = 3.0
         self.dcom_check_interval = 3.0
+        self.wificom_check_interval = 3.0
         
         # UI Components (shared across all views)
         self.background = None
@@ -77,10 +80,11 @@ class MainMenuView:
         self.arena_back_button = None
         
         # Local Battle sub-menu buttons
+        self.local_wificom_button = None
         self.local_wifi_button = None
         self.local_dcom_button = None
         self.local_back_button = None
-        self.local_battle_desc_panel = None
+        self.local_battle_tooltip = None
         
         # Config sub-menu buttons
         self.config_back_button = None
@@ -286,17 +290,17 @@ class MainMenuView:
         small_button_width = 61
         small_button_heights = (main_button_height // 3) - 4
         
-        # WiFi button
-        self.local_wifi_button = Button(
+        # WiFiCom button
+        self.local_wificom_button = Button(
             left_button_x, top_row_y, main_button_width, main_button_height,
-            "", self._on_wifi_selected,
-            decorators=["Connect_LocalWifi", "Connect_Loading"],
+            "", self._on_wificom_selected,
+            decorators=["Connect_WifiCom", "Connect_Loading"],
             cut_corners={'tl': False, 'tr': True, 'bl': False, 'br': True}
         )
-        self.local_wifi_button.visible = False
-        self.local_wifi_button.enabled = False
-        self.ui_manager.add_component(self.local_wifi_button)
-        self.local_battle_submenu_components.append(self.local_wifi_button)
+        self.local_wificom_button.visible = False
+        self.local_wificom_button.enabled = False
+        self.ui_manager.add_component(self.local_wificom_button)
+        self.local_battle_submenu_components.append(self.local_wificom_button)
         
         # DCom button
         self.local_dcom_button = Button(
@@ -310,10 +314,21 @@ class MainMenuView:
         self.ui_manager.add_component(self.local_dcom_button)
         self.local_battle_submenu_components.append(self.local_dcom_button)
         
+        # WiFi button, below WiFiCom
+        self.local_wifi_button = Button(
+            left_button_x, bottom_row_y, main_button_width, main_button_height,
+            "", self._on_wifi_selected,
+            decorators=["Connect_LocalWifi", "Connect_Loading"],
+            cut_corners={'tl': False, 'tr': True, 'bl': False, 'br': True}
+        )
+        self.local_wifi_button.visible = False
+        self.local_wifi_button.enabled = False
+        self.ui_manager.add_component(self.local_wifi_button)
+        self.local_battle_submenu_components.append(self.local_wifi_button)
+        
         # Back button
-        local_back_y = top_row_y + main_button_height + vertical_gap
         self.local_back_button = Button(
-            right_button_x, local_back_y, small_button_width, small_button_heights,
+            right_button_x, bottom_row_y, small_button_width, small_button_heights,
             "BACK", self._on_local_battle_back,
             cut_corners={'tl': True, 'tr': False, 'bl': False, 'br': True}
         )
@@ -321,14 +336,12 @@ class MainMenuView:
         self.ui_manager.add_component(self.local_back_button)
         self.local_battle_submenu_components.append(self.local_back_button)
         
-        # Description panel
-        self.local_battle_desc_panel = TextPanel(
-            left_button_x, bottom_row_y, main_button_width, main_button_height
-        )
-        self.local_battle_desc_panel.set_text("")
-        self.local_battle_desc_panel.visible = False
-        self.ui_manager.add_component(self.local_battle_desc_panel)
-        self.local_battle_submenu_components.append(self.local_battle_desc_panel)
+        # Tooltip bar for the highlighted option.  It sizes and places
+        # itself along the bottom edge of the UI area.
+        self.local_battle_tooltip = TooltipBar()
+        self.local_battle_tooltip.visible = False
+        self.ui_manager.add_component(self.local_battle_tooltip)
+        self.local_battle_submenu_components.append(self.local_battle_tooltip)
     
     def _setup_config_submenu_buttons(self):
         """Setup Config sub-menu buttons and labels."""
@@ -463,13 +476,22 @@ class MainMenuView:
             self.config_omninet_button.set_text("CONNECT")
             self.config_omninet_button.enabled = False
         
-        # In Free Mode, block Omninet linking entirely
+        # Free Mode has no Omninet account: the row says so, and the button
+        # switches the game mode (Omninet accounts are Progress Mode's).
         if is_free:
-            self.config_omninet_button.visible = False
-            self.config_omninet_button.enabled = False
-            self.config_omninet_button.focusable = False
-        
-        # Update Discord status
+            if self._omninet_available is None:
+                self.config_omninet_status_label.set_text("Status: Checking...")
+            elif self._omninet_available:
+                self.config_omninet_status_label.set_text("Status: Online")
+            else:
+                self.config_omninet_status_label.set_text("Status: Offline")
+            self.config_omninet_account_label.set_text("Free Mode")
+            self.config_omninet_button.set_text("SWITCH MODE")
+            self.config_omninet_button.enabled = True
+            self.config_omninet_button.focusable = True
+
+        # Update Discord status.  Discord battles are available in Free Mode
+        # too, so the button stays enabled regardless of game mode.
         discord_name = self.discord.get_account_name() if self.discord else None
         if discord_name:
             self.config_discord_status_label.set_text("Status: Linked")
@@ -479,6 +501,8 @@ class MainMenuView:
             self.config_discord_status_label.set_text("Status: Not linked")
             self.config_discord_account_label.set_text("Account: None")
             self.config_discord_button.set_text("LINK")
+        self.config_discord_button.enabled = True
+        self.config_discord_button.focusable = True
     
     def _show_main_menu(self):
         """Show main menu buttons."""
@@ -550,6 +574,13 @@ class MainMenuView:
             component.visible = True
         
         # Reset buttons to loading state
+        self.local_wificom_button.decorators = ["Connect_WifiCom", "Connect_Loading"]
+        self.local_wificom_button.enabled = False
+        self.local_wificom_button.focusable = False
+        if hasattr(self.local_wificom_button, 'on_manager_set'):
+            self.local_wificom_button.on_manager_set()
+        self.local_wificom_button.needs_redraw = True
+        
         self.local_wifi_button.decorators = ["Connect_LocalWifi", "Connect_Loading"]
         self.local_wifi_button.enabled = False
         self.local_wifi_button.focusable = False
@@ -567,13 +598,17 @@ class MainMenuView:
         # Reset availability flags and trigger checks
         self._wifi_available = None
         self._dcom_available = None
+        self._wificom_available = None
         self.last_wifi_check_time = 0
         self.last_dcom_check_time = 0
-        runtime_globals.game_console.log("[MainMenuView] Starting WiFi and DCom availability checks...")
+        self.last_wificom_check_time = 0
+        runtime_globals.game_console.log("[MainMenuView] Starting WiFi, DCom and WiFiCom availability checks...")
         threading.Thread(target=self._check_wifi_availability_async, daemon=True).start()
         threading.Thread(target=self._check_dcom_availability_async, daemon=True).start()
+        threading.Thread(target=self._check_wificom_availability_async, daemon=True).start()
         
-        # Set initial keyboard focus on Local WiFi (first button in submenu)
+        # Set initial keyboard focus on Local WiFi.  WiFiCom sits above it
+        # but cannot be used yet, so it does not take the opening focus.
         if self.local_wifi_button:
             self.ui_manager.set_focused_component(self.local_wifi_button)
     
@@ -583,11 +618,14 @@ class MainMenuView:
         self.current_submenu = 'config'
         
         runtime_globals.game_console.log("[MainMenuView] Showing config submenu components...")
-        
-        # Show all config components
-        self._update_config_status()
+
+        # Show all config components FIRST, then let the status update apply
+        # its per-mode adjustments (doing it the other way round re-showed
+        # components the status update had hidden, leaving broken rectangles
+        # over the settings in Free Mode).
         for component in self.config_submenu_components:
             component.visible = True
+        self._update_config_status()
         
         # Start checking Omninet availability if not checked yet
         if self._omninet_available is None:
@@ -600,37 +638,51 @@ class MainMenuView:
         """Background thread to check OmniNet availability."""
         runtime_globals.game_console.log("[MainMenuView] Checking OmniNet availability...")
         
-        available = False
-        local_url = getattr(constants, 'OMNINET_LOCAL_URL', None)
-        if local_url:
-            try:
-                response = requests.get(urljoin(local_url, '/health'), timeout=2)
-                if response.status_code == 200:
-                    available = True
-            except Exception:
-                pass
-        
-        if not available:
-            main_url = getattr(constants, 'OMNINET_MAIN_URL', None)
-            if main_url:
-                try:
-                    response = requests.get(urljoin(main_url, '/health'), timeout=2)
-                    if response.status_code == 200:
-                        available = True
-                except Exception:
-                    pass
-        
-        self._shop_available = available
+        # The server the shop will talk to: OmninetService's (production, or
+        # OMNIPET_OMNINET_URL). Probing the dev server first could report the
+        # shop open while production was down (BLD-04).
+        self._shop_available = omninet_service.check_availability()
     
     def _check_wifi_availability_async(self):
-        """Background thread to check WiFi availability."""
+        """Background thread to check WiFi availability.
+
+        A WiFi battle needs a local network, not the internet: the button
+        used to stay off on a network without internet access (a phone's
+        hotspot, a router with its line down) where two games can still
+        find each other.
+        """
         runtime_globals.game_console.log("[MainMenuView] Checking WiFi availability...")
         try:
-            import socket
-            socket.create_connection(("8.8.8.8", 53), timeout=2)
-            self._wifi_available = True
+            from battle.lan_link import local_addresses
+            self._wifi_available = bool(local_addresses())
         except Exception:
             self._wifi_available = False
+    
+    def _check_wificom_availability_async(self):
+        """Background thread to check WiFiCom availability.
+
+        Two conditions, both of which the player can fix: the secrets
+        file from the wificom.dev webapp has to be in place, and the
+        machine has to be able to reach the internet.  Credentials are
+        re-read each time so dropping the file in is picked up without a
+        restart.
+        """
+        runtime_globals.game_console.log("[MainMenuView] Checking WiFiCom availability...")
+        if not (constants.WIFICOM_BATTLES_RELEASED
+                or getattr(game_globals.configuration, "debug_mode", False)):
+            self._wificom_available = False
+            return
+        try:
+            from services.wificom_service import (credentials_available,
+                                                  internet_available,
+                                                  transport_available)
+            available = (transport_available()
+                         and credentials_available()
+                         and internet_available())
+            self._wificom_available = available
+        except Exception as e:
+            runtime_globals.game_console.log(f"[MainMenuView] WiFiCom check failed: {e}")
+            self._wificom_available = False
     
     def _check_dcom_availability_async(self):
         """Background thread to check DCom availability."""
@@ -671,7 +723,11 @@ class MainMenuView:
             runtime_globals.game_console.log("[MainMenuView] Arena requires Progress Mode")
             return
         if not omninet_service.is_logged_in():
-            self.change_view("link_dialog", is_online_mode=True, return_view="arena")
+            # The Omninet sign-in, as Config's CONNECT does in Progress Mode:
+            # link_dialog is the Discord link (found by the 2026-10-22 doc
+            # pass: the Arena opened it).
+            runtime_globals.game_console.log("[MainMenuView] Arena needs an Omninet login")
+            change_scene("login")
             return
         self.change_view("arena")
     
@@ -777,10 +833,19 @@ class MainMenuView:
         runtime_globals.game_sound.play("cancel")
         self._show_main_menu()
     
-    def _on_wifi_selected(self):
-        """WiFi button clicked."""
+    def _on_wificom_selected(self):
+        """WiFiCom button clicked.
+
+        Straight to the risk notice: nothing connects until the player
+        has read it and said yes.
+        """
         runtime_globals.game_sound.play("menu")
-        self.change_view("wifi_hosting", is_online_mode=False)
+        self.change_view("wificom_warning")
+    
+    def _on_wifi_selected(self):
+        """WiFi button clicked: choose the pets, then host or join."""
+        runtime_globals.game_sound.play("menu")
+        self.change_view("pet_selection")
     
     def _on_dcom_selected(self):
         """DCom button clicked."""
@@ -806,8 +871,20 @@ class MainMenuView:
             self.change_view("link_dialog", is_online_mode=False, return_view="main_menu")
     
     def _on_omninet_connect(self):
-        """Omninet Connect/Disconnect button clicked."""
+        """Omninet Connect/Disconnect button clicked.
+
+        In Free Mode the button reads SWITCH MODE and opens the game-mode
+        selection instead (Omninet accounts are Progress-Mode-only).
+        """
         runtime_globals.game_sound.play("menu")
+
+        if game_globals.is_free_mode():
+            game_globals.setup_input = False
+            game_globals.setup_graphics = False
+            game_globals.setup_game_mode = True
+            game_globals.skip_tutorial_on_mode_switch = bool(game_globals.pet_list)
+            change_scene("setup")
+            return
 
         if omninet_service.is_logged_in():
             # Disconnect: drop the device key and bounce the player into the
@@ -824,7 +901,7 @@ class MainMenuView:
             # Progress Mode: redirect to SceneLogin for full login flow
             if game_globals.is_progress_mode():
                 runtime_globals.game_console.log(
-                    "[MainMenuView] Progress Mode â€” redirecting to SceneLogin")
+                    "[MainMenuView] Progress Mode - redirecting to SceneLogin")
                 change_scene("login")
             else:
                 # Free Mode: use inline pairing code view
@@ -837,29 +914,9 @@ class MainMenuView:
         
         available = False
         
-        # First check if server is available
-        local_url = getattr(constants, 'OMNINET_LOCAL_URL', 'http://localhost:8000')
-        try:
-            runtime_globals.game_console.log(f"[MainMenuView] Trying Omninet at {local_url}/health")
-            response = requests.get(urljoin(local_url, '/health'), timeout=2)
-            runtime_globals.game_console.log(f"[MainMenuView] Response status: {response.status_code}")
-            if response.status_code == 200:
-                available = True
-                runtime_globals.game_console.log(f"[MainMenuView] Omninet available at {local_url}")
-        except Exception as e:
-            runtime_globals.game_console.log(f"[MainMenuView] Connection failed: {e}")
-        
-        # Try main URL if local failed
-        if not available:
-            main_url = getattr(constants, 'OMNINET_MAIN_URL', None)
-            if main_url:
-                try:
-                    response = requests.get(urljoin(main_url, '/health'), timeout=2)
-                    if response.status_code == 200:
-                        available = True
-                        runtime_globals.game_console.log(f"[MainMenuView] Omninet available at {main_url}")
-                except Exception:
-                    pass
+        # The server every Omninet call uses (BLD-04: no dev-server probe).
+        available = omninet_service.check_availability()
+        runtime_globals.game_console.log(f"[MainMenuView] Omninet available: {available}")
         
         # If server is available and we have saved credentials, try auto-login
         if available and omninet_service.has_saved_credentials():
@@ -932,6 +989,23 @@ class MainMenuView:
             self.local_dcom_button.needs_redraw = True
             self._dcom_available = None
         
+        # Handle WiFiCom availability result
+        if self._wificom_available is not None and self.local_wificom_button and self.local_wificom_button.visible:
+            runtime_globals.game_console.log(f"[MainMenuView] WiFiCom availability: {self._wificom_available}")
+            if self._wificom_available:
+                self.local_wificom_button.decorators = ["Connect_WifiCom"]
+                self.local_wificom_button.enabled = True
+                self.local_wificom_button.focusable = True
+            else:
+                self.local_wificom_button.decorators = ["Connect_WifiCom", "Connect_Offline"]
+                self.local_wificom_button.enabled = False
+                self.local_wificom_button.focusable = False
+            
+            if hasattr(self.local_wificom_button, 'on_manager_set'):
+                self.local_wificom_button.on_manager_set()
+            self.local_wificom_button.needs_redraw = True
+            self._wificom_available = None
+        
         # Handle Omninet availability result
         if self._omninet_available is not None and self.current_submenu == 'config':
             runtime_globals.game_console.log(f"[MainMenuView] Omninet availability: {self._omninet_available}")
@@ -950,24 +1024,36 @@ class MainMenuView:
                 self.last_dcom_check_time = current_time
                 threading.Thread(target=self._check_dcom_availability_async, daemon=True).start()
             
-            # Update description panel based on focus
-            if self.local_battle_desc_panel:
+            if current_time - self.last_wificom_check_time >= self.wificom_check_interval:
+                self.last_wificom_check_time = current_time
+                threading.Thread(target=self._check_wificom_availability_async, daemon=True).start()
+            
+            # Feed the tooltip bar the highlighted option's description
+            if self.local_battle_tooltip:
                 focused = None
                 if 0 <= self.ui_manager.focused_index < len(self.ui_manager.focusable_components):
                     focused = self.ui_manager.focusable_components[self.ui_manager.focused_index]
                 
-                if focused == self.local_wifi_button:
-                    self.local_battle_desc_panel.set_text(
+                if focused == self.local_wificom_button:
+                    self.local_battle_tooltip.set_text(
+                        "Connects to real devices over the internet through wificom.dev, requires an internet connection"
+                    )
+                    self.local_battle_tooltip.visible = True
+                elif focused == self.local_wifi_button:
+                    self.local_battle_tooltip.set_text(
                         "Connects to another Omnipet in the local network, requires Wifi connection"
                     )
-                    self.local_battle_desc_panel.visible = True
+                    self.local_battle_tooltip.visible = True
                 elif focused == self.local_dcom_button:
-                    self.local_battle_desc_panel.set_text(
+                    self.local_battle_tooltip.set_text(
                         "Connects to a real device using a D-Com, requires serial connection support"
                     )
-                    self.local_battle_desc_panel.visible = True
+                    self.local_battle_tooltip.visible = True
                 else:
-                    self.local_battle_desc_panel.visible = False
+                    # Clearing the text as well as hiding restarts the read
+                    # pause when the player comes back to an option.
+                    self.local_battle_tooltip.set_text("")
+                    self.local_battle_tooltip.visible = False
     
     def draw(self, surface):
         """Draw additional elements (if any)."""

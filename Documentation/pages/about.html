@@ -1,61 +1,62 @@
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
+  <meta charset="UTF-8">
   <title>About - Omnipet Documentation</title>
   <link rel="stylesheet" href="../assets/main.css">
 </head>
+
 <body>
   <div class="page-content">
     <div class="page-header">
-      <h1 class="page-title">About Omnipet</h1>
-      <p class="page-subtitle">Learn more about the project, its history, and the team behind it</p>
-    </div>
-
-    <div class="content-section">
-      <h2 class="section-title">Project Overview</h2>
-      <div class="section-content">
-        <p>Omnipet started as a passion project to recreate the magic of classic virtual pets while bringing modern gaming sensibilities and customization options to the genre. Our goal is to provide a platform that's both nostalgic and innovative.</p>
+      <div class="page-header-text">
+        <h1 class="page-title">About Omnipet</h1>
+        <p class="page-subtitle">The project, how it is built, and where to find the community.</p>
       </div>
     </div>
 
     <div class="content-section">
-      <h2 class="section-title">Key Features</h2>
+      <h2 class="section-title">Project overview</h2>
       <div class="section-content">
-        <ul style="list-style: none; padding: 0;">
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">▸</span>
-            <strong>Modular Architecture:</strong> Add new pets, features, and gameplay mechanics through modules
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">▸</span>
-            <strong>Evolution System:</strong> Complex branching evolution paths based on care and choices
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">▸</span>
-            <strong>Battle System:</strong> Engage in strategic battles with other virtual pets
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">▸</span>
-            <strong>Module Editor:</strong> Create and share custom content with the community
-          </li>
-        </ul>
+        <p>Omnipet started as a fan project to play the classic virtual pets on one device. Each device is recreated as a
+          module, following its manual and, where possible, measurements of the real hardware, so the Digimon of many
+          devices can be raised side by side.</p>
+        <p>This is a fan project with no connection to the manufacturers of the original devices.</p>
       </div>
     </div>
 
     <div class="content-section">
-      <h2 class="section-title">Technology Stack</h2>
+      <h2 class="section-title">Key features</h2>
       <div class="section-content">
-        <p>Omnipet is built using Python and Pygame, making it accessible for modders and contributors. The modular design allows for easy extension and customization without affecting the core game systems.</p>
+        <table class="data-table">
+          <tbody>
+            <tr><td>Modules</td><td>Each device is data: Digimon, evolution routes, care rules, battles, items and backgrounds.</td></tr>
+            <tr><td>Evolution</td><td>Branching routes that read care, training, battles and each device's own values.</td></tr>
+            <tr><td>Battles</td><td>Adventure areas, Versus, Jogress, DCom battles with real devices, WiFi and online battles, Arena seasons.</td></tr>
+            <tr><td>Module Editor</td><td>A Windows program that creates, checks, documents and publishes modules.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="content-section">
+      <h2 class="section-title">Technology</h2>
+      <div class="section-content">
+        <p>Omnipet is written in Python with pygame. It runs on Windows, Linux, the Raspberry Pi (GamePi), Batocera and
+          Android. Omninet, the online service for accounts, the Shop and the Arena, is a separate server. The Module
+          Editor is a C# Windows Forms program.</p>
       </div>
     </div>
 
     <div class="content-section">
       <h2 class="section-title">Community</h2>
       <div class="section-content">
-        <p>Join our growing community of virtual pet enthusiasts, modders, and developers. Share your modules, get help with the game, and contribute to the project's development on GitHub.</p>
+        <p>Questions, bug reports and module sharing happen on <a href="https://discord.gg/3JRzKPpC" target="_blank">Discord</a>.
+          The source and the releases are on <a href="https://github.com/sundeth/omnipet" target="_blank">GitHub</a>.</p>
       </div>
     </div>
   </div>
 </body>
+
 </html>

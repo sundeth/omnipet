@@ -7,6 +7,11 @@ class XaiRoll:
     """XAI rolling minigame for DMX ruleset"""
     FRAME_COUNT = 7
 
+    #: How long the roll spins unattended before stopping itself. A player who
+    #: never presses anything would otherwise sit in front of a roll that spins
+    #: forever, with no way to reach the bar phase.
+    AUTO_STOP_MS = 5000
+
     def __init__(self, x, y, width, height, xai_number):
         self.x = x
         self.y = y
@@ -22,6 +27,8 @@ class XaiRoll:
 
         # Animation state for stop effect
         self.stopping = False
+        self.auto_stopped = False   # True when the roll timed out on its own
+        self._roll_started_ms = 0
         self.stop_target_frame = None
         self.rect_anim_progress = 0
         self.rect_anim_speed = 2 * (30 / constants.FRAME_RATE)  # pixels per frame
@@ -46,6 +53,8 @@ class XaiRoll:
         self.rolling = True
         self.stopping = False
         self.roll_timer = 0
+        self.auto_stopped = False
+        self._roll_started_ms = pygame.time.get_ticks()
 
     def stop(self, xai_number=None):
         # Begin stop animation
@@ -59,6 +68,14 @@ class XaiRoll:
             self.stop_target_frame = self.current_frame
 
     def update(self):
+        # Nobody pressed anything: stop on whichever face is showing, exactly
+        # as a press would have. Checked before the frame advances so the roll
+        # lands on the face the player was looking at.
+        if (self.rolling and not self.stopping and self._roll_started_ms
+                and pygame.time.get_ticks() - self._roll_started_ms >= self.AUTO_STOP_MS):
+            self.auto_stopped = True
+            self.stop()
+
         if self.rolling:
             # Use integer tick progression to avoid per-frame modulo cost
             self.roll_timer += 1

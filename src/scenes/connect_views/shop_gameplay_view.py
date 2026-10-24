@@ -257,8 +257,9 @@ class ShopGameplayView:
         def fetch_gameplay():
             try:
                 success, data = omninet_service.get_shop_gameplay()
-                if success and data:
-                    self.gameplay_data = data
+                if success:
+                    # an empty shelf is an answer, not a failure
+                    self.gameplay_data = data or []
                 else:
                     self.gameplay_data = []
                     runtime_globals.game_console.log(f"[ShopGameplayView] Failed to load gameplay")
@@ -295,7 +296,10 @@ class ShopGameplayView:
             try:
                 success, message = omninet_service.purchase_item('gameplay', item.id)
                 if success:
-                    game_globals.coins -= item.price
+                    # the balance the server left, not the listed price
+                    remaining = omninet_service.last_coins_remaining
+                    game_globals.coins = (remaining if remaining is not None
+                                          else game_globals.coins - item.price)
                     game_globals.purchases.add_gameplay(item.id)
                     game_globals.save()
                     

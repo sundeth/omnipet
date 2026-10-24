@@ -11,18 +11,24 @@ This document outlines the requirements for building Omnipet Virtual Pet Game ac
 ## General Requirements
 
 ### Python Version
-- **Required**: Python 3.8 - 3.11
-- **Recommended**: Python 3.10
-- **Not Supported**: Python 3.12+ (due to some build tool compatibility issues)
+- **Required**: Python 3.10 or newer. The game uses 3.10 syntax (`X | None`
+  annotations), so 3.9 and older cannot run it.
+- **Builds**: Python 3.10. Buildozer builds Android with `/usr/bin/python3.10`
+  (`buildozer.spec`); the GamePi image runs `python3.10`. Newer versions are
+  not tried for the builds.
 
 ### Core Dependencies
 ```
 pygame>=2.0.0
 psutil>=5.8.0
+requests>=2.25   # Omninet (login, Shop, Arena); the game imports it at start
 ```
 
 ### Optional Dependencies (Platform-specific)
 ```
+# For the WiFiCom feature (all platforms)
+paho-mqtt>=1.6.0
+
 # For GPIO support on Raspberry Pi
 RPi.GPIO>=0.7.0 (Raspberry Pi only)
 
@@ -42,17 +48,18 @@ pyinstaller>=5.0
 **Target**: Cross-platform Python distribution requiring Python installation
 
 **Requirements**:
-- Python 3.8-3.11
+- Python 3.10 or newer
 - pygame >= 2.0.0
 - psutil >= 5.8.0
+- requests
 
 **Platform Support**:
-- Windows 7+
-- Linux (Ubuntu 18.04+, Debian 10+)
-- macOS 10.14+
+- Windows 10 and 11
+- Linux with Python 3.10 or newer
+- macOS: not tried
 
 **Build Output**: ZIP archive with Python source files
-**Runtime Requirements**: Python + pygame + psutil installed on target system
+**Runtime Requirements**: Python + pygame + psutil + requests installed on target system
 
 ---
 
@@ -62,7 +69,7 @@ pyinstaller>=5.0
 
 **Requirements**:
 - Windows 10+ (build system)
-- Python 3.8-3.11
+- Python 3.10
 - PyInstaller >= 5.0
 - pygame >= 2.0.0
 - psutil >= 5.8.0
@@ -84,7 +91,7 @@ pip install pyinstaller>=5.0 pygame>=2.0.0 psutil>=5.8.0
 
 **Requirements**:
 - Windows 10+ (build system)
-- Python 3.8-3.11
+- Python 3.10
 - Nuitka >= 1.8.0
 - pygame >= 2.0.0
 - psutil >= 5.8.0
@@ -109,16 +116,18 @@ pip install nuitka>=1.8.0 pygame>=2.0.0 psutil>=5.8.0
 **Requirements**:
 - Cross-compilation: Windows/Linux build system
 - Target: Raspberry Pi OS Lite (Bullseye/Bookworm)
-- Python 3.9+ (on target Pi)
+- Python 3.10 or newer (on target Pi; `launch.sh` picks the newest it finds)
 - pygame >= 2.0.0
 - psutil >= 5.8.0
+- requests
 - RPi.GPIO >= 0.7.0 (for hardware controls)
 
 **Target Pi Setup**:
 ```bash
 sudo apt update
-sudo apt install python3-pygame python3-psutil python3-rpi.gpio
+sudo apt install python3-pygame python3-psutil python3-requests python3-rpi.gpio
 ```
+(`build/gamepi/setup.sh` installs pygame, psutil and requests with pip.)
 
 **Build Output**: ZIP archive optimized for Pi
 **Runtime Requirements**: Python + dependencies on Raspberry Pi
@@ -132,7 +141,7 @@ sudo apt install python3-pygame python3-psutil python3-rpi.gpio
 **Requirements**:
 - **Cross-compilation Setup**: ARM GCC toolchain
 - Windows/Linux build system
-- Python 3.8-3.11
+- Python 3.10
 - Nuitka >= 1.8.0
 - ARM cross-compilation tools
 
@@ -153,21 +162,22 @@ sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
 **Requirements**:
 - Batocera v37+ (target system)
-- Python 3.9+ (usually pre-installed on Batocera)
+- Python 3.10 or newer (Batocera's own Python; check its version)
 - pygame >= 2.0.0
+- requests
 
 **Build Output**: `.pygame` package for Batocera
 **Runtime Requirements**: Batocera system with Python support
 
 ---
 
-### 7. Android APK Build (`build_android_apk.ps1`)
+### 7. Android APK Build (`build_android.ps1`)
 
 **Target**: Android devices (ARM/ARM64)
 
 **Requirements**:
-- Linux build system (Ubuntu 20.04+ recommended)
-- Python 3.8-3.11
+- Linux build system (WSL on Windows; Ubuntu 20.04+ recommended)
+- Python 3.10 (`buildozer.spec`: 3.11 breaks pygame on Android)
 - Buildozer >= 1.4.0
 - python-for-android >= 2023.06.21
 - plyer >= 2.0.0 (for accelerometer support)
@@ -199,7 +209,9 @@ android.permissions = INTERNET
 - **App Storage**: Uses `android.storage.app_storage_path()` for save files
 - **Touch Input**: Full touch and drag gesture support
 
-**Build Output**: `omnipet.apk`
+**Build Output**: the APK as Buildozer names it, copied to `bin/` (for example
+`omnipet-offline-1.0.0-arm64-v8a-debug.apk`). `build_all.ps1` checks for a
+`Release/Omnipet_Android_Ver_<version>.apk`, which nothing writes yet.
 **Runtime Requirements**: Android 5.0+ (API level 21+)
 
 ## Quick Setup Commands
@@ -272,7 +284,7 @@ git config --global core.eol lf
 If you encounter shell script execution errors:
 ```bash
 # Convert CRLF to LF for shell scripts
-dos2unix launch.sh utilities/setup.sh
+dos2unix launch.sh build/gamepi/setup.sh
 
 # Or use Git to normalize line endings
 git add --renormalize .
@@ -320,23 +332,21 @@ Omnipet/
 ├── main.py                # Standard Python entry point
 ├── main_nuitka.py         # Nuitka-optimized entry point
 ├── launch.sh              # Unix/Linux/macOS launch script
-├── fix-line-endings.sh    # Quick fix for line ending issues
 ├── pyinstall.spec         # PyInstaller configuration
 ├── omnipet.pygame         # Batocera package metadata
 ├── assets/                # Game assets (sprites, sounds)
 ├── modules/               # Game modules (DMC, etc.)
-├── config/                # Configuration files
-├── game/                  # Python game source code
-├── utilities/             # Platform-specific utilities
+├── src/                   # Python game source code
 └── build/                 # Build scripts
 ```
 
 ## Build Script Usage
 
-All build scripts accept a version parameter:
+All build scripts accept a version parameter; without one they read
+`VERSION` from `src/core/version.py`:
 
 ```powershell
-# Build with default version (0.9.8)
+# Build with the version in src/core/version.py
 .\build_windows.ps1
 
 # Build with custom version
@@ -365,7 +375,7 @@ All build scripts accept a version parameter:
 
 **1. Nuitka Build Fails**:
 - Install Visual Studio Build Tools (Windows)
-- Check Python version compatibility (3.8-3.11)
+- Build with Python 3.10
 - Ensure all assets are included in `--include-data-dir`
 
 **2. PyInstaller Executable Won't Run**:
@@ -390,8 +400,7 @@ All build scripts accept a version parameter:
 - **Error**: `bash: ./launch.sh: cannot execute: required file not found`
 - **Error**: `-bash: ./launch.sh: /bin/bash^M: bad interpreter: No such file or directory`
 - **Cause**: Windows CRLF line endings in shell scripts
-- **Quick Fix**: Run `./fix-line-endings.sh` in project root
-- **Manual Fix**: Convert line endings using `dos2unix launch.sh` or text editor
+- **Fix**: Convert line endings using `dos2unix launch.sh` or a text editor
 - **Prevention**: Project includes `.gitattributes` to enforce LF line endings
 
 ### Debug Mode:
@@ -406,19 +415,10 @@ This will show console output and additional logging information.
 
 ## Version Compatibility Matrix
 
-| Platform | Python 3.8 | Python 3.9 | Python 3.10 | Python 3.11 | Python 3.12+ |
-|----------|-------------|-------------|--------------|--------------|---------------|
-| Windows  | ✅          | ✅          | ✅           | ✅           | ❌            |
-| Linux    | ✅          | ✅          | ✅           | ✅           | ❌            |
-| macOS    | ✅          | ✅          | ✅           | ✅           | ❌            |
-| Raspberry Pi | ✅      | ✅          | ✅           | ✅           | ⚠️            |
-| Android  | ✅          | ✅          | ✅           | ❌           | ❌            |
-| Batocera | ✅          | ✅          | ✅           | ✅           | ⚠️            |
-
-**Legend**:
-- ✅ Fully Supported
-- ⚠️ Limited Support / Testing Required
-- ❌ Not Supported
+The game needs Python 3.10 or newer on every platform (3.9 and older cannot
+load it). The builds are made and tested with 3.10; Android stays on 3.10
+(`buildozer.spec`). Newer versions run the Python Desktop build where pygame
+supports them, but are not part of the release tests.
 
 ## Support
 
@@ -428,5 +428,54 @@ For build issues, check:
 3. Platform-specific documentation
 4. GitHub Issues for known problems
 
-Last updated: August 31, 2025
-Game Version: 0.9.8
+Last updated: October 22, 2026
+Game Version: see `src/core/version.py`
+
+## NFC reader + battery gauge dependencies
+
+The NFC card reading service (`src/services/nfc_service.py`) and the battery
+gauge (`src/input/i2c_utils.py`) use optional, platform-specific packages.
+Everything degrades gracefully when a package is missing (NFC Read button
+disabled / battery icon neutral), but ship them for full functionality:
+
+- **Windows / desktop**: `pip install pyscard` (PC/SC readers such as the
+  ACR122U). The PyInstaller specs list the `smartcard.*` hidden imports.
+- **Raspberry Pi**: `pip install adafruit-circuitpython-pn532 adafruit-blinka`
+  for the PN532 I2C NFC reader; `smbus` + `RPi.GPIO` for the UPS-Lite V1.3
+  battery hat (MAX17040 fuel gauge on I2C 0x36, external-power sense on
+  GPIO4). Enable I2C in raspi-config.
+- **Android**: battery uses `plyer` with a `pyjnius` fallback (both in
+  buildozer requirements). Phone NFC reading is not implemented yet.
+
+## WiFiCom dependencies
+
+`src/wificom/` is wificom-lib vendored into the game, so Omnipet can present
+itself to wificom.dev as a WiFiCom rather than needing one. See
+`utilities/wificom/UPSTREAM.md`.
+
+Its only added dependency is **paho-mqtt**, which stands in for the
+CircuitPython `adafruit_minimqtt` upstream uses:
+
+```bash
+pip install paho-mqtt
+```
+
+It degrades the same way the NFC and serial features do — without it,
+`wificom.is_available()` is False and the feature is off; nothing else in the
+game is affected.
+
+Build coverage, since a new `src/` package has to be added in every pipeline
+by hand:
+
+- **PyInstaller** (`Omnipet.spec`, `pyinstall.spec`): `src/wificom` in
+  `datas`, and `paho.mqtt.client` in `hiddenimports` — it is imported inside
+  a `try`/`except`, which the analysis does not follow.
+- **Nuitka** (`build_nuitka_windows.ps1`, `build_gamepi_nuitka.ps1`):
+  `--include-package="src.wificom"` and `--include-module="paho.mqtt.client"`.
+- **Python/Batocera/GamePi** (`build_python_desktop.ps1`,
+  `build_batocera.ps1`, `build_gamepi.ps1`): a robocopy block for
+  `src\wificom`.
+- **Android** (`build_android.ps1`, `buildozer.spec`): `src/wificom` in the
+  WSL mkdir and rsync lists, and `paho-mqtt` in buildozer `requirements`
+  (pure Python, so p4a needs no recipe). `source.include_patterns` already
+  covers it through `src/**`.

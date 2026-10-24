@@ -1,736 +1,408 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Installation Guide - Omnipet Documentation</title>
+  <meta charset="UTF-8">
+  <title>Installation - Omnipet Documentation</title>
   <link rel="stylesheet" href="../assets/main.css">
   <style>
-    .platform-section {
-      margin: 32px 0;
-      padding: 24px;
-      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-      border-radius: 16px;
-      border-left: 4px solid #3b82f6;
-    }
-    
-    .requirements-box {
-      background: #fef3c7;
-      border: 1px solid #f59e0b;
-      border-radius: 8px;
-      padding: 16px;
-      margin: 16px 0;
-    }
-    
-    .warning-box {
-      background: #fee2e2;
-      border: 1px solid #ef4444;
-      border-radius: 8px;
-      padding: 16px;
-      margin: 16px 0;
-    }
-    
-    .success-box {
-      background: #dcfce7;
-      border: 1px solid #22c55e;
-      border-radius: 8px;
-      padding: 16px;
-      margin: 16px 0;
-    }
-    
-    .code-block {
-      background: #1e293b;
-      color: #e2e8f0;
-      padding: 16px;
-      border-radius: 8px;
-      font-family: 'Courier New', monospace;
-      overflow-x: auto;
-      margin: 16px 0;
-    }
-    
-    .folder-structure {
-      background: #f1f5f9;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      padding: 16px;
-      font-family: 'Courier New', monospace;
-      margin: 16px 0;
-      white-space: pre-line;
-    }
-    
-    .step-number {
-      display: inline-block;
-      background: #3b82f6;
-      color: white;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      text-align: center;
-      line-height: 24px;
-      font-weight: bold;
-      margin-right: 8px;
-    }
-    
-    .download-button {
-      display: inline-block;
-      background: #3b82f6;
-      color: white;
-      padding: 12px 24px;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: bold;
-      margin: 8px 8px 8px 0;
-      transition: background 0.3s;
-    }
-    
-    .download-button:hover {
-      background: #2563eb;
-      color: white;
-    }
-    
-    .platform-tabs {
-      display: flex;
-      margin-bottom: 24px;
-      border-bottom: 2px solid #e2e8f0;
-    }
-    
-    .platform-tab {
-      padding: 12px 24px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-bottom: none;
-      cursor: pointer;
-      font-weight: bold;
-      color: #64748b;
-      transition: all 0.3s;
-    }
-    
-    .platform-tab.active {
-      background: #3b82f6;
-      color: white;
-      border-color: #3b82f6;
-    }
-    
-    .platform-content {
-      display: none;
-    }
-    
-    .platform-content.active {
-      display: block;
-    }
+    /* main.css spaces only the direct children of .section-content */
+    .tab-panel > * + * { margin-top: 12px; }
+    .steps pre { margin-top: 8px; }
   </style>
 </head>
 <body>
   <div class="page-content">
     <div class="page-header">
-      <h1 class="page-title">Installation Guide</h1>
-      <p class="page-subtitle">Complete setup instructions for Windows, Linux, Batocera, and macOS</p>
+      <div class="page-header-text">
+        <h1 class="page-title">Installation</h1>
+        <p class="page-subtitle">Downloads for each platform, how to start the game, where the save is kept and how to update.</p>
+      </div>
     </div>
 
-    <div class="content-section">
-      <h2 class="section-title">Quick Start</h2>
-      <p>Omnipet is a cross-platform virtual pet simulator that can run on Windows, Linux, Batocera, and macOS systems. Choose your platform below for detailed installation instructions:</p>
-      
-      <div class="platform-tabs">
-        <div class="platform-tab active" onclick="showPlatform('windows')">🪟 Windows</div>
-        <div class="platform-tab" onclick="showPlatform('linux')">🐧 Linux</div>
-        <div class="platform-tab" onclick="showPlatform('batocera')">🎮 Batocera</div>
-        <div class="platform-tab" onclick="showPlatform('gamepi')">🥧 GamePi</div>
-        <div class="platform-tab" onclick="showPlatform('macos')">🍎 macOS</div>
+    <nav class="page-toc">
+      <a href="#downloads">Downloads</a>
+      <a href="#install">Install</a>
+      <a href="#packages">Python packages</a>
+      <a href="#first-start">First start</a>
+      <a href="#modules">Modules</a>
+      <a href="#saves">Save files</a>
+      <a href="#updating">Updating</a>
+      <a href="#options">Start options</a>
+    </nav>
+
+    <div class="content-section" id="downloads">
+      <h2 class="section-title">Downloads</h2>
+      <div class="section-content">
+        <p>Every download is on the <a href="https://github.com/sundeth/omnipet/releases" target="_blank">release page</a>, except the GamePi SD card image, which is in the <a href="https://mega.nz/folder/ODhAmBZb#PnvjHOSqpz8AHK1qxwSaJg" target="_blank">Mega folder</a>. Version 1.0.0:</p>
+        <table class="data-table">
+          <thead><tr><th>Download</th><th>Platform</th><th>Starts with</th></tr></thead>
+          <tbody>
+            <tr><td>Omnipet_Windows_Ver_1.0.0.zip</td><td>Windows 10 and 11</td><td><code>Omnipet.exe</code></td></tr>
+            <tr><td>Omnipet_Nuitka_Windows_Ver_1.0.0.zip</td><td>Windows; experimental Nuitka build</td><td><code>omnipet.exe</code></td></tr>
+            <tr><td>Omnipet_Python_Desktop_Ver_1.0.0.zip</td><td>Windows and Linux with Python 3.10 or newer</td><td><code>launch.bat</code> on Windows, <code>launch.sh</code> on Linux</td></tr>
+            <tr><td>Omnipet_GamePi_Ver_1.0.0.zip</td><td>GamePi and other Raspberry Pi; Linux with apt, dnf or pacman</td><td><code>setup.sh</code> once, then <code>launch.sh</code></td></tr>
+            <tr><td>Omnipet_GamePi_Nuitka_ARM_Ver_1.0.0.zip</td><td>Raspberry Pi; experimental Nuitka build</td><td><code>./omnipet</code></td></tr>
+            <tr><td>Omnipet_GamePi_Ver_&lt;version&gt; (Image).zip</td><td>GamePi SD card image, in the <a href="https://mega.nz/folder/ODhAmBZb#PnvjHOSqpz8AHK1qxwSaJg" target="_blank">Mega folder</a></td><td>Booting the Pi</td></tr>
+            <tr><td>Omnipet_Batocera_Ver_1.0.0.zip</td><td>Batocera</td><td><code>omnipet.pygame</code>, in EmulationStation's Pygame list</td></tr>
+            <tr><td>Omnipet_Android_Ver_1.0.0.apk</td><td>Android 5.0 or newer, 64-bit ARM</td><td>The Omnipet VPet Simulator app</td></tr>
+          </tbody>
+        </table>
+
+        <table class="data-table">
+          <thead><tr><th>Zip</th><th>Program</th><th>Launchers and tools</th></tr></thead>
+          <tbody>
+            <tr><td>Windows</td><td><code>Omnipet.exe</code>, with Python built in</td><td>None</td></tr>
+            <tr><td>Nuitka Windows</td><td><code>omnipet.exe</code> with its <code>.pyd</code> and <code>.dll</code> files</td><td>None</td></tr>
+            <tr><td>Python Desktop</td><td><code>main.py</code> and <code>src/</code></td><td><code>launch.bat</code>, <code>launch.sh</code></td></tr>
+            <tr><td>GamePi</td><td><code>main.py</code> and <code>src/</code></td><td><code>launch.sh</code>, <code>setup.sh</code></td></tr>
+            <tr><td>GamePi Nuitka ARM</td><td><code>omnipet</code> with its compiled files</td><td>None</td></tr>
+            <tr><td>Batocera</td><td><code>main.py</code> and <code>src/</code></td><td><code>omnipet.pygame</code>, <code>input_test/</code></td></tr>
+          </tbody>
+        </table>
+        <p>Every zip also holds <code>assets/</code>, <code>Documentation/</code>, <code>LICENSE.txt</code> and empty
+          <code>modules/</code> and <code>save/</code> folders. The files sit at the top of the zip, with no folder around
+          them: extract them into the folder the game will live in.</p>
+        <div class="note"><strong>No module comes with the game.</strong> Modules are downloaded in the game, from the
+          module shop: see <a href="#modules">Modules</a>.</div>
+        <p>The Module Editor is a separate Windows program: see <a href="module-editor.html">Module Editor</a>.</p>
       </div>
+    </div>
 
-      <!-- Windows Installation -->
-      <div id="windows-content" class="platform-content active">
-        <div class="platform-section">
-          <h3>🪟 Windows Installation</h3>
-          
-          <div style="text-align: center; margin-bottom: 20px;">
-            <a href="https://github.com/sundeth/omnipet/releases/latest" target="_blank" class="download-button">📦 Download Latest Release</a>
-          </div>
-
-          <div class="requirements-box">
-            <strong>📋 Available Windows Downloads:</strong>
-            <ul>
-              <li><strong>Omnipet_Windows_Ver_0.9.8.zip</strong> - Standard Windows distribution with Module Editor</li>
-              <li><strong>Omnipet_Nuitka_Windows_Ver_0.9.8.zip</strong> - Experimental faster compilation (use if standard version has performance issues)</li>
-            </ul>
-          </div>
-          
-          <h4>Option 1: Standalone Executable (Recommended for most users)</h4>
-          <p>The easiest way to run Omnipet on Windows is using the pre-built executable.</p>
-          
-          <div class="success-box">
-            <strong>✅ Advantages:</strong>
-            <ul>
-              <li>No Python installation required</li>
-              <li>One-click launch</li>
-              <li>All dependencies included</li>
-              <li>Works on any Windows 10/11 system</li>
-            </ul>
-          </div>
-
-          <div class="requirements-box">
-            <strong>📋 Requirements:</strong>
-            <ul>
-              <li>At least 400MB free disk space</li>
-            </ul>
-          </div>
-          
-          <p><span class="step-number">1</span>Download the latest Omnipet release:</p>
-          <a href="https://github.com/sundeth/omnipet/releases" class="download-button">📥 Download Omnipet.exe</a>
-
-          <br>
-          
-          <p><span class="step-number">2</span>Extract the downloaded ZIP file to your desired location (e.g., <code>C:\Games\Omnipet\</code>)</p>
-
-          <br>
-          
-          <p><span class="step-number">3</span>Double-click <code>Omnipet.exe</code> to launch the game</p>
-          
-          <div class="warning-box">
-            <strong>⚠️ Windows Defender Warning:</strong> Windows may show a security warning for unsigned executables. Click "More info" → "Run anyway" to proceed.
-          </div>
-
-          <h4>Option 2: Python Source Installation</h4>
-          <p>For developers or users who want to modify the game.</p>
-          
-          <div class="requirements-box">
-            <strong>📋 Requirements:</strong>
-            <ul>
-              <li>Python 3.9 or higher</li>
-              <li>Pygame 2.0+ library</li>
-              <li>At least 400MB free disk space</li>
-            </ul>
-          </div>
-          
-          <p><span class="step-number">1</span>Install Python from <a href="https://python.org/downloads/">python.org</a></p>
-          <div class="warning-box">
-            <strong>Important:</strong> Make sure to check "Add Python to PATH" during installation!
-          </div>
-          
-          <p><span class="step-number">2</span>Open Command Prompt and install Pygame:</p>
-          <div class="code-block">pip install pygame</div>
-
-          <p><span class="step-number">3</span>OPTIONAL: Install psutil to enable power status in-game:</p>
-          <div class="code-block">pip install psutil</div>
-          
-          <p><span class="step-number">4</span>Download and extract the Omnipet source code</p>
-
-          <br>
-          
-          <p><span class="step-number">5</span>Navigate to the game folder and run:</p>
-          <div class="code-block">
-            <ul style="list-style: none;">
-              <li>cd path\to\omnipet</li>
-              <li>python main.py</li>
-            </ul>
-          </div>
-
-          <h4>Folder Structure</h4>
-          <p>Your Omnipet installation should look like this:</p>
-          <div class="folder-structure">Omnipet/
-├── main.py                        # Main game launcher
-├── Omnipet.exe                    # Standalone executable (if using pre-built)
-├── config/
-│   ├── config_windows.json        # Game configuration
-│   └── input_config_windows.json  # Input mappings
-├── game/                          # Game engine
-├── modules/                       # Game modules (pets, rulesets)
-│   ├── D-3/                       # Digital Monster D-3 -25th COLOR EVOLUTION- module
-│   ├── DMC/                       # Digital Monster Color module
-│   ├── DMH/                       # Digital Monster Color Monster Hunter 20th Edition module
-│   ├── DMX/                       # Digital Monster X module
-│   └── PENC/                      # Digital Monster Pendulum Color module
-├── assets/                        # Game assets
-├── save/                          # Save files
-├── logs/                          # Game logs
-└── Documentation/                 # Game documentation</div>
-
-
-
+    <div class="content-section" id="install">
+      <h2 class="section-title">Install</h2>
+      <div class="section-content">
+        <div class="tabs">
+          <button type="button" class="tab active" data-tab="win">Windows</button>
+          <button type="button" class="tab" data-tab="desktop">Python Desktop</button>
+          <button type="button" class="tab" data-tab="gamepi">GamePi</button>
+          <button type="button" class="tab" data-tab="batocera">Batocera</button>
+          <button type="button" class="tab" data-tab="android">Android</button>
         </div>
-      </div>
 
-      <!-- Linux Installation -->
-      <div id="linux-content" class="platform-content">
-        <div class="platform-section">
-          <h3>🐧 Linux Installation</h3>
-          
-          <div style="text-align: center; margin-bottom: 20px;">
-            <a href="https://github.com/sundeth/omnipet/releases/latest" target="_blank" class="download-button">📦 Download Python Desktop Release</a>
-          </div>
-
-          <div class="requirements-box">
-            <strong>📋 Available Linux Download:</strong>
-            <ul>
-              <li><strong>Omnipet_Python_Desktop_Ver_0.9.8.zip</strong> - Cross-platform Python version for Linux/macOS</li>
-              <li><strong>Required Dependencies:</strong> <code>pip install pygame psutil</code></li>
-              <li><strong>Module Editor:</strong> Source code available on GitHub repository</li>
-            </ul>
-          </div>
-          
-          <div class="requirements-box">
-            <strong>📋 System Requirements:</strong>
-            <ul>
-              <li>Linux distribution with Python 3.9+</li>
-              <li>X11 or Wayland display server</li>
-              <li>Audio system (ALSA/PulseAudio)</li>
-              <li>At least 400MB free disk space</li>
-            </ul>
-          </div>
-
-          <h4>Ubuntu/Debian Installation</h4>
-          <p><span class="step-number">1</span>Update your package list and install dependencies:</p>
-          <div class="code-block">
-            <ul style="list-style: none;">
-              <li>sudo apt update</li>
-              <li>sudo apt install python3 python3-pip python3-pygame git</li>
-            </ul>
-          </div>
-
-          <p><span class="step-number">2</span>OPTIONAL: Install python3-psutil for power status in-game:</p>
-          <div class="code-block">sudo apt install python3-psutil</div>
-          
-          <p><span class="step-number">3</span>Clone or download Omnipet:</p>
-          <div class="code-block">
-            <ul style="list-style: none;">
-              <li>git clone https://github.com/sundeth/omnipet.git</li>
-              <li>cd omnipet</li>
-            </ul>
-          </div>
-          
-          <p><span class="step-number">4</span>Make the main script executable and run:</p>
-          <div class="code-block">
-            <ul style="list-style: none;">
-              <li>chmod +x main.py</li>
-              <li>python3 main.py</li>
-            </ul>
-          </div>
-
-          <h4>Arch Linux Installation</h4>
-          <p><span class="step-number">1</span>Install dependencies:</p>
-          <div class="code-block">sudo pacman -S python python-pygame git</div>
-
-          <p><span class="step-number">2</span>OPTIONAL: Install python-psutil for power status in-game:</p>
-          <div class="code-block">sudo pacman -S python-psutil</div>
-          
-          <p><span class="step-number">3</span>Follow steps 3-4 from Ubuntu instructions above</p>
-
-          <br>
-
-          <h4>Fedora/CentOS Installation</h4>
-          <p><span class="step-number">1</span>Install dependencies:</p>
-          <div class="code-block">sudo dnf install python3 python3-pygame git</div>
-
-          <p><span class="step-number">2</span>OPTIONAL: Install python3-psutil for power status in-game:</p>
-          <div class="code-block">sudo dnf install python3-psutil</div>
-          
-          <p><span class="step-number">3</span>Follow steps 3-4 from Ubuntu instructions above</p>
-
-          <br>
-
-          <h4>Running in Fullscreen</h4>
-          <p>For dedicated gaming setups, you can launch Omnipet in fullscreen mode:</p>
-          <div class="code-block">python3 main.py --fullscreen</div>
-          
-          <p>Or set the environment variable:</p>
-          <div class="code-block">OMNIPET_FULLSCREEN=1 python3 main.py</div>
-
-          <div class="success-box">
-            <strong>💡 Pro Tip:</strong> Create a desktop shortcut by making a <code>.desktop</code> file in <code>~/.local/share/applications/</code>
-          </div>
-
-          <h4>Folder Structure</h4>
-          <p>Your Omnipet installation should look like this:</p>
-          <div class="folder-structure">Omnipet/
-├── main.py                               # Main game launcher
-├── config/
-│   ├── config_python_desktop.json        # Game configuration
-│   ├── input_config_python_desktop.json  # Input mappings
-│   ├── config_raspberry.json             # Game configuration for Raspberry Pi OS
-│   └── input_config_raspberry.json       # Input mappings for Raspberry Pi OS
-├── game/                                 # Game engine
-├── modules/                              # Game modules (pets, rulesets)
-│   ├── D-3/                              # Digital Monster D-3 -25th COLOR EVOLUTION- module
-│   ├── DMC/                              # Digital Monster Color module
-│   ├── DMH/                              # Digital Monster Color Monster Hunter 20th Edition module
-│   ├── DMX/                              # Digital Monster X module
-│   └── PENC/                             # Digital Monster Pendulum Color module
-├── assets/                               # Game assets
-├── save/                                 # Save files
-├── logs/                                 # Game logs
-└── Documentation/                        # Game documentation</div>
-
+        <!-- Windows -->
+        <div class="tab-panel active" id="win">
+          <p>For Windows 10 and 11. Python is built into <code>Omnipet.exe</code>: there is nothing else to install.</p>
+          <ol class="steps">
+            <li>Download <code>Omnipet_Windows_Ver_1.0.0.zip</code>.</li>
+            <li>Extract all files to a folder of your own, such as <code>C:\Games\Omnipet</code>.</li>
+            <li>Double-click <code>Omnipet.exe</code>.</li>
+          </ol>
+          <div class="warning"><strong>Unsigned program.</strong> <code>Omnipet.exe</code> is not signed, so Windows may
+            show "Windows protected your PC". Click More info, then Run anyway.</div>
+          <h3>Nuitka build</h3>
+          <p><code>Omnipet_Nuitka_Windows_Ver_1.0.0.zip</code> is the same game compiled with Nuitka. It is experimental:
+            use it if the standard build runs slowly. Start it with <code>omnipet.exe</code> and keep the
+            <code>.pyd</code> and <code>.dll</code> files beside it.</p>
         </div>
-      </div>
 
-      <!-- Batocera Installation -->
-      <div id="batocera-content" class="platform-content">
-        <div class="platform-section">
-          <h3>🎮 Batocera Installation</h3>
-          <p>Omnipet can run natively on Batocera systems as a Pygame application, perfect for handheld devices and retro gaming setups.</p>
-          
-          <div style="text-align: center; margin-bottom: 20px;">
-            <a href="https://github.com/sundeth/omnipet/releases/latest" target="_blank" class="download-button">📦 Download Batocera Release</a>
-          </div>
-
-          <div class="requirements-box">
-            <strong>📋 Available Batocera Download:</strong>
-            <ul>
-              <li><strong>Omnipet_Batocera_Ver_0.9.8.zip</strong> - Optimized for Batocera systems</li>
-              <li><strong>Module Editor:</strong> Not included (Linux incompatible) - available on GitHub</li>
-              <li><strong>Input Configuration:</strong> May require adjustment for your specific device</li>
-            </ul>
-          </div>
-          
-          <div class="requirements-box">
-            <strong>📋 Batocera Requirements:</strong>
-            <ul>
-              <li>Batocera v35 or higher</li>
-              <li>At least 400MB free space on userdata</li>
-              <li>Network access for initial setup (optional)</li>
-            </ul>
-          </div>
-
-          <h4>Installation Steps</h4>
-          <p><span class="step-number">1</span>Access your Batocera system via:</p>
-          <ul>
-            <li><strong>Network:</strong> <code>\\batocera</code> (Windows) or <code>smb://batocera</code> (Linux/Mac)</li>
-            <li><strong>SSH:</strong> <code>ssh root@batocera</code> (password: linux)</li>
-            <li><strong>Direct access:</strong> Remove SD card and access on PC</li>
-          </ul>
-          
-          <p><span class="step-number">2</span>Navigate to the pygame folder:</p>
-          <div class="code-block">/userdata/roms/pygame/</div>
-          
-          <p><span class="step-number">3</span>Create the Omnipet directory and copy files:</p>
-          <div class="folder-structure">/userdata/roms/pygame/omnipet/
-├── omnipet.pygame                  # Batocera launcher (REQUIRED)
-├── main.py                         # Main game file
-├── config/               
-│   ├── config_batocera.json        # Game configuration
-│   └── input_config_batocera.json  # Input mappings
-├── game/                 
-├── modules/              
-├── modules/                        # Game modules (pets, rulesets)
-│   ├── D-3/                        # Digital Monster D-3 -25th COLOR EVOLUTION- module
-│   ├── DMC/                        # Digital Monster Color module
-│   ├── DMH/                        # Digital Monster Color Monster Hunter 20th Edition module
-│   ├── DMX/                        # Digital Monster X module
-│   └── PENC/                       # Digital Monster Pendulum Color module
-├── assets/                         # Game assets
-├── logs/                           # Game logs
-└── Documentation/                  # Game documentation</div>
-          
-          <p><span class="step-number">4</span>Ensure the launcher is properly configured:</p>
-          <p>The <code>omnipet.pygame</code> file should contain:</p>
-          <div class="code-block">#!/usr/bin/env python3
-"""
-Omnipet Virtual Pet Game - Batocera Pygame Launcher
-"""
-
-import os
-import sys
-
-def main():
-    # Set environment variables for Batocera
-    os.environ["SDL_VIDEO_CENTERED"] = "1"
-    os.environ["OMNIPET_FULLSCREEN"] = "1"
-    os.environ["AUTO_RESOLUTION"] = "1"
-    
-    # Change to the game directory
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
-    sys.path.insert(0, script_dir)
-    
-    try:
-        from main import main as game_main
-        print("[Batocera] Starting Omnipet...")
-        game_main()
-    except Exception as e:
-        print(f"[Batocera] Error: {e}")
-        return 1
-    
-    return 0
-
-if __name__ == "__main__":
-    sys.exit(main())</div>
-          
-          <p><span class="step-number">5</span>Make the launcher executable:</p>
-          <div class="code-block">chmod +x omnipet.pygame</div>
-          
-          <p><span class="step-number">6</span>Refresh EmulationStation or restart Batocera</p>
-          
-          <div class="success-box">
-            <strong>✅ Success!</strong> Omnipet should now appear in the "Pygame" system in EmulationStation.
-          </div>
-
-          <h4>Batocera-Specific Features</h4>
-          <ul>
-            <li><strong>Auto-Resolution:</strong> Automatically detects and uses your screen's native resolution</li>
-            <li><strong>Controller Support:</strong> Works with any controller configured in Batocera</li>
-            <li><strong>Save Data:</strong> Saves are stored in the game directory and persist across reboots</li>
-            <li><strong>Low Resource Usage:</strong> Optimized for handheld devices and low-power systems</li>
-          </ul>
-
-          <h4>Troubleshooting Batocera</h4>
-          <div class="warning-box">
-            <strong>Game doesn't appear in EmulationStation:</strong>
-            <ul>
-              <li>Ensure the <code>omnipet.pygame</code> file is in the correct location</li>
-              <li>Check that the file has execute permissions</li>
-              <li>Restart EmulationStation or reboot Batocera</li>
-            </ul>
-          </div>
-          
-          <div class="warning-box">
-            <strong>Game crashes on startup:</strong>
-            <ul>
-              <li>Check that all game files are present</li>
-              <li>Verify Python syntax in the launcher file</li>
-              <li>Look for error messages in <code>/tmp/pygame_stdout.log</code></li>
-            </ul>
-          </div>
+        <!-- Python Desktop -->
+        <div class="tab-panel" id="desktop">
+          <p>The game's Python source with launch scripts, for Windows and Linux. It needs Python 3.10 or newer with
+            pygame and requests: see <a href="#packages">Python packages</a>.</p>
+          <h3>Windows</h3>
+          <ol class="steps">
+            <li>Install Python 3.10 or newer from <a href="https://www.python.org/downloads/" target="_blank">python.org</a>.
+              Tick the option that adds Python to PATH: <code>launch.bat</code> runs <code>python</code>.</li>
+            <li>Open Command Prompt and install the packages:
+              <pre><code>python -m pip install pygame requests psutil</code></pre></li>
+            <li>Extract <code>Omnipet_Python_Desktop_Ver_1.0.0.zip</code> to a folder of your own.</li>
+            <li>Double-click <code>launch.bat</code>. It stops with a message when Python or pygame is missing.</li>
+          </ol>
+          <h3>Linux</h3>
+          <ol class="steps">
+            <li>Install Python 3.10 or newer and the packages (table below). Check the version with
+              <code>python3 --version</code>: Raspberry Pi OS Bullseye's Python 3.9 is too old.</li>
+            <li>Extract the zip:
+              <pre><code>unzip Omnipet_Python_Desktop_Ver_1.0.0.zip -d ~/Omnipet</code></pre></li>
+            <li>Make the launcher executable and start the game:
+              <pre><code>cd ~/Omnipet
+chmod +x launch.sh
+./launch.sh</code></pre></li>
+          </ol>
+          <table class="data-table">
+            <thead><tr><th>Distribution</th><th>Command</th></tr></thead>
+            <tbody>
+              <tr><td>Debian, Ubuntu, Raspberry Pi OS</td><td><code>sudo apt install python3 python3-pygame python3-requests python3-psutil</code></td></tr>
+              <tr><td>Fedora</td><td><code>sudo dnf install python3 python3-pygame python3-requests python3-psutil</code></td></tr>
+              <tr><td>Arch</td><td><code>sudo pacman -S python python-pygame python-requests python-psutil</code></td></tr>
+              <tr><td>Any, with pip</td><td><code>python3 -m pip install --user pygame requests psutil</code></td></tr>
+            </tbody>
+          </table>
+          <p><code>launch.sh</code> uses the first of <code>python3.14</code> down to <code>python3.10</code>,
+            <code>python3</code> and <code>python</code> that is 3.10 or newer and has pygame. It picks the display driver:
+            Wayland, X11, or KMS/DRM on a console with no desktop.</p>
         </div>
-      </div>
 
-      <!-- GamePi Installation -->
-      <div id="gamepi-content" class="platform-content">
-        <div class="platform-section">
-          <h3>🥧 GamePi (Raspberry Pi Zero 2W) Installation</h3>
-          <p>Omnipet runs excellently on Raspberry Pi Zero 2W devices, offering a portable handheld gaming experience.</p>
-          
-          <div style="text-align: center; margin-bottom: 20px;">
-            <a href="https://github.com/sundeth/omnipet/releases/latest" target="_blank" class="download-button">📦 Download GamePi Release</a>
-          </div>
+        <!-- GamePi -->
+        <div class="tab-panel" id="gamepi">
+          <p>For the GamePi handheld (Raspberry Pi Zero 2W) and other Raspberry Pi boards. <code>setup.sh</code> also
+            installs on Debian, Ubuntu, Fedora and Arch.</p>
+          <h3>From the zip</h3>
+          <ol class="steps">
+            <li>Copy <code>Omnipet_GamePi_Ver_1.0.0.zip</code> to the Pi and extract it into the game folder. The GamePi
+              uses <code>~/Games/Omnipet</code>:
+              <pre><code>mkdir -p ~/Games/Omnipet
+unzip -o Omnipet_GamePi_Ver_1.0.0.zip -d ~/Games/Omnipet</code></pre></li>
+            <li>Run the setup script once (table below):
+              <pre><code>cd ~/Games/Omnipet
+bash setup.sh</code></pre></li>
+            <li>Install requests, which <code>setup.sh</code> does not install, for the Python it named in "Installing
+              Python packages for ...". For <code>python3.10</code>, or for a system <code>python3</code> of 3.10 or newer:
+              <pre><code>python3.10 -m pip install --user requests
+sudo apt install python3-requests</code></pre></li>
+            <li>Start the game:
+              <pre><code>./launch.sh</code></pre>
+              On a console with no desktop the game uses KMS/DRM and runs fullscreen.</li>
+          </ol>
+          <table class="data-table">
+            <thead><tr><th>setup.sh</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr><td>System</td><td>Updates and upgrades every installed package (apt, dnf or pacman).</td></tr>
+              <tr><td>Packages</td><td>Python 3, pip, git, the SDL2 libraries and build tools; on a Raspberry Pi also <code>python3-smbus</code> and <code>i2c-tools</code>.</td></tr>
+              <tr><td>Python</td><td>Finds Python 3.10 or newer (<code>python3.14</code> down to <code>python3.10</code>, then <code>python3</code>). Stops if there is none.</td></tr>
+              <tr><td>Python packages</td><td>Installs pygame and psutil with <code>pip --user</code>.</td></tr>
+              <tr><td>Shortcut</td><td>On a desktop session, puts <code>Omnipet.desktop</code> on the desktop.</td></tr>
+              <tr><td><code>--service</code></td><td><code>bash setup.sh --service</code> on a Raspberry Pi also creates and enables <code>omnipet.service</code>, which runs <code>launch.sh</code> on display <code>:0</code>.</td></tr>
+            </tbody>
+          </table>
 
-          <div class="requirements-box">
-            <strong>📋 Available GamePi Download:</strong>
-            <ul>
-              <li><strong>Omnipet_GamePi_Ver_0.9.8.zip</strong> - Optimized for Raspberry Pi Zero 2W</li>
-              <li><strong>Module Editor:</strong> Not included (Linux incompatible) - available on GitHub</li>
-              <li><strong>Installation Options:</strong> Upgrade existing installation or use pre-made image</li>
-            </ul>
-          </div>
+          <h3>SD card image</h3>
+          <p><code>Omnipet_GamePi_Ver_&lt;version&gt; (Image).zip</code> is a ready SD card with the system, Python 3.10
+            (<code>/usr/local/bin/python3.10</code>) and the game installed. Use it for new setups or a full reinstall.</p>
+          <ol class="steps">
+            <li>Unzip it to get the <code>.img</code> file.</li>
+            <li>Write it with <a href="https://www.raspberrypi.com/software/" target="_blank">Raspberry Pi Imager</a>
+              (Choose OS, Use custom). In the OS customisation settings, set your WiFi network and enable SSH: without
+              WiFi you cannot reach the Pi to update it.</li>
+            <li>Insert the card and power on. The system grows to fill the card on the first boot, and Omnipet starts
+              as a service.</li>
+          </ol>
 
-          <h4>Option 1: Upgrade Existing Installation</h4>
-          <p>If you already have Omnipet installed on your GamePi device:</p>
-          
-          <p><span class="step-number">1</span>SSH into your GamePi device:</p>
-          <div class="code-block">ssh pi@[your-gamepi-ip]</div>
-          
-          <p><span class="step-number">2</span>Backup your save data (optional but recommended):</p>
-          <div class="code-block">cp -r /home/Games/Omnipet/save ~/omnipet_save_backup</div>
-          
-          <p><span class="step-number">3</span>Extract the new version over the existing installation:</p>
-          <div class="code-block">
-            cd /home/Games/<br>
-            # Upload and extract Omnipet_GamePi_Ver_0.9.8.zip here<br>
-            unzip -o Omnipet_GamePi_Ver_0.9.8.zip
-          </div>
+          <h3>Nuitka build</h3>
+          <p><code>Omnipet_GamePi_Nuitka_ARM_Ver_1.0.0.zip</code> is the game compiled with Nuitka. It is experimental
+            and has no launch script. Extract it, then from its folder:</p>
+          <pre><code>chmod +x omnipet
+./omnipet</code></pre>
 
-          <h4>Option 2: Clean Installation with Pre-made Image</h4>
-          <p>For new setups or complete reinstalls:</p>
-          
-          <p><span class="step-number">1</span>Download the GamePi pre-made image (if available)</p>
-          
-          <p><span class="step-number">2</span>Use Raspberry Pi Imager to flash the image:</p>
-          <ul>
-            <li>Download and install <a href="https://rpi.org/imager">Raspberry Pi Imager</a></li>
-            <li>Select the Omnipet GamePi image file</li>
-            <li>Click the gear icon for advanced options</li>
-            <li><strong>Configure WiFi settings</strong> - Essential for remote access!</li>
-            <li>Enable SSH and set a username/password</li>
-            <li>Flash to your SD card</li>
-          </ul>
-          
-          <p><span class="step-number">3</span>Insert SD card and boot your GamePi device</p>
-          
-          <p><span class="step-number">4</span>Omnipet will load automatically as a service on startup</p>
+          <h3>Hardware</h3>
+          <table class="data-table">
+            <thead><tr><th>Part</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td>Raspberry Pi Zero 2W</td><td>The GamePi's board.</td></tr>
+              <tr><td>microSD card</td><td>16 GB or larger recommended.</td></tr>
+              <tr><td>GamePi case</td><td>Screen and buttons. The buttons are read through GPIO.</td></tr>
+              <tr><td>Battery hat</td><td>Optional. A UPS-Lite V1.3 (MAX17040) or a CW2015 fuel gauge shows the battery level.</td></tr>
+              <tr><td>Accelerometer</td><td>Optional. A BMI160 on I2C reads shaking.</td></tr>
+              <tr><td>NFC reader</td><td>Optional. A PN532 on I2C reads cards and plates.</td></tr>
+            </tbody>
+          </table>
+          <p>The I2C parts need I2C enabled in <code>raspi-config</code> and the packages in
+            <a href="#packages">Python packages</a>. Putting the handheld together: the
+            <a href="build-guide.html">Build Guide</a>.</p>
+        </div>
 
-          <div class="warning-box">
-            <strong>⚠️ Important WiFi Setup:</strong> Configure WiFi during image flashing with Raspberry Pi Imager's advanced options. Without WiFi, you won't be able to SSH into the device for updates or maintenance.
-          </div>
+        <!-- Batocera -->
+        <div class="tab-panel" id="batocera">
+          <p>For Batocera's Pygame system. <code>omnipet.pygame</code> is the launcher EmulationStation lists; it starts the
+            game fullscreen from its own folder. <code>input_test/input_test.pygame</code> shows what each key, joystick
+            button, axis and GPIO pin sends.</p>
+          <ol class="steps">
+            <li>Extract <code>Omnipet_Batocera_Ver_1.0.0.zip</code> into a folder named <code>omnipet</code>.</li>
+            <li>Copy that folder to <code>/userdata/roms/pygame/</code>, over the network share (<code>\\batocera</code>
+              on Windows, <code>smb://batocera</code> on Linux; folder <code>roms/pygame</code>) or over SSH
+              (<code>ssh root@batocera</code>, password <code>linux</code>).</li>
+            <li>Make the launcher executable over SSH:
+              <pre><code>chmod +x /userdata/roms/pygame/omnipet/omnipet.pygame</code></pre></li>
+            <li>Update the game lists in EmulationStation, or restart Batocera. Omnipet appears under Pygame.</li>
+          </ol>
+          <p>On Batocera the game always runs fullscreen and tries the KMS/DRM display driver first. The save is in
+            <code>/userdata/roms/pygame/omnipet/save</code>. The game needs Python 3.10 or newer with pygame and
+            requests.</p>
+        </div>
 
-          <div class="note">
-            <strong>💡 Update Process:</strong> Currently there's no auto-update system. To update, you'll need to SSH into the device and manually overwrite the contents of <code>/home/Games/Omnipet</code> with new releases.
-          </div>
-
-          <h4>GamePi-Specific Features</h4>
-          <ul>
-            <li><strong>Battery Optimization:</strong> Achieves ~7 hours battery life on Pi Zero 2W with 2000mAh battery</li>
-            <li><strong>Handheld Controls:</strong> Optimized button mapping for portable gaming</li>
-            <li><strong>Auto-Boot Service:</strong> Game starts automatically when device powers on</li>
-            <li><strong>Power Management:</strong> Built-in battery monitoring and low-power optimizations</li>
-          </ul>
-
-          <div class="requirements-box">
-            <strong>📋 Hardware Requirements:</strong>
-            <ul>
-              <li>Raspberry Pi Zero 2W</li>
-              <li>MicroSD card (16GB+ recommended)</li>
-              <li>GamePi case with LCD screen and controls</li>
-              <li>Battery pack (2000mAh+ recommended)</li>
-              <li>WiFi connectivity for updates</li>
-            </ul>
-          </div>
+        <!-- Android -->
+        <div class="tab-panel" id="android">
+          <p><code>Omnipet_Android_Ver_1.0.0.apk</code> is for Android 5.0 or newer on 64-bit ARM (arm64-v8a). The app is
+            Omnipet VPet Simulator; it runs fullscreen in landscape.</p>
+          <ol class="steps">
+            <li>Download the APK on the phone or tablet.</li>
+            <li>Open it and install. Android asks once to allow installs from the app that opened it (the browser or the
+              file manager).</li>
+            <li>Open Omnipet VPet Simulator.</li>
+            <li>Allow notifications if Android asks: care calls and events arrive as notifications while the app is
+              closed.</li>
+          </ol>
+          <p>When you come back, the time the app was closed is played through as if it had stayed open. The save and the
+            downloaded modules are kept in the app's own storage, and uninstalling the app deletes them. To update,
+            install the new APK over the installed app.</p>
         </div>
       </div>
     </div>
 
-        <!-- macOS Installation -->
-      <div id="macos-content" class="platform-content">
-        <div class="platform-section">
-          <h3>🍎 macOS Installation</h3>
-          
-          <div style="text-align: center; margin-bottom: 20px;">
-            <a href="https://github.com/sundeth/omnipet/releases/latest" target="_blank" class="download-button">📦 Download Python Desktop Release</a>
-          </div>
-
-          <div class="requirements-box">
-            <strong>📋 Available macOS Download:</strong>
-            <ul>
-              <li><strong>Omnipet_Python_Desktop_Ver_0.9.8.zip</strong> - Cross-platform Python version for Linux/macOS</li>
-              <li><strong>Required Dependencies:</strong> <code>pip3 install pygame psutil</code></li>
-              <li><strong>Module Editor:</strong> Source code available on GitHub repository</li>
-            </ul>
-          </div>
-          
-          <div class="requirements-box">
-            <strong>📋 System Requirements:</strong>
-            <ul>
-              <li>Recent macOS with Python 3.9+</li>
-              <li>Pygame 2.0+ library</li>
-              <li>At least 400 MB free disk space</li>
-            </ul>
-          </div>
-
-          <h4>macOS Installation</h4>
-          
-          <p><span class="step-number">1</span>Install Python from <a href="https://python.org/downloads/">python.org</a></p>
-          <div class="warning-box">
-            <strong>Important:</strong> If customizing the installation, make sure "Shell profile updater" is checked!
-          </div>
-          
-          <p><span class="step-number">2</span>Open Terminal and install Pygame:</p>
-          <div class="code-block">pip3 install pygame</div>
-
-          <p><span class="step-number">3</span>OPTIONAL: Install psutil to enable power status in-game:</p>
-          <div class="code-block">pip3 install psutil</div>
-          
-          <p><span class="step-number">4</span>Download Omnipet from <a href="https://github.com/sundeth/omnipet">github.com</a></p>
-
-          <br>
-          
-          <p><span class="step-number">5</span>Navigate to the game folder and run:</p>
-          <div class="code-block">
-            <ul style="list-style: none;">
-              <li>cd path/to/omnipet</li>
-              <li>chmod +x launch.sh</li>
-              <li>./launch.sh</li>
-            </ul>
-          </div>
-
-          <h4>Running in Fullscreen</h4>
-          <p>For dedicated gaming setups, you can launch Omnipet in fullscreen mode:</p>
-          <div class="code-block">./launch.sh --fullscreen</div>
-          
-          <p>Or set environment variables:</p>
-          <div class="code-block">OMNIPET_FULLSCREEN=1 python3 main.py</div>
-
-          <h4>Folder Structure</h4>
-          <p>Your Omnipet installation should look like this:</p>
-          <div class="folder-structure">
-Omnipet/
-├── main.py                               # Main game launcher
-├── config/
-│   ├── config_python_desktop.json        # Game configuration
-│   ├── input_config_python_desktop.json  # Input mappings
-├── game/                                 # Game engine
-├── modules/                              # Game modules (pets, rulesets)
-│   ├── D-3/                              # Digital Monster D-3 -25th COLOR EVOLUTION- module
-│   ├── DMC/                              # Digital Monster Color module
-│   ├── DMH/                              # Digital Monster Color Monster Hunter 20th Edition module
-│   ├── DMX/                              # Digital Monster X module
-│   └── PENC/                             # Digital Monster Pendulum Color module
-├── assets/                               # Game assets
-├── save/                                 # Save files
-├── logs/                                 # Game logs
-└── Documentation/                        # Game documentation
-          </div>
-
-        </div>
+    <div class="content-section" id="packages">
+      <h2 class="section-title">Python packages</h2>
+      <div class="section-content">
+        <p>Python Desktop, GamePi and Batocera run the game's Python source: they need Python 3.10 or newer and the
+          packages below. The Windows build and the Android app carry their own Python.</p>
+        <table class="data-table">
+          <thead><tr><th>Package</th><th>Needed</th><th>Used for</th></tr></thead>
+          <tbody>
+            <tr><td>pygame</td><td>Required</td><td>The game itself (pygame 2).</td></tr>
+            <tr><td>requests</td><td>Required</td><td>Omninet: account, shop, module and sprite downloads.</td></tr>
+            <tr><td>psutil</td><td>Recommended</td><td>Battery level on laptops; WiFi battles search every network adapter.</td></tr>
+            <tr><td>pyserial</td><td>Optional</td><td>The DCom adapter.</td></tr>
+            <tr><td>pyscard</td><td>Optional</td><td>USB NFC readers (PC/SC, such as the ACR122U).</td></tr>
+            <tr><td>gpiozero</td><td>Raspberry Pi</td><td>Buttons on GPIO pins.</td></tr>
+            <tr><td>smbus, RPi.GPIO</td><td>Raspberry Pi</td><td>Battery gauge and accelerometer on I2C; the UPS-Lite's external-power pin.</td></tr>
+            <tr><td>adafruit-circuitpython-pn532, adafruit-blinka</td><td>Raspberry Pi</td><td>The PN532 NFC reader on I2C.</td></tr>
+          </tbody>
+        </table>
+        <p>A missing optional package turns off only its feature.</p>
       </div>
+    </div>
 
+    <div class="content-section" id="first-start">
+      <h2 class="section-title">First start</h2>
+      <div class="section-content">
+        <ol class="steps">
+          <li>Setup: map your buttons (keyboard, gamepad or GPIO), then the graphics test. On a keyboard or gamepad START
+            or B skips; touch screens show a Skip button.</li>
+          <li>Choose Progress Mode (shown as Progression Mode) or Free Mode. Progress Mode signs in to Omninet and opens the
+            Arena and the whole shop. Free Mode unlocks every module and feature at once, without the Arena. See
+            <a href="online-play.html">Online Play</a>.</li>
+          <li>The tutorial follows. With no module installed it covers the module shop, and the egg screen opens the shop
+            instead.</li>
+        </ol>
+        <p>Offline with no module installed, the game shows NO MODULE DETECTED: connect to the internet or add a module by
+          hand.</p>
+        <h3>Settings</h3>
+        <p>There are no configuration files to edit: display, sound, gameplay and button settings are in the game's
+          Settings menu and are saved with your game (buttons: Settings &gt; Input &gt; Remap Input). Each platform starts
+          with its own defaults. See the <a href="manual.html">Manual</a>.</p>
+      </div>
+    </div>
 
+    <div class="content-section" id="modules">
+      <h2 class="section-title">Modules</h2>
+      <div class="section-content">
+        <h3>From the shop</h3>
+        <p>Connect &gt; Shop &gt; Modules lists the published modules.</p>
+        <table class="data-table">
+          <thead><tr><th>Mode</th><th>Downloads</th></tr></thead>
+          <tbody>
+            <tr><td>Free Mode</td><td>Every module is free. No Omninet account is needed.</td></tr>
+            <tr><td>Progress Mode</td><td>Sign in to Omninet. A module is bought once with coins; the modules you own are downloaded to every device linked to the account.</td></tr>
+          </tbody>
+        </table>
+        <p>A module's page shows Download, Update when a newer version is published, or Updated. An update replaces the
+          installed module only once the download is complete.</p>
+        <h3>By hand</h3>
+        <p>Every build except Android also loads modules copied into the <code>modules</code> folder: one folder per
+          module, with <code>module.json</code> directly inside, as in <code>modules/DMC/module.json</code>. Restart the
+          game to load it. A module that fails to load shows "Error loading module" and its name on the main screen.</p>
+        <p>A module's documentation, when it has one, is at <code>modules/&lt;NAME&gt;/documentation/index.html</code>.</p>
+      </div>
+    </div>
 
-    <div class="content-section">
-      <h2 class="section-title">Post-Installation Setup</h2>
-      
-      <h3>First Launch</h3>
-      <p>When you first start Omnipet:</p>
-      <ol>
-        <li>Make sure you have a config directory with the config files in it</li>
-        <li>To access the module documentation from within the game main documentation files, run the game at least once</li>
-        <li>You'll see the egg selection screen, with eggs available from all installed modules</li>
-        <li>You'll see the main game screen with an egg ready to hatch</li>
-      </ol>
+    <div class="content-section" id="saves">
+      <h2 class="section-title">Save files</h2>
+      <div class="section-content">
+        <table class="data-table">
+          <thead><tr><th>Build</th><th>Save folder</th></tr></thead>
+          <tbody>
+            <tr><td>Windows, Python Desktop, GamePi, Batocera, Nuitka</td><td><code>save</code> in the game folder</td></tr>
+            <tr><td>Android</td><td>The app's own storage, not reachable from a file manager</td></tr>
+          </tbody>
+        </table>
+        <table class="data-table">
+          <thead><tr><th>In save/</th><th>Holds</th></tr></thead>
+          <tbody>
+            <tr><td><code>game_mode.cfg</code></td><td>The mode chosen at the first start.</td></tr>
+            <tr><td><code>omninet_device.json</code></td><td>This device's link to its Omninet account.</td></tr>
+            <tr><td><code>Default/</code></td><td>The Free Mode save.</td></tr>
+            <tr><td><code>&lt;player id&gt;/</code></td><td>The Progress Mode save of one Omninet account.</td></tr>
+          </tbody>
+        </table>
+        <p>Each save folder holds <code>save_data_1.dat</code> to <code>save_data_10.dat</code> (the game writes the next
+          one each time and loads the newest), <code>freezer.pkl</code> (the Freezer) and <code>digidex.json</code> (the
+          Digidex). The game saves every minute and when it closes.</p>
+        <p>To back up the game, or move it to another computer or a GamePi, copy the whole <code>save</code> folder while
+          the game is closed.</p>
+      </div>
+    </div>
 
-      <br>
+    <div class="content-section" id="updating">
+      <h2 class="section-title">Updating</h2>
+      <div class="section-content">
+        <h3>Windows, Python Desktop, GamePi and Batocera</h3>
+        <ol class="steps">
+          <li>Close the game.</li>
+          <li>Copy the <code>save</code> folder somewhere safe, and <code>modules</code> if you added modules by hand.</li>
+          <li>Extract the new release into the game folder, replacing the old files. Its <code>modules</code> and
+            <code>save</code> folders are empty, so your save and modules stay. On a GamePi, over SSH:
+            <pre><code>unzip -o Omnipet_GamePi_Ver_1.0.0.zip -d ~/Games/Omnipet</code></pre></li>
+          <li>Start the game, then open Connect &gt; Shop &gt; Modules and update the modules that show Update.</li>
+        </ol>
+        <h3>Android</h3>
+        <p>Install the new APK over the installed app. Do not uninstall first: that deletes the save.</p>
+        <h3>From 1.0.0 Beta 3</h3>
+        <ul>
+          <li>Saves carry over.</li>
+          <li>The original Digital Monster and Pendulum modules are now DMOG and PENOG. Your Digimon from them move to the
+            new names when the save loads: install DMOG and PENOG from the shop to keep playing them.</li>
+          <li>A sick Digimon keeps its ailment as the kind it was; its old count becomes its injury count.</li>
+          <li>The <code>config</code> folder of older releases is no longer used and can be deleted.</li>
+        </ul>
+      </div>
+    </div>
 
-      <h3>Configuration</h3>
-      <p>Key configuration files:</p>
-      <ul>
-        <li><strong>config.json:</strong> Default/Fallback display settings, sound levels, and game options</li>
-        <li><strong>input_config.json:</strong> Default/Fallback button mappings</li>
-        <br>
-        <li><strong>config_batocera.json:</strong> Display settings, sound levels, and game options for Batocera</li>
-        <li><strong>input_config_batocera.json:</strong> Customize button mappings for Batocera</li>
-        <br>
-        <li><strong>config_python_desktop.json:</strong> Display settings, sound levels, and game options for Linux or macOS</li>
-        <li><strong>input_config_python_desktop.json:</strong> Customize button mappings for Linux or macOS</li>
-        <br>
-        <li><strong>config_raspberry.json:</strong> Display settings, sound levels, and game options for Raspberry Pi OS</li>
-        <li><strong>input_config_raspberry.json:</strong> Customize button mappings for Raspberry Pi OS</li>
-        <br>
-        <li><strong>config_windows.json:</strong> Display settings, sound levels, and game options for Windows</li>
-        <li><strong>input_config_windows.json:</strong> Customize button mappings for Windows</li>
-        <br>
-        <li><strong>Module configs:</strong> Each module has its own configuration options, 
-          configured by editing the .json files in the module folder, or using Module Editor on Windows</li>
-      </ul>
-
-      <br>
-
-      <h3>Adding Modules</h3>
-      <p>To add new modules:</p>
-      <ol>
-        <li>Create a new folder in the <code>modules/</code> directory</li>
-        <li>Add the required module files (module.json, monster.json, etc.)</li>
-        <li>Restart the game to load the new module</li>
-        <li>The module documentation will be added to the guide list</li>
-      </ol>
-
-      <div class="success-box">
-        <strong>🎉 You're all set!</strong> Check out the <a href="manual.html">User Manual</a> to learn how to play, or explore the <a href="module-guide.html">Module Guide</a> for available content.
+    <div class="content-section" id="options">
+      <h2 class="section-title">Start options</h2>
+      <div class="section-content">
+        <table class="data-table">
+          <thead><tr><th>Option</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>--fullscreen</code> or <code>-f</code></td><td>Starts fullscreen, scaled to the screen. Works with <code>Omnipet.exe</code>, <code>omnipet.exe</code>, <code>main.py</code>, <code>launch.sh</code> and <code>launch.bat</code>.</td></tr>
+            <tr><td><code>OMNIPET_FULLSCREEN</code></td><td>The same, as an environment variable: <code>1</code>, <code>true</code> or <code>yes</code>.</td></tr>
+            <tr><td><code>SDL_VIDEODRIVER</code></td><td>Chooses the display driver. Without it the game tries <code>windows</code> on Windows; <code>x11</code>, <code>wayland</code>, <code>kmsdrm</code>, <code>fbcon</code> on Linux; <code>kmsdrm</code> first on Batocera. <code>launch.sh</code> sets it itself. <code>kmsdrm</code> always runs fullscreen.</td></tr>
+          </tbody>
+        </table>
+        <pre><code>Omnipet.exe --fullscreen
+./launch.sh -f
+python3 main.py --fullscreen
+OMNIPET_FULLSCREEN=1 ./launch.sh</code></pre>
+        <p>Windows starts in a window. Linux, the Raspberry Pi, Batocera and Android start fullscreen.</p>
+        <div class="note"><strong>Start the game from its own folder.</strong> The game reads <code>assets</code>,
+          <code>modules</code> and <code>save</code> from the folder it starts in. <code>launch.sh</code>,
+          <code>omnipet.pygame</code> and the Nuitka builds change to their folder themselves. <code>Omnipet.exe</code> and
+          <code>launch.bat</code> do when double-clicked; a shortcut to them needs the game folder as its Start in
+          folder.</div>
+        <p>Problems starting the game are covered in <a href="troubleshooting.html">Troubleshooting</a>.</p>
       </div>
     </div>
   </div>
 
   <script>
-    function showPlatform(platform) {
-      // Hide all platform contents
-      const contents = document.querySelectorAll('.platform-content');
-      contents.forEach(content => content.classList.remove('active'));
-      
-      // Hide all tabs
-      const tabs = document.querySelectorAll('.platform-tab');
-      tabs.forEach(tab => tab.classList.remove('active'));
-      
-      // Show selected platform content
-      document.getElementById(platform + '-content').classList.add('active');
-      
-      // Highlight selected tab
-      event.target.classList.add('active');
-    }
+    // Platform tabs: show the panel named by the clicked tab's data-tab,
+    // or by the page address (installation-guide.html#gamepi).
+    (function () {
+      var tabs = document.querySelectorAll('.tab');
+      function show(id) {
+        if (!document.getElementById(id)) { return; }
+        tabs.forEach(function (t) { t.classList.toggle('active', t.dataset.tab === id); });
+        document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.toggle('active', p.id === id); });
+      }
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () { show(t.dataset.tab); });
+      });
+      if (location.hash) {
+        var id = location.hash.slice(1);
+        if (document.querySelector('.tab[data-tab="' + id + '"]')) {
+          show(id);
+          document.getElementById('install').scrollIntoView();
+        }
+      }
+    })();
   </script>
 </body>
 </html>

@@ -16,11 +16,13 @@ from ui.components.item_list import ItemList
 from ui.components.text_panel import TextPanel
 from ui.windows.window_background import WindowBackground
 from core import runtime_globals, game_globals
+from utils import ailments
 import core.constants as constants
 from utils.module_utils import get_module
 from utils.pet_utils import get_selected_pets
 from utils.scene_utils import change_scene
-from utils.inventory_utils import get_inventory_value, remove_from_inventory, add_to_inventory
+from utils.inventory_utils import get_inventory_value, remove_from_inventory, add_to_inventory, item_fits_pet
+from utils import item_effects
 from ui.ui_constants import BASE_RESOLUTION
 from utils.asset_utils import image_load
 
@@ -48,7 +50,10 @@ class SceneInventory:
         self.discard_button = None
         self.selection_button = None
         self.exit_button = None
-        
+        # An item of one module waiting for the player to choose which of
+        # that module's Digimon takes it (`_start_pick`).
+        self.picking_item = None
+
         # Black background for areas not covered by UI
         self.window_background = WindowBackground(False)
         
@@ -91,12 +96,17 @@ class SceneInventory:
                 for item in module.items:
                     if getattr(item, "effect", "") == "digimental":
                         continue
-                    amount = get_inventory_value(item.id)
+                    # The module's own stock: an Omninet purchase of the same
+                    # id (the Vital Bracelets' clocks are sold there too) is
+                    # the shop's cross-module item, added below. Counted
+                    # here, it showed once per module that defines the id
+                    # (x3 with VB, VBE and VH) and only that module's
+                    # Digimon could take it.
+                    amount = game_globals.inventory.get(item.id, 0)
                     if amount > 0:
-                        # Check if we already have this item ID
+                        # One stock per id, however many modules define it
                         if item.id in items_by_id:
-                            # Add to existing quantity
-                            items_by_id[item.id].quantity += amount
+                            continue
                         else:
                             # Create new item entry
                             sprite_name = item.sprite_name
@@ -116,27 +126,41 @@ class SceneInventory:
 
         # Shop-purchased items (cross-module): pulled from purchases.items
         # (quantity per id) + metadata from game_globals.shop_items_data
-        # (cached when the shop items view loaded).  Skip any item that
-        # already exists in items_by_id (i.e. also defined by a module).
+        # (cached when the shop items view loaded).  An id a module also
+        # holds stock of joins that module's entry.
         try:
             purchases = getattr(game_globals, 'purchases', None)
             shop_meta = getattr(game_globals, 'shop_items_data', {}) or {}
-            if purchases and shop_meta and getattr(purchases, 'items', None):
-                items_dir = os.path.join("assets", "items")
+            if purchases and getattr(purchases, 'items', None):
+                from utils.inventory_utils import get_item_by_id
+                from utils.module_utils import shop_item_effect_known
                 for shop_id, qty in purchases.items.items():
-                    if qty <= 0 or shop_id in items_by_id:
+                    if qty <= 0:
                         continue
-                    meta = shop_meta.get(shop_id)
+                    if shop_id in items_by_id:
+                        # Some held as the module's own item too: one entry,
+                        # used up module stock first (remove_from_inventory)
+                        items_by_id[shop_id].quantity += qty
+                        continue
+                    meta = dict(shop_meta.get(shop_id) or {})
+                    same = get_item_by_id(shop_id) if not shop_item_effect_known(meta) else None
+                    if same is not None:
+                        # Sold under a module item's id: that item, when the
+                        # shop's own data could not be fetched (Omninet's
+                        # item download fails once an item was bought twice)
+                        for key in ('name', 'description', 'sprite_name'):
+                            if not meta.get(key):
+                                meta[key] = getattr(same, key, meta.get(key))
+                        for key in ('effect', 'status', 'amount', 'boost_time', 'protocol_value',
+                                    'attack_sprite'):
+                            if hasattr(same, key):
+                                meta[key] = getattr(same, key)
+                        meta['module_items_dir'] = os.path.join(
+                            getattr(get_module(same.module), 'folder_path', ''), 'items')
                     if not meta:
                         continue
                     sprite_name = meta.get('sprite_name') or ''
-                    sprite_path = os.path.join(items_dir, sprite_name) if sprite_name else ''
-                    icon = pygame.Surface((48, 48), pygame.SRCALPHA)
-                    if sprite_path and os.path.exists(sprite_path):
-                        try:
-                            icon = image_load(sprite_path).convert_alpha()
-                        except Exception:
-                            pass
+                    icon = self._shop_item_icon(shop_id, meta)
                     # Build a lightweight game_item proxy holding the
                     # fields the inventory consumer expects.  cross_module
                     # is True so the apply-effect path bypasses the usual
@@ -153,6 +177,8 @@ class SceneInventory:
                     proxy.status = meta.get('status', '')
                     proxy.amount = meta.get('amount', 1)
                     proxy.boost_time = meta.get('boost_time', 0)
+                    proxy.protocol_value = meta.get('protocol_value', 0)
+                    proxy.attack_sprite = meta.get('attack_sprite', 0)
                     proxy.component_item = ''
                     proxy.cross_module = True
                     items.append(InventoryItem(shop_id, proxy, icon, qty, None))
@@ -161,6 +187,34 @@ class SceneInventory:
                 f"[SceneInventory] Shop items load error: {exc}")
 
         return items
+
+    @staticmethod
+    def _shop_item_icon(shop_id, meta):
+        """A shop item's icon: the one kept in the save at purchase
+        (`module_utils.ensure_shop_item_icon`), a copy shipped in
+        assets/items or in the module whose item it is, or the one the shop's
+        Items page fetched this session; an empty square only when none is
+        there."""
+        from utils.module_utils import shop_item_icon_path
+        from services.shop_image_cache import shop_image_cache
+        sprite_name = meta.get('sprite_name') or ''
+        candidates = [shop_item_icon_path(meta)]
+        for folder in (os.path.join("assets", "items"), meta.get('module_items_dir')):
+            if sprite_name and folder:
+                candidates.append(os.path.join(folder, sprite_name))
+                if not sprite_name.lower().endswith(".png"):
+                    candidates.append(os.path.join(folder, sprite_name + ".png"))
+        from utils.asset_utils import resolve_path
+        for path in candidates:
+            if path and os.path.isfile(resolve_path(path)):
+                try:
+                    return image_load(path).convert_alpha()
+                except Exception:
+                    pass
+        cached = shop_image_cache.get(shop_id, 'icon', kind='item')
+        if cached is not None:
+            return cached
+        return pygame.Surface((48, 48), pygame.SRCALPHA)
 
     def setup_ui(self):
         """Setup the UI components for the inventory scene."""
@@ -298,8 +352,11 @@ class SceneInventory:
         """Handle events in the inventory scene."""        
         event_type, event_data = event
 
-        if event_type in ["A", "LCLICK"]:
-            print(f"[SceneInventory] Handling event: {event_type} with data: {event_data}")
+        if self.picking_item is not None and event_type == "B":
+            # Back out of choosing a Digimon: the item is kept.
+            runtime_globals.game_sound.play("cancel")
+            self._end_pick()
+            return
 
         # Handle events through UI manager first
         if self.ui_manager.handle_event(event):
@@ -350,28 +407,59 @@ class SceneInventory:
             
         self.text_panel.set_text(description)
             
+    def _is_food_item(self, item):
+        """True if using the item feeds hunger/strength (capped by the pet's
+        stomach).  A pet with stomach 0 cannot accept these, so they are
+        greyed out for such pets."""
+        gi = item.game_item
+        if (gi.effect in ("component", "status_boost", "dna", "currency", "devolve", "bundle")
+                or gi.effect in item_effects.PET_EFFECTS
+                or gi.effect in item_effects.NOT_IMPLEMENTED_EFFECTS):
+            return False
+        if gi.effect == "status_change" and gi.status not in ("hunger", "strength"):
+            return False
+        return gi.status in ("hunger", "strength")
+
     def _update_pet_selector_for_item(self, item):
         """Update pet selector enable/disable flags based on selection strategy and item requirements"""
         if not self.pet_selector:
             return
-            
+
         # Pet selector should always show ALL pets from game_globals.pet_list
         all_pets = game_globals.pet_list
         selected_pets = get_selected_pets()  # Pets that can interact with items
-        
+
         # Only set pets if the list has changed (to avoid unnecessary redraws)
         if not hasattr(self, '_last_pet_count') or self._last_pet_count != len(all_pets):
             self.pet_selector.set_pets(all_pets)
             self._last_pet_count = len(all_pets)
-        
+
         # Create a mapping of selected pets for quick lookup
         selected_pet_set = set(selected_pets)
-        
+
+        if item.game_item.effect == "status_boost":
+            # A battle item is chosen before a battle, not here.
+            self.pet_selector.set_enabled_pets([])
+            return
+        if self._item_module(item) is not None:
+            # A module's item: that module's Digimon, whoever is selected.
+            eligible = self._eligible_pets(item, self._module_pool(item))
+            self.pet_selector.set_enabled_pets(
+                [i for i, pet in enumerate(all_pets) if pet in eligible])
+            return
+
+        # Food (hunger/strength) items can't be used by a pet with stomach 0.
+        is_food = self._is_food_item(item)
+
         if runtime_globals.strategy_index == 0:
             # Strategy 0: Enable all pets that are in selected_pets list
             enabled_indices = []
             for i, pet in enumerate(all_pets):
                 if pet in selected_pet_set and not pet._is_blocked_by_sleep():
+                    if is_food and pet.stomach <= 0:
+                        continue  # Can't eat — grey out
+                    if not item_fits_pet(item.game_item, pet):
+                        continue  # Another family's item — grey out
                     enabled_indices.append(i)
             self.pet_selector.set_enabled_pets(enabled_indices)
         else:
@@ -383,9 +471,15 @@ class SceneInventory:
                     continue  # Skip pets not in selected_pets
                 if pet._is_blocked_by_sleep():
                     continue  # Skip pets blocked by sleep window
-                    
+                if is_food and pet.stomach <= 0:
+                    continue  # Can't eat — grey out
+                if not item_fits_pet(item.game_item, pet):
+                    continue  # Another family's item — grey out
+
                 pet_needs_item = False
-                if item_status == "hunger":
+                if item.game_item.effect in item_effects.PET_EFFECTS:
+                    pet_needs_item = self._pet_needs_effect(item.game_item, pet)
+                elif item_status == "hunger":
                     pet_needs_item = pet.hunger < 4
                 elif item_status == "strength":
                     pet_needs_item = pet.strength < 4
@@ -398,16 +492,46 @@ class SceneInventory:
 
             self.pet_selector.set_enabled_pets(enabled_indices)
             
-    def _use_item(self, item, index):
-        """Internal method to use an item - dispatches to effect-specific handlers"""
-        # Get targets (selected pets), excluding sleep-blocked pets
-        targets = [pet for pet in get_selected_pets() if not pet._is_blocked_by_sleep()]
+    #: Effects that act once for the item, not on a Digimon: no one is
+    #: chosen for them.
+    ITEM_WIDE_EFFECTS = ("component", "bundle", "currency", "encounter")
+
+    @staticmethod
+    def _item_module(item):
+        """The module an item belongs to, or None for the core foods and a
+        shop's cross-module items, which any Digimon can take."""
+        gi = item.game_item
+        if getattr(gi, "cross_module", False):
+            return None
+        name = getattr(gi, "module", None)
+        return name if name in runtime_globals.game_modules else None
+
+    def _module_pool(self, item):
+        """The party's Digimon of the item's module."""
+        module_name = self._item_module(item)
+        return [pet for pet in game_globals.pet_list
+                if pet is not None and getattr(pet, "module", None) == module_name]
+
+    def _eligible_pets(self, item, pool):
+        """Who in *pool* can take the item now: awake, with room to eat a
+        food, of the family a family item names and, in NEED mode, needing
+        it."""
+        targets = [pet for pet in pool if not pet._is_blocked_by_sleep()]
+        # Food items (hunger/strength) can't be eaten by a pet with stomach 0.
+        if self._is_food_item(item):
+            targets = [pet for pet in targets if pet.stomach > 0]
+        # A boost item that names a DigiSoul family is that family's only.
+        targets = [pet for pet in targets
+                   if item_fits_pet(item.game_item, pet)]
         if runtime_globals.strategy_index != 0:
             # NEED mode: only pets that actually need this item
             item_status = item.game_item.status
             filtered = []
             for pet in targets:
-                if item_status == "hunger":
+                if item.game_item.effect in item_effects.PET_EFFECTS:
+                    if self._pet_needs_effect(item.game_item, pet):
+                        filtered.append(pet)
+                elif item_status == "hunger":
                     if pet.hunger < 4:
                         filtered.append(pet)
                 elif item_status == "strength":
@@ -417,11 +541,73 @@ class SceneInventory:
                     if pet.can_battle():
                         filtered.append(pet)
             targets = filtered
+        return targets
+
+    def _use_item(self, item, index):
+        """Use an item: the core foods and shop items on the selected
+        Digimon; a module's item on one Digimon of that module, the player
+        choosing when there is more than one. A battle item is chosen before
+        a battle instead (`utils.battle_items`)."""
+        gi = item.game_item
+        if gi.effect == "status_boost":
+            runtime_globals.game_sound.play("cancel")
+            self._show_notes(["Use it before a battle"])
+            return
+        module_name = self._item_module(item)
+        if module_name is None:
+            targets = self._eligible_pets(item, get_selected_pets())
+        else:
+            targets = self._eligible_pets(item, self._module_pool(item))
         if not targets:
             runtime_globals.game_sound.play("cancel")
-            runtime_globals.game_console.log("[SceneInventory] No pets selected for feeding")
+            runtime_globals.game_console.log(
+                f"[SceneInventory] No Digimon can take {gi.name}"
+                + (f" ({module_name}'s item)" if module_name else ""))
             return
-        
+        if module_name is not None and gi.effect not in self.ITEM_WIDE_EFFECTS and len(targets) > 1:
+            self._start_pick(item, targets)
+            return
+        self._dispatch_item(item, targets)
+
+    def _start_pick(self, item, targets):
+        """Let the player choose which of the module's Digimon takes it."""
+        self.picking_item = item
+        all_pets = game_globals.pet_list
+        self.pet_selector.set_enabled_pets([i for i, pet in enumerate(all_pets) if pet in targets])
+        self.pet_selector.set_interactive(True)
+        self.pet_selector.max_selection = 1
+        self.pet_selector.activation_callback = self._on_pick
+        self.pet_selector.focused_cell = next(i for i, pet in enumerate(all_pets) if pet in targets)
+        self.ui_manager.set_focused_component(self.pet_selector)
+        if self.text_panel:
+            self.text_panel.set_text(f"Choose a Digimon for {item.game_item.name}")
+        runtime_globals.game_sound.play("menu")
+
+    def _on_pick(self):
+        cell = self.pet_selector.get_activation_cell()
+        item = self.picking_item
+        if item is None or cell not in self.pet_selector.enabled_pets \
+                or not 0 <= cell < len(game_globals.pet_list):
+            runtime_globals.game_sound.play("cancel")
+            return True
+        pet = game_globals.pet_list[cell]
+        self._end_pick()
+        self._dispatch_item(item, [pet])
+        return True
+
+    def _end_pick(self):
+        item, self.picking_item = self.picking_item, None
+        self.pet_selector.set_interactive(False)
+        self.pet_selector.activation_callback = None
+        self.pet_selector.selected_pets = []
+        if self.item_list:
+            self.ui_manager.set_focused_component(self.item_list)
+        if item is not None:
+            self._update_item_description(item)
+            self._update_pet_selector_for_item(item)
+
+    def _dispatch_item(self, item, targets):
+        """Hand the item to the handler for its effect."""
         # Dispatch to appropriate handler based on item effect
         effect = item.game_item.effect
         status = item.game_item.status
@@ -429,8 +615,26 @@ class SceneInventory:
             self._use_component_item(item)
         elif effect == "status_boost":
             self._use_status_boost_item(item, targets)
+        elif effect == "dna":
+            self._use_dna_item(item, targets)
+        elif effect == "currency":
+            self._use_currency_item(item, targets)
+        elif effect == "devolve":
+            self._use_devolve_item(item, targets)
+        elif effect in item_effects.PET_EFFECTS:
+            self._use_pet_effect_item(item, targets)
+        elif effect == "bundle":
+            self._use_bundle_item(item)
         elif effect == "status_change" and status not in ["hunger", "strength"]:
             self._use_status_change_item(item, targets)
+        elif effect in item_effects.NOT_IMPLEMENTED_EFFECTS or (not effect and not status):
+            # Catalogued items whose authentic behavior is not implemented
+            # remain visible/grantable, but cannot be accidentally consumed
+            # as a generic food item.
+            runtime_globals.game_sound.play("cancel")
+            runtime_globals.game_console.log(
+                f"[SceneInventory] {item.game_item.name} has no implemented effect")
+            return
         else:
             self._use_feeding_item(item, targets)
     
@@ -444,7 +648,7 @@ class SceneInventory:
             runtime_globals.game_console.log(f"[SceneInventory] Not enough {item.game_item.name} (have {current_amount}, need {required_amount})")
             return
         
-        runtime_globals.game_sound.play("menu")
+        # BaseList already played the activation sound
         remove_from_inventory(item.id, required_amount)
         
         # Find the component item in the same module
@@ -469,127 +673,204 @@ class SceneInventory:
         self._return_to_game()
     
     def _use_status_boost_item(self, item, targets):
-        """Handle status boost items (battle effects)"""
-        runtime_globals.game_sound.play("menu")
-        
-        eff = game_globals.battle_effects.get(item.game_item.status, {"amount": 0, "boost_time": 0, "module": item.game_item.module})
-        eff["amount"] = item.game_item.amount
-        eff["boost_time"] += item.game_item.boost_time
-        eff["module"] = item.game_item.module
-        eff["item_id"] = item.game_item.id
-        game_globals.battle_effects[item.game_item.status] = eff
-        
-        # Continue to feeding animation
-        self._use_feeding_item(item, targets)
+        """Handle status boost items (battle effects): stored once a pet
+        takes the item."""
+        gi = item.game_item
+        self._use_feeding_item(item, targets, before_finish=lambda: item_effects.add_battle_boost(
+            gi, gi.status, gi.amount, gi.boost_time))
+
+    def _show_notes(self, notes):
+        for note in notes:
+            runtime_globals.game_message.add_slide(
+                note, (255, 255, 0), 56 * runtime_globals.UI_SCALE, runtime_globals.FONT_SIZE_SMALL)
+
+    def _consume(self, item):
+        """Use up one of a non-default item; a reusable one is kept."""
+        if getattr(item.game_item, "reusable", False):
+            return
+        if item.id not in [ditem.id for ditem in runtime_globals.default_items.values()]:
+            remove_from_inventory(item.id)
+
+    def _use_bundle_item(self, item):
+        """A set of items (effect `bundle`): every `item` row handed over."""
+        gi = item.game_item
+        notes = [item_effects.give_item(gi, row.get("item", ""), int(row.get("amount", 1) or 1))
+                 for row in getattr(gi, "extra_effects", None) or [] if row.get("effect") == "item"]
+        notes = [n for n in notes if n]
+        if not notes:
+            runtime_globals.game_sound.play("cancel")
+            return
+        self._show_notes(notes)
+        runtime_globals.game_sound.play("happy2")
+        self._consume(item)
+        self._return_to_game()
+
+    @staticmethod
+    def _pet_needs_effect(game_item, pet):
+        """For the NEED selection: a medicine is for a pet with its ailment,
+        Digi Bedding for one that is sick, injured or has a care mistake;
+        every other pet effect for any pet it fits."""
+        if game_item.effect == "cure":
+            return item_effects.has_ailment(pet, game_item.status)
+        if game_item.effect == "bedding":
+            return ailments.ailing(pet) or getattr(pet, "mistakes", 0) > 0
+        if game_item.effect == "multiplier":
+            # A BE item whose targets have no stat here, or Vital Values
+            # for a pet without them.
+            return item_effects.fits(game_item, pet)
+        return True
+
+    def _use_pet_effect_item(self, item, targets):
+        """The Digivice iC's items that act on the pet rather than feed it
+        (`item_effects.PET_EFFECTS`). A ticket starts its battle and a C'mon
+        Switch shows the first selected pet up close; an evolving item takes
+        the first pet that can use it, one evolution an item; the rest act
+        on every selected pet."""
+        gi = item.game_item
+        if gi.effect == "encounter":
+            if item_effects.start_encounter(gi):
+                self._consume(item)
+                runtime_globals.game_console.log(f"[SceneInventory] {gi.name}: battle started")
+            else:
+                runtime_globals.game_sound.play("cancel")
+            return
+        if gi.effect == "closeup":
+            from utils import accessory_utils
+            accessory_utils.start_closeup(targets[0])
+            runtime_globals.game_sound.play("happy")
+            self._consume(item)
+            self._return_to_game()
+            return
+        if gi.effect in ("evolve", "random_evolve"):
+            targets = targets[:1]
+        affected = [pet for pet in targets if item_effects.apply_pet_effect(gi, pet)]
+        if not affected:
+            runtime_globals.game_sound.play("cancel")
+            runtime_globals.game_console.log(f"[SceneInventory] {gi.name}: no selected pet took it")
+            return
+        self._show_notes(item_effects.finish_use(gi, affected))
+        if gi.effect not in ("evolve", "random_evolve"):
+            # An evolution plays its own sound.
+            runtime_globals.game_sound.play("happy2")
+        self._consume(item)
+        runtime_globals.game_console.log(
+            f"[SceneInventory] {gi.name} ({gi.effect}): {', '.join(pet.name for pet in affected)}")
+        self._return_to_game()
+
+    def _use_currency_item(self, item, targets):
+        """Handle currency items: `amount` of the item's `currency`, paid
+        once however many pets are selected."""
+        gi = item.game_item
+        note = item_effects.pay_currency(gi, gi.currency, gi.amount)
+        if not note:
+            runtime_globals.game_sound.play("cancel")
+            return
+        self._show_notes([note] + item_effects.finish_use(gi, targets))
+        runtime_globals.game_sound.play("happy2")
+        self._consume(item)
+        runtime_globals.game_console.log(f"[SceneInventory] {gi.name}: {note}")
+        self._return_to_game()
+
+    def _use_devolve_item(self, item, targets):
+        """Handle devolve items: each pet returns to the form it evolved
+        from (`GamePet.devolve`); a pet with none is left alone."""
+        gi = item.game_item
+        devolved = [pet for pet in targets if pet.devolve()]
+        if not devolved:
+            runtime_globals.game_sound.play("cancel")
+            runtime_globals.game_console.log(
+                f"[SceneInventory] {gi.name}: no selected pet has an earlier form")
+            return
+        self._show_notes(item_effects.finish_use(gi, devolved))
+        runtime_globals.game_sound.play("evolution")
+        self._consume(item)
+        runtime_globals.game_console.log(
+            f"[SceneInventory] {gi.name}: {', '.join(pet.name for pet in devolved)} devolved")
+        self._return_to_game()
     
+    def _use_dna_item(self, item, targets):
+        """Handle DNA items: `amount` of the item's `digisoul` to each pet."""
+        family = getattr(item.game_item, "digisoul", "") or ""
+        amount = item.game_item.amount
+        affected_pets = [pet for pet in targets
+                         if hasattr(pet, "add_dna") and pet.add_dna(family, amount)]
+        if not affected_pets:
+            runtime_globals.game_sound.play("cancel")
+            runtime_globals.game_console.log(
+                f"[SceneInventory] No pets took {family or 'no'} DNA from {item.game_item.name}")
+            return
+
+        for pet in affected_pets:
+            pet.check_disturbed_sleep()
+            pet.set_state("eat", True)
+        self._show_notes(item_effects.finish_use(item.game_item, affected_pets))
+        self._setup_eating_animation(item, affected_pets)
+
+        self._consume(item)
+
+        runtime_globals.game_console.log(
+            f"[SceneInventory] {item.game_item.name}: +{amount} {family} DNA to {len(affected_pets)} pets")
+        self._return_to_game()
+
     def _use_status_change_item(self, item, targets):
-        """Handle status change items (direct stat modifications)"""
+        """Handle status change items (direct stat modifications), each
+        stat within its own limits (`item_effects.apply_status`)."""
         status_to_change = item.game_item.status
         amount = item.game_item.amount
-        affected_pets = []  # Track pets that received stat changes
-        
-        # For capped stats, check if all pets have reached the cap
-        if status_to_change in ['hp', 'attack', 'power']:
-            all_capped = True
-            bonus_index = {'hp': 0, 'attack': 1, 'power': 2}[status_to_change]
-            cap_attr = {'hp': 'hp_max_item_boost', 'attack': 'atk_max_item_boost', 'power': 'power_max_item_boost'}[status_to_change]
-            
-            for pet in targets:
-                pet_module = get_module(pet.module)
-                cap = getattr(pet_module, cap_attr, 0)
-                current_bonus = pet.bonus_stats[bonus_index]
-                if current_bonus < cap:
-                    all_capped = False
-                    break
-            
-            if all_capped:
-                runtime_globals.game_sound.play("cancel")
-                runtime_globals.game_console.log(f"[SceneInventory] All pets have reached {status_to_change} cap")
-                return
-            
-            # Apply bonus to pets that haven't reached cap
-            for pet in targets:
-                pet_module = get_module(pet.module)
-                cap = getattr(pet_module, cap_attr, 0)
-                current_bonus = pet.bonus_stats[bonus_index]
-                if current_bonus < cap:
-                    new_bonus = min(cap, current_bonus + amount)
-                    pet.bonus_stats[bonus_index] = new_bonus
-                    affected_pets.append(pet)
-                    runtime_globals.game_console.log(f"[SceneInventory] {pet.name} {status_to_change} bonus: {current_bonus} -> {new_bonus} (cap: {cap})")
-        
-        # For uncapped or direct stats
-        elif status_to_change == 'strength':
-            for pet in targets:
-                old_strength = pet.strength
-                pet.strength = min(4, pet.strength + amount)
-                if pet.strength != old_strength:
-                    affected_pets.append(pet)
-                    runtime_globals.game_console.log(f"[SceneInventory] {pet.name} strength: {pet.strength}")
-        
-        elif status_to_change == 'dp':
-            for pet in targets:
-                old_dp = pet.dp
-                pet.dp = min(pet.energy, pet.dp + amount)
-                if pet.dp != old_dp:
-                    affected_pets.append(pet)
-                    runtime_globals.game_console.log(f"[SceneInventory] {pet.name} dp: {pet.dp}/{pet.energy}")
-        
-        elif status_to_change == 'timer':
-            for pet in targets:
-                pet._rt_origin -= amount * 60  # shift origin back by the given number of minutes
-                affected_pets.append(pet)
-                runtime_globals.game_console.log(f"[SceneInventory] {pet.name} timer advanced by {amount} minutes")
-        
-        elif status_to_change == 'vital_values':
-            for pet in targets:
-                old_vital = pet.vital_values
-                pet.vital_values = min(9999, pet.vital_values + amount)
-                if pet.vital_values != old_vital:
-                    affected_pets.append(pet)
-                    runtime_globals.game_console.log(f"[SceneInventory] {pet.name} vital_values: {pet.vital_values}")
-        
+        affected_pets = [pet for pet in targets
+                         if item_effects.apply_status(pet, status_to_change, amount)]
+
         if len(affected_pets) == 0:
             runtime_globals.game_sound.play("cancel")
             runtime_globals.game_console.log(f"[SceneInventory] No pets affected by {item.game_item.name}")
             return
 
-        runtime_globals.game_sound.play("menu")
         for pet in affected_pets:
             pet.check_disturbed_sleep()
             pet.set_state("eat", True)
-        
+        self._show_notes(item_effects.finish_use(item.game_item, affected_pets))
+
         # Set up eating animation for affected pets
         self._setup_eating_animation(item, affected_pets)
         
-        # Remove item from inventory
-        if item.id not in [ditem.id for ditem in runtime_globals.default_items.values()]:
-            remove_from_inventory(item.id)
+        self._consume(item)
         
         runtime_globals.game_console.log(f"[SceneInventory] Applied {item.game_item.name} to {len(affected_pets)} pets")
         self._return_to_game()
     
-    def _use_feeding_item(self, item, targets):
-        """Handle regular feeding items (hunger/strength)"""
-        runtime_globals.game_sound.play("menu")
-        
+    def _use_feeding_item(self, item, targets, before_finish=None):
+        """Handle regular feeding items (hunger/strength), and the feeding
+        step of a battle boost. Only a pet that takes the item gets its
+        weight and extra effects, and an item nobody took is kept."""
+
         food_status = item.game_item.status
         food_amount = item.game_item.amount
         accepted_pets = []
         
         for pet in targets:
             pet.check_disturbed_sleep()
-            accepted = pet.set_eating(food_status, food_amount)
+            accepted = pet.set_eating(
+                food_status, food_amount,
+                getattr(item.game_item, 'weight_gain', None))
             if accepted:
                 pet.animation_counter = 0
                 accepted_pets.append(pet)
+
+        if not accepted_pets:
+            runtime_globals.game_sound.play("cancel")       # nobody ate: nothing happened
+            runtime_globals.game_console.log(f"[SceneInventory] No pet took {item.game_item.name}")
+            self._return_to_game()
+            return
+
+        runtime_globals.game_sound.play("menu")             # the item was used
+        if before_finish:
+            before_finish()
+        self._show_notes(item_effects.finish_use(item.game_item, accepted_pets))
         
         # Set up eating animation for pets that accepted the food
         self._setup_eating_animation(item, accepted_pets)
         
-        # Remove from inventory for non-default items
-        if item.id not in [ditem.id for ditem in runtime_globals.default_items.values()]:
-            remove_from_inventory(item.id)
+        self._consume(item)
         
         runtime_globals.game_console.log(f"[SceneInventory] Fed {len(accepted_pets)} pets with {item.game_item.name}")
         self._return_to_game()

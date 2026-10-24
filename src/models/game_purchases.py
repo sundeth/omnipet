@@ -27,6 +27,13 @@ class GamePurchases:
     gameplay: Set[str] = field(default_factory=set)
     items: Dict[str, int] = field(default_factory=dict)  # item_id -> quantity
     specials: Set[str] = field(default_factory=set)
+    #: The server's purchase rows this save has counted into `items`. Items
+    #: are bought again and again (one row each) and used up here, so a row
+    #: is counted once: the account sync used to set every used item back to 1.
+    item_purchase_ids: Set[str] = field(default_factory=set)
+    #: False for a save from before the rows were counted: its first sync
+    #: takes the quantities it holds as what it has (apply_purchase_entries).
+    item_purchases_tracked: bool = True
     
     def owns_module(self, module_id: str) -> bool:
         """Check if player owns a module."""
@@ -83,6 +90,17 @@ class GamePurchases:
         """Add consumable items (stacks with existing quantity)."""
         current = self.items.get(item_id, 0)
         self.items[item_id] = current + quantity
+
+    def apply_item_purchase(self, item_id: str, purchase_id: Optional[str]) -> bool:
+        """One bought item, from the server's purchase row *purchase_id*: +1
+        unless that row was counted already. True if it added one."""
+        purchase_id = str(purchase_id) if purchase_id else ""
+        if purchase_id and purchase_id in self.item_purchase_ids:
+            return False
+        self.add_item(item_id, 1)
+        if purchase_id:
+            self.item_purchase_ids.add(purchase_id)
+        return True
     
     def use_item(self, item_id: str, quantity: int = 1) -> bool:
         """
@@ -112,6 +130,8 @@ class GamePurchases:
             'gameplay': list(self.gameplay),
             'items': self.items.copy(),
             'specials': list(self.specials),
+            'item_purchase_ids': sorted(self.item_purchase_ids),
+            'item_purchases_tracked': self.item_purchases_tracked,
         }
     
     @classmethod
@@ -127,6 +147,9 @@ class GamePurchases:
             gameplay=set(data.get('gameplay', [])),
             items=data.get('items', {}),
             specials=set(data.get('specials', [])),
+            item_purchase_ids=set(data.get('item_purchase_ids', [])),
+            # A save written before the rows were counted has no such key
+            item_purchases_tracked=bool(data.get('item_purchases_tracked', False)),
         )
     
     def __repr__(self) -> str:

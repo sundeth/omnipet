@@ -21,6 +21,35 @@ class PetFrame(Enum):
     LOSE = 14
     SPECIAL = 15
 
+#: The frame drawn instead when a set lacks one: a Mode Change or DigiXros
+#: form has only the frames its device's battle shows (DMXW's Superior Modes
+#: have no ANGRY), and a missing frame used to stop the battle (owner,
+#: 2026-10-15: such forms need only the frames battle references).
+FRAME_FALLBACKS = {
+    PetFrame.IDLE2.value: (PetFrame.IDLE1.value,),
+    PetFrame.HAPPY.value: (PetFrame.IDLE2.value, PetFrame.IDLE1.value),
+    PetFrame.ANGRY.value: (PetFrame.IDLE2.value, PetFrame.IDLE1.value),
+    PetFrame.TRAIN1.value: (PetFrame.ATK1.value, PetFrame.ATK2.value, PetFrame.IDLE1.value),
+    PetFrame.TRAIN2.value: (PetFrame.ATK2.value, PetFrame.ATK1.value, PetFrame.IDLE1.value),
+    PetFrame.ATK1.value: (PetFrame.ATK2.value, PetFrame.ANGRY.value, PetFrame.IDLE1.value),
+    PetFrame.ATK2.value: (PetFrame.ATK1.value, PetFrame.ANGRY.value, PetFrame.IDLE1.value),
+    PetFrame.LOSE.value: (PetFrame.SICK.value, PetFrame.IDLE1.value),
+}
+
+
+def frame_or_fallback(get, index):
+    """``get(index)``, else the first frame of FRAME_FALLBACKS[index] the set
+    has, else IDLE1; None only when the set has none of them."""
+    frame = get(index)
+    if frame is not None:
+        return frame
+    for other in FRAME_FALLBACKS.get(index, (PetFrame.IDLE1.value,)):
+        frame = get(other)
+        if frame is not None:
+            return frame
+    return get(PetFrame.IDLE1.value) if index != PetFrame.IDLE1.value else None
+
+
 class EggFrame(Enum):
     IDLE1, IDLE2, HATCH, DEAD = range(4)
 

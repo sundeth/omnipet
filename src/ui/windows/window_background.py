@@ -55,53 +55,142 @@ class WindowBackground:
             self.time_of_day = new_time_of_day
             self.load_sprite(False)
 
-    def load_sprite(self, boot):
+    #: Always available, and what the login scene shows.
+    DEFAULT_BACKGROUND = "assets/Splash.png"
+
+    @staticmethod
+    def _safe_module(name):
+        """The module, or None — an old save can name one that is gone."""
+        if not name:
+            return None
+        try:
+            return get_module(name)
+        except Exception:
+            return None
+
+    def _paths_for(self, module, name):
+        """Candidate files for one background, best first."""
+        if module is None or not name:
+            return []
+        day_night = True
+        for bg in getattr(module, "backgrounds", []):
+            if bg.get("name") == name:
+                day_night = bg.get("day_night", True)
+                break
+        base = f"bg_{name}{f'_{self.time_of_day}' if day_night else ''}"
+        folder = os.path.join(module.folder_path, "backgrounds")
+        high = os.path.join(folder, f"{base}_high.png")
+        normal = os.path.join(folder, f"{base}.png")
+        out = []
+        if game_globals.background_high_res and os.path.exists(resolve_path(high)):
+            out.append(high)
+        out.append(normal)
+        # A day/night background whose current slice is missing still has its
+        # other slices; better the wrong time of day than no background.
+        for slice_name in ("day", "dusk", "night", ""):
+            alt = os.path.join(folder, f"bg_{name}{f'_{slice_name}' if slice_name else ''}.png")
+            if alt not in out:
+                out.append(alt)
+        return out
+
+    def _shop_paths(self, name):
+        """A background bought in the Omninet shop (a cosmetic, or a Special
+        bought with contribution points): the files its download wrote.
+        Settings lists these under the module name "shop"."""
+        for bg in (getattr(game_globals, "shop_backgrounds", None) or {}).values():
+            if (bg.get("name") or bg.get("id", "")) != name:
+                continue
+            paths = bg.get("sprite_paths") or {}
+            # Omninet's listing names the sprite with its prefix ("bg_ocean")
+            base = bg.get("sprite_name") or ""
+            if not base.startswith("bg_"):
+                base = f"bg_{base}"
+            # The pictures a download may hold, as module backgrounds have
+            # them: `<base>_<day|dusk|night>[_high].png` (the premium
+            # Specials have all six) or one fixed `<base>[_high].png`. This
+            # time of day first, the _high one first when High-Res is on;
+            # then the fixed picture, then the other times of day.
+            times = [self.time_of_day] if self.time_of_day else []
+            times += [t for t in ("day", "dusk", "night") if t not in times]
+            stems = [f"{base}_{times[0]}"] if times else []
+            stems += [base] + [f"{base}_{t}" for t in times[1:]]
+            preferred = []
+            for stem in stems:
+                if game_globals.background_high_res:
+                    preferred.append(f"{stem}_high.png")
+                preferred.append(f"{stem}.png")
+            out = [paths[f] for f in preferred if f in paths]
+            # Anything else it wrote, the normal resolution first.
+            out += [path for f, path in sorted(paths.items(), key=lambda kv: ("_high" in kv[0], kv[0]))
+                    if path not in out]
+            return out
+        return []
+
+    def _candidates(self, boot):
+        """Every background worth trying, in order of preference.
+
+        The saved background first, then anything else the player has unlocked
+        (an old save can point at a background a newer build renamed, or at a
+        module that is no longer installed), and finally the splash image so
+        there is ALWAYS something behind the scene.
+        """
         if boot:
-            path = "assets/Splash.png"
-        else:
-            name = game_globals.game_background
-            module_name = game_globals.background_module_name
-
-            if not name or not module_name:
-                # Use boot background if no background is set
-                runtime_globals.game_console.log("[!] No background set, using boot background.")
-                path = "assets/Splash.png"
-                boot = True
-            
-            if not boot:
-                module = get_module(module_name)
-                day_night = True
-                for bg in getattr(module, "backgrounds", []):
-                    if bg["name"] == name:
-                        day_night = bg.get("day_night", True)
-                        break
-
-                suffix = f"_{self.time_of_day}" if day_night else ""
-                base_filename = f"bg_{name}{suffix}"
-
-                high_path = os.path.join(module.folder_path, "backgrounds", f"{base_filename}_high.png")
-                normal_path = os.path.join(module.folder_path, "backgrounds", f"{base_filename}.png")
-
-                if game_globals.background_high_res and os.path.exists(resolve_path(high_path)):
-                    path = high_path
-                else:
-                    path = normal_path
-
-        # Avoid reloading if already loaded
-        if path == self.last_image_path:
+            yield self.DEFAULT_BACKGROUND
             return
 
+        name = game_globals.game_background
+        module_name = game_globals.background_module_name
+        if module_name == "shop":
+            yield from self._shop_paths(name)
+        else:
+            yield from self._paths_for(self._safe_module(module_name), name)
+
+        # Other backgrounds this player has earned, same module first.
         try:
-            # Use the new sprite loading method to cover the screen, keeping proportions
-            # Use "Fill" method for both landscape and portrait devices
-            if runtime_globals.SCREEN_WIDTH >= runtime_globals.SCREEN_HEIGHT:
-                self.image = sprite_load_percent(path, percent=100, keep_proportion=True, base_on="width", alpha=False)
-            else:
-                self.image = sprite_load_percent(path, percent=100, keep_proportion=True, base_on="height", alpha=False)
-            self.last_background = game_globals.game_background
-            self.last_module = game_globals.background_module_name
-            self.last_image_path = path
-            self.center = self.image.get_rect(center=(runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_HEIGHT // 2))
-        except Exception:
-            runtime_globals.game_console.log(f"[!] Error loading background: {path}")
-            self.image = None
+            from utils.utils_unlocks import get_unlocked_backgrounds
+            seen = {(module_name, name)}
+            ordered = [module_name] + [m for m in runtime_globals.game_modules if m != module_name]
+            for mod_name in ordered:
+                mod = self._safe_module(mod_name)
+                if mod is None:
+                    continue
+                for bg in get_unlocked_backgrounds(mod_name, getattr(mod, "backgrounds", [])):
+                    key = (mod_name, bg.get("name"))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    yield from self._paths_for(mod, bg.get("name"))
+        except Exception as exc:
+            runtime_globals.game_console.log(f"[Background] unlock scan failed: {exc}")
+
+        yield self.DEFAULT_BACKGROUND
+
+    def load_sprite(self, boot):
+        first = None
+        for path in self._candidates(boot):
+            if first is None:
+                first = path
+                # Already showing the preferred background — nothing to do.
+                if path == self.last_image_path and self.image is not None:
+                    return
+            if not os.path.exists(resolve_path(path)):
+                continue
+            try:
+                # Cover the screen, keeping proportions, on both orientations.
+                base_on = "width" if runtime_globals.SCREEN_WIDTH >= runtime_globals.SCREEN_HEIGHT else "height"
+                self.image = sprite_load_percent(path, percent=100, keep_proportion=True,
+                                                 base_on=base_on, alpha=False)
+                self.last_background = game_globals.game_background
+                self.last_module = game_globals.background_module_name
+                self.last_image_path = path
+                self.center = self.image.get_rect(
+                    center=(runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_HEIGHT // 2))
+                if path != first:
+                    runtime_globals.game_console.log(
+                        f"[Background] {first} unavailable, fell back to {path}")
+                return
+            except Exception as exc:
+                runtime_globals.game_console.log(f"[!] Error loading background {path}: {exc}")
+
+        runtime_globals.game_console.log("[!] No background could be loaded at all")
+        self.image = None

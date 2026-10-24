@@ -55,7 +55,10 @@ def get_save_dir():
     else:
         subfolder = "Default"
     save_dir = os.path.join(base, subfolder)
-    os.makedirs(save_dir, exist_ok=True)
+    # Called for every save path the game builds (thousands of times when
+    # the Library opens); a stat is cheap, a mkdir attempt each time is not.
+    if not os.path.isdir(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
     return save_dir
 
 
@@ -276,42 +279,99 @@ def is_progress_mode() -> bool:
 
 
 #---------------------------------------------------------------------
-# Arena pet pool
+# Arena season lock
 #---------------------------------------------------------------------
+# Pets on an arena team never leave the save. They go to the freezer with an
+# ``arena_lock`` and cannot be taken out until the season ends. The check is
+# local -- the device clock against the season end the server reported when
+# the team was created -- so it needs no connection.
 
-def send_pets_to_arena(pets: list) -> None:
-    """Move the given pets out of pet_list and into the arena_pets pool.
+def arena_lock_remaining(pet, now=None) -> float:
+    """Seconds until *pet*'s arena lock ends; 0 when it is not locked."""
+    lock = getattr(pet, "arena_lock", None)
+    if not isinstance(lock, dict):
+        return 0.0
+    try:
+        until = float(lock.get("until") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    now = time.time() if now is None else now
+    return max(0.0, until - now)
 
-    Called after a successful arena team upload.  Hides them from the
-    rest of the game until the season ends.
+
+def is_pet_arena_locked(pet, now=None) -> bool:
+    """True while *pet* belongs to an arena team whose season is running."""
+    return arena_lock_remaining(pet, now) > 0
+
+
+def lock_pets_for_arena(pets: list, lock: dict) -> bool:
+    """Move *pets* from the party into the freezer, locked by *lock*.
+
+    *lock* carries ``until`` (unix time the season ends) plus the team and
+    season it belongs to. The freezer is written before the party changes,
+    so a failure leaves the pets in the party rather than losing them.
+    Returns True when every pet was stored.
     """
-    global pet_list, arena_pets
-    pet_ids = {id(p) for p in pets}
-    arena_pets.extend(p for p in pet_list if id(p) in pet_ids)
-    pet_list = [p for p in pet_list if id(p) not in pet_ids]
+    global pet_list
+    chosen = [p for p in pet_list if any(p is q for q in pets)]
+    if not chosen:
+        return False
+    for pet in chosen:
+        pet.arena_lock = dict(lock)
+    if freezer_deposit_pets(chosen) != len(chosen):
+        for pet in chosen:
+            pet.arena_lock = None
+        return False
+    pet_list = [p for p in pet_list if not any(p is q for q in chosen)]
+    save()
+    return True
 
 
-def return_pets_from_arena() -> list:
-    """Move every arena pet back into pet_list. Returns the moved pets."""
-    global pet_list, arena_pets
-    returned = list(arena_pets)
-    pet_list.extend(returned)
-    arena_pets = []
-    return returned
+def release_arena_locks(team_ids) -> int:
+    """Clear the locks of pets whose team's season the server says is over.
+
+    A season can end earlier than the date stored in the lock (an admin or
+    development rollover); the server can only shorten a lock, never extend
+    it. Returns the number of pets released.
+    """
+    team_ids = {str(t) for t in team_ids or [] if t}
+    if not team_ids:
+        return 0
+    file_path = os.path.join(get_save_dir(), "freezer.pkl")
+    if not os.path.exists(file_path):
+        return 0
+    try:
+        with open(file_path, "rb") as f:
+            pages = pickle.load(f) or []
+    except Exception as exc:
+        print(f"[Arena] could not read freezer: {exc}")
+        return 0
+    released = 0
+    for page in pages:
+        for pet in getattr(page, "pets", None) or []:
+            lock = getattr(pet, "arena_lock", None)
+            if isinstance(lock, dict) and str(lock.get("team_id")) in team_ids:
+                pet.arena_lock = None
+                released += 1
+    if released:
+        try:
+            with open(file_path, "wb") as f:
+                pickle.dump(pages, f)
+        except Exception as exc:
+            print(f"[Arena] could not write freezer: {exc}")
+            return 0
+    return released
 
 
 def freezer_deposit_pets(pets: list) -> int:
     """Append *pets* to the freezer pkl in the player's current save dir.
 
-    Used by the arena reclaim flow: when a past season is reclaimed, the
-    pets that were locked to that team are returned to the player —
-    spec says "transferred to the freezer", so we drop them into the
-    first freezer page(s) with a free slot rather than back into the
-    active party (where they'd suddenly appear during gameplay).
+    Used by the arena (team pets are stored locked) and by password pets.
+    Pets fill the first pages with a free slot; if every page is full they
+    go on the emptiest page rather than being dropped.
 
-    Returns the number of pets actually deposited.  Silently no-ops if
-    the save dir can't be accessed or the freezer file can't be read.
-    Empty `pets` returns 0.
+    Returns the number of pets deposited: all of them, or 0 when the
+    freezer could not be read or written. Empty `pets` returns 0.
     """
     if not pets:
         return 0
@@ -365,27 +425,30 @@ def freezer_deposit_pets(pets: list) -> int:
         if not remaining:
             break
         page_pets = list(getattr(page, 'pets', []) or [])
-        # Each page has a fixed slot count; treat existing length as the
-        # cap if available, else default to 12.
-        cap = getattr(page, 'capacity', None) or 12
+        # A page shows a 5x5 grid (GameFreezer.rebuild).
+        cap = getattr(page, 'capacity', None) or 25
         while remaining and len(page_pets) < cap:
             page_pets.append(remaining.pop(0))
             deposited += 1
         page.pets = page_pets
+
+    if remaining:
+        # No room anywhere: keep them on the emptiest page rather than
+        # dropping them.
+        try:
+            page = min(freezer_pages,
+                       key=lambda p: len(getattr(p, 'pets', []) or []))
+            page.pets = list(getattr(page, 'pets', []) or []) + remaining
+            deposited += len(remaining)
+        except Exception:
+            return 0
+
+    for page in freezer_pages:
         if hasattr(page, 'rebuild'):
             try:
                 page.rebuild()
             except Exception:
                 pass
-
-    if not deposited and remaining:
-        # No room anywhere — fall back to extending the last page
-        try:
-            freezer_pages[-1].pets = list(
-                getattr(freezer_pages[-1], 'pets', []) or []) + remaining
-            deposited = len(remaining)
-        except Exception:
-            pass
 
     try:
         os.makedirs(save_dir, exist_ok=True)
@@ -399,10 +462,6 @@ def freezer_deposit_pets(pets: list) -> int:
     return deposited
 
 
-def is_pet_in_arena(pet) -> bool:
-    """True if this pet object is currently in the arena pool."""
-    return any(p is pet for p in arena_pets)
-
 SAVE_FILE = "save/save_data.dat"  # Legacy reference, use get_save_dir() instead
 SAVE_DIR = "save"  # Legacy reference, use get_save_dir() instead
 MAX_BACKUPS = 10  # Keep 10 backup files
@@ -415,7 +474,19 @@ background_high_res = False
 pet_list = []
 poop_list = []
 traited = []
+#: "module@version" -> the generation its waiting Traited Egg hatches as
+#: (traited_egg_rule "Generation": the Digivice iC's inherited Digitama).
+generations = {}
 gcell_fragments = []
+
+#: Modules that have been renamed. A save keys almost everything by module
+#: name -- adventure progress, unlocks, victories, cards, friends, and every
+#: pet's own ``module`` -- so a rename would orphan all of it without this.
+#: Read on load and written back under the new name; the old name never
+#: reappears. Mirrors protocol_constants.LEGACY_FORMAT_NAMES, which does the
+#: same for the battle format a module declares.
+LEGACY_MODULE_NAMES = {"DM": "DMOG", "PEN": "PENOG"}
+
 unlocks = {}
 showClock = False
 battle_area = {}
@@ -425,20 +496,53 @@ xai = 1
 xai_date = datetime.date.today()
 inventory = {}
 battle_effects = {}
+# Password redemptions: "module@CODE" -> unix timestamp of the last
+# redemption. Used to enforce codes.json cooldowns (-1 = one use only).
+redeemed_codes = {}
 quests = []
 event = None
 event_time = None
 total_victories = {}  # Track total battle victories per module: {module_name: count}
+# Counted connection unlocks (`versus` + amount): {module: {record key:
+# {"battles": n, "opponents": [device versions met]}}}. utils_unlocks.
+versus_progress = {}
 purchases = GamePurchases()  # Shop purchases
 configuration = GameConfiguration()  # Centralized configuration
 coins = 0  # Player's coin balance
+# Contribution points: a second Omninet balance, earned by contributing to the
+# Digimon Database and spent in Shop > Specials. Never mixed with the coins;
+# the server's figure is mirrored here (module_utils.sync_account_data).
+contribution_points = 0
+# Module currencies (shop.json): {module_name: {currency_name: balance}}. Kept
+# on the save rather than the pet, as the Digivice iC carries its Fight Money
+# across generations. See utils.currency_utils.
+currency = {}
+# Event-only shops an event has opened: {module_name: {shop_name: expiry, or
+# 0 for good}} (utils.event_utils.grant_shop_access).
+shop_access = {}
+# Per-module Friend lists: {module_name: [pet_name, ...]}.  A pet is added by
+# battling an enemy marked as Friend; used by Xros temporary evolutions and
+# the digidex "Friends" view.
+friends = {}
 
-# Pets currently uploaded to an active arena team are kept in this side list
-# instead of pet_list while the season is running.  Functions that walk
-# pet_list (battle, training, feeding, evolution, UI) therefore skip them
-# automatically.  When the team's season closes (or the team is deactivated),
-# pets are moved back to pet_list with their state preserved.
-arena_pets = []
+# The Friend Event Battle promised by an area clear, or None.
+#
+#   {"pet": <pet name>, "module": <module name>, "minutes": <1-5>}
+#
+# Set when a pet that has DigiXros forms clears an area of its OWN module. The
+# main game counts the minutes down and then spends it on an encounter with one
+# of that pet's own missing Friends — a pet can never unlock another pet's
+# Friends. Only one is held at a time; a newer clear overrides an older promise.
+friend_event_pending = None
+
+# Card collection state (see utils.card_utils):
+#   card_collection: {module_name: {card_id:
+#                     {"digital": n, "physical": n, "shiny": n}}}
+# ``shiny`` is a subset of digital, not an additional ownership count.
+#   card_cooldowns:  {card_id: unix timestamp of last digital use}
+card_collection = {}
+card_cooldowns = {}
+
 setup_input = True
 setup_graphics = True
 setup_game_mode = False  # Jump directly to mode selection, bypassing welcome
@@ -462,8 +566,41 @@ shop_gameplay_data = {}     # id -> {name, description, item_type}
 # during save/load operations.
 
 # Internal timer for autosave
+android_offline = None  # Optional Android metadata; legacy/desktop saves need none.
 _last_save_time = time.time()
-AUTOSAVE_INTERVAL_SECONDS = 60  # 5 minutes
+AUTOSAVE_INTERVAL_SECONDS = 60  # one minute
+
+def _saves_newest_first(saves):
+    """``[(number, path), ...]`` ordered newest first.
+
+    By modification time, then, among files that share one, by the save
+    rotation: the file written later is the one whose successor number is not
+    in the tie. exFAT keeps times in 2-second steps, so two saves a second
+    apart tie, and directory order used to decide - loading the older save
+    and losing the play in between.
+    """
+    def mtime(path):
+        try:
+            return os.path.getmtime(path)
+        except OSError:
+            return 0.0
+
+    by_time = {}
+    for entry in saves:
+        by_time.setdefault(mtime(entry[1]), []).append(entry)
+    ordered = []
+    for stamp in sorted(by_time, reverse=True):
+        group = by_time[stamp]
+        numbers = {n for n, _ in group}
+
+        def steps_behind(entry):
+            n, steps = entry[0], 0
+            while (n % MAX_BACKUPS) + 1 in numbers and steps < MAX_BACKUPS:
+                n, steps = (n % MAX_BACKUPS) + 1, steps + 1
+            return steps
+        ordered += sorted(group, key=steps_behind)
+    return ordered
+
 
 def get_next_save_number():
     """Get the next save file number for backup rotation (1 to MAX_BACKUPS)."""
@@ -516,8 +653,7 @@ def get_latest_save_file():
         return None
 
     # Return the most recent file
-    save_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
-    return save_files[0][1]
+    return _saves_newest_first(save_files)[0][1]
 
 def cleanup_old_saves():
     """Remove old backup saves beyond MAX_BACKUPS."""
@@ -538,7 +674,7 @@ def cleanup_old_saves():
     
     # Keep only the most recent MAX_BACKUPS files
     if len(save_files) > MAX_BACKUPS:
-        save_files.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
+        save_files = _saves_newest_first(save_files)
         files_to_remove = save_files[MAX_BACKUPS:]
         
         for _, file_path in files_to_remove:
@@ -554,6 +690,7 @@ def save() -> None:
     Will not save if game mode preference has not been set yet,
     or if in Progress Mode without a player_id.
     """
+    from core import runtime_globals
     if not _can_access_save_dir():
         print("[Save] Skipping save - save directory not accessible")
         return
@@ -568,10 +705,17 @@ def save() -> None:
             print(f"[Save] Failed to create save directory: {e}")
             return
 
+    offline_metadata = None
+    if runtime_globals.IS_ANDROID:
+        from services import android_progress
+        offline_metadata = android_progress.before_save()
+
     data = {
+        "android_offline": offline_metadata,
         "pet_list": pet_list,
         "poop_list": poop_list,
         "traited": traited,
+        "generations": generations,
         "gcell_fragments": gcell_fragments,
         "game_background": game_background,
         "battle_area": battle_area,
@@ -584,13 +728,24 @@ def save() -> None:
         "xai_date": xai_date,
         "inventory": inventory,
         "battle_effects": battle_effects,
+        "redeemed_codes": redeemed_codes,
         "background_high_res": background_high_res,
         "quests": quests,
         "event": event,
         "event_time": event_time,
         "total_victories": total_victories,
+        "versus_progress": versus_progress,
         "purchases": purchases.to_dict(),
         "coins": coins,
+        "contribution_points": contribution_points,
+        "currency": currency,
+        "shop_access": shop_access,
+        "shop_items_data": shop_items_data,
+        "shop_backgrounds": shop_backgrounds,
+        "friends": friends,
+        "friend_event_pending": friend_event_pending,
+        "card_collection": card_collection,
+        "card_cooldowns": card_cooldowns,
         "configuration": configuration.to_dict(),
         "setup_input": setup_input,
         "setup_graphics": setup_graphics,
@@ -613,9 +768,52 @@ def save() -> None:
         
         # Clean up old saves
         cleanup_old_saves()
+        if runtime_globals.IS_ANDROID:
+            android_progress.after_save(offline_metadata)
+        return True
         
     except Exception as e:
         print(f"[Save] Failed to save game: {e}")
+        return False
+
+def _rename_saved_modules() -> None:
+    """Move a renamed module's saved state onto its new name.
+
+    Everything a save holds about a module is keyed by its name, so renaming
+    one on disk would otherwise lose the player's adventure progress, its
+    unlocks and its card collection, and leave every pet raised on it
+    pointing at a module that no longer loads.
+
+    An entry already under the new name wins -- the player has played since
+    the rename, and that is the current state.
+    """
+    global pet_list, unlocks, battle_area, battle_round, total_victories, versus_progress
+    global friends, card_collection, card_cooldowns, currency, shop_access
+    global last_adventure_module, background_module_name
+
+    renamed = []
+    for old_name, new_name in LEGACY_MODULE_NAMES.items():
+        for container in (unlocks, battle_area, battle_round, total_victories, versus_progress,
+                          friends, card_collection, card_cooldowns, currency, shop_access):
+            if isinstance(container, dict) and old_name in container:
+                value = container.pop(old_name)
+                container.setdefault(new_name, value)
+                renamed.append(f"{old_name}->{new_name}")
+
+        for pet in (pet_list or []):
+            if getattr(pet, "module", None) == old_name:
+                pet.module = new_name
+                renamed.append(f"pet {getattr(pet, 'name', '?')}")
+
+        if last_adventure_module == old_name:
+            last_adventure_module = new_name
+        if background_module_name == old_name:
+            background_module_name = new_name
+
+    if renamed:
+        print(f"[Save] Migrated renamed modules: {len(renamed)} entry/entries "
+              f"({', '.join(sorted(set(renamed))[:6])})")
+
 
 def load() -> None:
     """
@@ -623,9 +821,14 @@ def load() -> None:
     Will not load if game mode preference has not been set yet,
     or if in Progress Mode without a player_id.
     """
-    global pet_list, poop_list, traited, gcell_fragments, unlocks, battle_area, battle_round, last_adventure_module, xai, xai_date, background_high_res
-    global game_background, background_module_name, showClock, inventory, battle_effects
-    global quests, event, event_time, total_victories, purchases, coins, configuration, setup_input, setup_graphics, show_tutorial, game_mode
+    from core import runtime_globals
+    global pet_list, poop_list, traited, generations, gcell_fragments, unlocks, battle_area, battle_round, last_adventure_module, xai, xai_date, background_high_res
+    global game_background, background_module_name, showClock, inventory, battle_effects, redeemed_codes
+    global quests, event, event_time, total_victories, versus_progress, purchases, coins, configuration, setup_input, setup_graphics, show_tutorial, game_mode
+    global contribution_points
+    global friends, friend_event_pending, card_collection, card_cooldowns, currency, shop_access
+    global shop_items_data, shop_backgrounds
+    global android_offline
 
     if not _can_access_save_dir():
         print("[Save] Skipping load - save directory not accessible")
@@ -664,8 +867,8 @@ def load() -> None:
             except ValueError:
                 continue
     
-    # Sort by modification time (newest first)
-    all_saves.sort(key=lambda x: os.path.getmtime(x[1]), reverse=True)
+    # Newest first (by time, then by rotation where times tie)
+    all_saves = _saves_newest_first(all_saves)
     save_files_to_try = [save_path for _, save_path in all_saves]
 
     # Try to load each save file in order
@@ -712,12 +915,14 @@ def load() -> None:
                         print(f"[Game] Failed to load pet (removing from save): {e}")
                         continue
                 
+                android_offline = data.get("android_offline") if runtime_globals.IS_ANDROID else None
                 pet_list = valid_pets
                 poop_list = data.get("poop_list", [])
                 for poop in poop_list:
                     poop.patch()  # Ensure all poops have necessary attributes
 
                 traited = data.get("traited", [])
+                generations = data.get("generations") or {}
                 gcell_fragments = data.get("gcell_fragments", [])
                 game_background = data.get("game_background", None)
                 battle_area = data.get("battle_area", {})
@@ -730,17 +935,37 @@ def load() -> None:
                 xai_date = data.get("xai_date", datetime.date.today())
                 inventory = data.get("inventory", {})
                 battle_effects = data.get("battle_effects", {})
+                redeemed_codes = data.get("redeemed_codes", {})
                 background_high_res = data.get("background_high_res", False)
                 quests = data.get("quests", [])
                 event = data.get("event", None)
                 event_time = data.get("event_time", None)
                 total_victories = data.get("total_victories", {})
+                versus_progress = data.get("versus_progress", {}) or {}
                 purchases = GamePurchases.from_dict(data.get("purchases", None))
                 coins = data.get("coins", 0)
+                contribution_points = int(data.get("contribution_points", 0) or 0)
+                currency = data.get("currency", {}) or {}
+                shop_access = data.get("shop_access", {}) or {}
+                # Omninet shop metadata: the inventory lists bought items by
+                # it, Settings and the background window draw bought backgrounds
+                shop_items_data = data.get("shop_items_data", {}) or {}
+                shop_backgrounds = data.get("shop_backgrounds", {}) or {}
+                friends = data.get("friends", {})
+                # Saves from before the rework stored a list of module names;
+                # that promise no longer carries enough to act on, so it is
+                # dropped and the next area clear queues a fresh one.
+                _pending = data.get("friend_event_pending", None)
+                friend_event_pending = _pending if isinstance(_pending, dict) else None
+                card_collection = data.get("card_collection", {})
+                card_cooldowns = data.get("card_cooldowns", {})
                 setup_input = data.get("setup_input", True)
                 setup_graphics = data.get("setup_graphics", True)
                 show_tutorial = data.get("show_tutorial", True)
                 game_mode = data.get("game_mode", GAME_MODE_PROGRESS)
+
+                # A module renamed on disk takes its saved state with it.
+                _rename_saved_modules()
 
                 # Verify player_id for Progress Mode saves
                 saved_player_id = data.get("player_id", None)
@@ -758,6 +983,20 @@ def load() -> None:
                         # Old format - copy values from saved object
                         configuration.from_dict(saved_config.to_dict() if hasattr(saved_config, 'to_dict') else {})
 
+                # Remember the render resolution this save was written at so the
+                # pets/poops (absolute pixel coords) can be re-placed for the
+                # current dimensions once the display is finalized.
+                try:
+                    from core import runtime_globals as _rg
+                    _rg.save_render_resolution = (
+                        configuration.screen_width, configuration.screen_height)
+                except Exception:
+                    pass
+
+                # The party is new objects now: a selection made before the
+                # load names pets that are no longer in it.
+                runtime_globals.selected_pets = []
+
                 # Sprites were loaded in __setstate__ before configuration was applied.
                 # Reload them now that enable_old_sprites and sprite_resolution_preference are correct.
                 for pet in pet_list:
@@ -774,11 +1013,13 @@ def load() -> None:
             continue  # Try the next save file
     
     # If we get here, all save files failed to load
+    android_offline = None
     print(f"[Game] All save files failed to load. Starting with fresh game state.")
     # Reset to default values
     pet_list = []
     poop_list = []
     traited = []
+    generations = {}
     gcell_fragments = []
     game_background = None
     battle_area = {}
@@ -791,10 +1032,21 @@ def load() -> None:
     xai_date = datetime.date.today()
     inventory = {}
     battle_effects = {}
+    redeemed_codes = {}
     background_high_res = False
     total_victories = {}
+    versus_progress = {}
     purchases = GamePurchases()
     coins = 0
+    contribution_points = 0
+    currency = {}
+    shop_access = {}
+    shop_items_data = {}
+    shop_backgrounds = {}
+    friends = {}
+    friend_event_pending = None
+    card_collection = {}
+    card_cooldowns = {}
     # Configuration keeps its system-detected defaults
 
 def autosave() -> None:

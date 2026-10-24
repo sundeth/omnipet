@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Build Guide - Omnipet Documentation</title>
+  <link rel="stylesheet" href="../assets/main.css">
+</head>
+<body>
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-header-text">
+        <h1 class="page-title">Build Guide</h1>
+        <p class="page-subtitle">How to build an Omnipet handheld: a Raspberry Pi Zero 2W with a Waveshare GamePi13 in a 3D printed case, with the optional battery, accelerometer and NFC reader.</p>
+      </div>
+    </div>
+
+    <img class="photo" src="../assets/build-guide/omnipet.jpg" alt="The finished Omnipet handheld, with its keychain">
+
+    <nav class="page-toc">
+      <a href="#parts">Parts and tools</a>
+      <a href="#sd">Preparing the SD card</a>
+      <a href="#pi">Preparing the Pi</a>
+      <a href="#optional">Optional parts</a>
+      <a href="#assembly">Assembly</a>
+      <a href="#software">Software</a>
+    </nav>
+
+
+    <div class="content-section" id="parts">
+      <h2 class="section-title">Parts and tools</h2>
+      <div class="section-content">
+        <img class="photo" src="../assets/build-guide/parts.jpg" alt="The parts: the printed shells, side door, buttons and screen frame, the case screws, the battery module with two batteries, and the GamePi13 with the NFC reader">
+        <p>The required parts make a working handheld. The optional parts add the battery, shaking and card reading, and
+          the printed case holds it all. The links are the parts used for this guide; any seller of the same part works,
+          so look for the cheapest.</p>
+        <table class="data-table">
+          <thead><tr><th>Part</th><th>Need</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><a href="#part-pi">Raspberry Pi Zero 2W</a></td><td><span class="badge blue">Required</span></td><td>Runs the game.</td></tr>
+            <tr><td><a href="#part-gamepi">Waveshare GamePi13</a></td><td><span class="badge blue">Required</span></td><td>The screen and the buttons.</td></tr>
+            <tr><td><a href="#part-sd">microSD card</a></td><td><span class="badge blue">Required</span></td><td>Holds the system and the game.</td></tr>
+            <tr><td><a href="#part-battery">UPS-Lite battery module</a></td><td><span class="badge grey">Optional</span></td><td>Runs the handheld on battery and shows the battery level.</td></tr>
+            <tr><td><a href="#part-batteries">Li-ion batteries</a></td><td><span class="badge grey">Optional</span></td><td>One or two, for the battery module.</td></tr>
+            <tr><td><a href="#part-accelerometer">BMI160 accelerometer</a></td><td><span class="badge grey">Optional</span></td><td>Shaking.</td></tr>
+            <tr><td><a href="#part-nfc">PN532 NFC reader</a></td><td><span class="badge grey">Optional</span></td><td>Reads physical cards and plates.</td></tr>
+            <tr><td><a href="#part-case">3D printed case</a></td><td><span class="badge">Printed</span></td><td>The shells and the buttons, with room for two batteries.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="part-pi">Raspberry Pi Zero 2W <span class="badge blue">Required</span></h3>
+        <!-- Photo: the Pi Zero 2W -->
+        <p>Buy it with the GPIO header already soldered. Without it, you solder the 40 pins yourself (see
+          <a href="#pi">Preparing the Pi</a>).</p>
+        <p>Product page: <a href="https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/" target="_blank">raspberrypi.com</a>
+          · Used for this guide: <a href="https://www.aliexpress.com/item/1005008223108354.html" target="_blank">AliExpress</a></p>
+
+        <h3 id="part-gamepi">Waveshare GamePi13 <span class="badge blue">Required</span></h3>
+        <!-- Photo: the GamePi13 -->
+        <p>The 1.3-inch screen and the buttons. It sits on top of the Pi, on the Pi's 40-pin header.</p>
+        <p>Some stores sell it as a kit with an acrylic case, a stand, spacers, screws and a prism. This build uses the
+          kit's spacers, screws, stand and prism. The prism goes over the screen for a 3D look, and the game supports it:
+          on the main screen, L turns the picture upside down. To get only the prism, look for a 25.4 mm glass prism
+          (<a href="https://www.aliexpress.com/item/1005007550166962.html" target="_blank">example</a>).</p>
+        <p>Product page: <a href="https://www.waveshare.com/gamepi13.htm" target="_blank">waveshare.com</a>
+          · Used for this guide: <a href="https://www.aliexpress.com/item/1005008488876017.html" target="_blank">AliExpress</a></p>
+
+        <h3 id="part-sd">microSD card <span class="badge blue">Required</span></h3>
+        <!-- Photo: the card -->
+        <p>16 GB or larger, formatted to FAT32. Any brand works.</p>
+
+        <h3 id="part-battery">UPS-Lite battery module <span class="badge grey">Optional</span></h3>
+        <!-- Photo: the battery module -->
+        <p>Without it, the handheld runs from the Pi's micro USB port. With it, the handheld runs on battery like a proper
+          virtual pet, and the game shows the battery level.</p>
+        <p>The module comes in versions 1.2 and 1.3. Both are compatible.</p>
+        <div class="warning"><strong>Never plug power into the Pi's micro USB port while the battery module is
+          fitted.</strong> Charge through the battery module's own USB port.</div>
+        <p>Used for this guide: <a href="https://www.aliexpress.com/item/1005008119707439.html" target="_blank">AliExpress</a></p>
+
+        <h3 id="part-batteries">Li-ion batteries <span class="badge grey">Optional</span></h3>
+        <!-- Photo: the batteries -->
+        <p>One or two 3.7 V 1000 mAh Li-ion batteries (803040) for the battery module. The module is sold with one; the
+          case holds two, for 2000 mAh (see <a href="#battery">Second battery</a>).</p>
+
+        <h3 id="part-accelerometer">BMI160 accelerometer <span class="badge grey">Optional</span></h3>
+        <!-- Photo: the BMI160 -->
+        <p>A 6-axis BMI160 board. It lets you shake the handheld in the minigames that use shaking, as in the Pendulum
+          and Vital Bracelet modules. Without it, the Y button shakes instead (not as fun as the real thing).</p>
+        <p>The board works over SPI or I2C; this build uses I2C, with four thin wires soldered to the Pi (see
+          <a href="#accelerometer">Accelerometer</a>).</p>
+        <p>Used for this guide: <a href="https://www.aliexpress.com/item/1005007738920327.html" target="_blank">AliExpress</a></p>
+
+        <h3 id="part-nfc">PN532 NFC reader <span class="badge grey">Optional</span></h3>
+        <!-- Photo: the PN532 -->
+        <p>Reads physical cards and plates made as NFC tags (Library &gt; Collections &gt; CARDS, READ). NFC support is
+          new and not fully tested yet. Without it, the game's card packs and items do the same job.</p>
+        <p>It is set to I2C with its two switches and shares the accelerometer's connection: four more thin wires (see
+          <a href="#nfc">NFC reader</a>). The cards are NTAG215 or NTAG216 tags, as cards or stickers; a card's data does
+          not fit an NTAG213.</p>
+        <p>Used for this guide: <a href="https://www.aliexpress.com/item/32884787583.html" target="_blank">AliExpress</a></p>
+
+        <h3 id="part-case">3D printed case <span class="badge">Printed</span></h3>
+        <p>Omnipet's own case: a top shell, a back shell, a side door, a screen frame and the buttons. Print it yourself
+          or order it from a printing service. The STL files
+          are in <code>Documentation/device_shell</code> in the game folder:</p>
+        <table class="data-table">
+          <thead><tr><th>File</th><th>Part</th></tr></thead>
+          <tbody>
+            <tr><td><a href="../device_shell/TopShell.stl">TopShell.stl</a></td><td>Top shell</td></tr>
+            <tr><td><a href="../device_shell/BackShell.stl">BackShell.stl</a></td><td>Back shell</td></tr>
+            <tr><td><a href="../device_shell/SideDoor.stl">SideDoor.stl</a></td><td>Side door</td></tr>
+            <tr><td><a href="../device_shell/ScreenFrame.stl">ScreenFrame.stl</a></td><td>Screen frame</td></tr>
+            <tr><td><a href="../device_shell/Buttons_DPad_ABXY.stl">Buttons_DPad_ABXY.stl</a></td><td>Buttons: direction pad, A, B, X and Y</td></tr>
+            <tr><td><a href="../device_shell/Buttons_LR_StartSelect_Power.stl">Buttons_LR_StartSelect_Power.stl</a></td><td>Buttons: L, R, Start, Select and power</td></tr>
+          </tbody>
+        </table>
+        <div class="warning"><strong>Print it in a heat-resistant material.</strong> The Pi gets hot in long sessions,
+          so resin and PLA are not recommended. Use a heat-resistant FDM filament (PETG or ABS), or MJF (Multi Jet
+          Fusion, offered by printing services). The shells have many small details and may need custom settings on your
+          printer.</div>
+
+        <h3>Other parts</h3>
+        <img class="photo small" src="../assets/build-guide/parts-keychain.jpg" alt="The keychain, the side door screw and its brass insert">
+        <table class="data-table">
+          <thead><tr><th>Qty</th><th>Part</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>4</td><td>9 mm spacers</td><td>Come with the GamePi13 kit.</td></tr>
+            <tr><td>4</td><td>10 mm spacers with a male end</td><td>For the battery module. The male end screws into a 9 mm spacer and holds it from below. The ones that come with the battery module work.</td></tr>
+            <tr><td>4</td><td>10.4 mm M3 screws</td><td>For the case: they fix the boards to the back shell from below. Come with the GamePi13 kit.</td></tr>
+            <tr><td>4</td><td>11.6 mm M3 screws</td><td>For the case, bought separately. They fix the Pi stack to the top shell; you may need longer ones.</td></tr>
+            <tr><td>1</td><td>Side door screw and brass insert</td><td>The insert holds the screw that closes the side door. Fix it in the shell with superglue, or melt it in with a soldering iron.</td></tr>
+            <tr><td>1</td><td>Small piece, 3 mm or less</td><td>For the case's shaker (see <a href="#shaker">Assembly</a>). Metal is recommended; a screw head works well.</td></tr>
+            <tr><td>1</td><td>Keychain</td><td>Optional.</td></tr>
+            <tr><td>-</td><td>Thin wires</td><td>For the accelerometer and the NFC reader.</td></tr>
+            <tr><td>-</td><td>Superglue</td><td>For the assembly.</td></tr>
+            <tr><td>-</td><td>Kapton tape</td><td>Optional, to insulate the wiring.</td></tr>
+            <tr><td>-</td><td>NTAG215 or NTAG216 tags</td><td>For the NFC reader, one per card.</td></tr>
+          </tbody>
+        </table>
+        <p class="tip">The case screws in the photos are not ideal: flat-head Phillips screws suit the case better.</p>
+
+        <h3>Tools</h3>
+        <ul>
+          <li>A soldering iron and solder, for the accelerometer and NFC reader wires, the Pi's header if it came without
+            one, and the side door's insert if you do not glue it.</li>
+          <li>A small Phillips screwdriver, and a hex key for the side door screw.</li>
+          <li>A 3D printer or a printing service, for the case.</li>
+          <li>A computer with a microSD card reader, to write the card.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="content-section" id="sd">
+      <h2 class="section-title">Preparing the SD card</h2>
+      <div class="section-content">
+        <p>The Omnipet SD card image has the system and the game installed. You write it to the card with Raspberry Pi
+          Imager on your computer.</p>
+        <div class="warning"><strong>Do not skip the WiFi settings in step 4.</strong> They make your life much easier
+          later: over WiFi you update the game and copy files to the handheld from your computer.</div>
+        <ol class="steps">
+          <li>Download the latest <code>Omnipet_GamePi_Ver_X.X (Image).zip</code> from the
+            <a href="https://mega.nz/folder/ODhAmBZb#PnvjHOSqpz8AHK1qxwSaJg" target="_blank">Omnipet Mega folder</a> and
+            unzip it to get the <code>.img</code> file.</li>
+          <li>Install and open <a href="https://www.raspberrypi.com/software/" target="_blank">Raspberry Pi Imager</a> and
+            choose:
+            <ul>
+              <li><strong>Raspberry Pi Device</strong>: Raspberry Pi Zero 2 W.</li>
+              <li><strong>Operating System</strong>: Use Custom, at the bottom of the list, then the <code>.img</code>
+                file.</li>
+              <li><strong>Storage</strong>: your SD card.</li>
+            </ul>
+            Then click NEXT.
+            <img class="photo" src="../assets/build-guide/imager-choose.png" alt="Raspberry Pi Imager with the Pi Zero 2 W, the Omnipet image and the SD card chosen"></li>
+          <li>Imager asks whether to use OS customisation. Click EDIT SETTINGS.
+            <img class="photo" src="../assets/build-guide/imager-customise.png" alt="The Use OS customisation question, with EDIT SETTINGS"></li>
+          <li>On the GENERAL tab, fill in:
+            <ul>
+              <li><strong>Set hostname</strong>: a name for the handheld, such as <code>omnipet</code>. Your computer then
+                finds it at <code>omnipet.local</code>.</li>
+              <li><strong>Set username and password</strong>: any you like. You need them to reach the handheld from your
+                computer.</li>
+              <li><strong>Configure wireless LAN</strong>: your WiFi network's name (SSID) and password, and your
+                country.</li>
+              <li><strong>Set locale settings</strong>: your time zone and keyboard layout.</li>
+            </ul>
+            On the SERVICES tab, tick Enable SSH with password authentication. Then click SAVE.
+            <img class="photo" src="../assets/build-guide/imager-settings.png" alt="The OS customisation settings: hostname omnipet, a username and password, the WiFi network and the locale"></li>
+          <li>Click YES to apply the settings, then YES again to confirm, because writing erases everything on the card.
+            Imager writes the card and then checks it.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="content-section" id="pi">
+      <h2 class="section-title">Preparing the Pi</h2>
+      <div class="section-content">
+        <p>Skip this if your Pi came with its GPIO header already soldered. Otherwise, solder the 40-pin header
+          yourself: put it in from the top of the Pi (the side with the chips), with the long pins pointing up, and
+          solder every pin on the underside. Each joint should be a small shiny cone that touches no other pin.</p>
+      </div>
+    </div>
+
+    <div class="content-section" id="optional">
+      <h2 class="section-title">Optional parts</h2>
+      <div class="section-content">
+        <p>Installing the optional parts: the accelerometer, the NFC reader and the second battery. Skip the ones you do
+          not use.</p>
+
+        <h3 id="wiring">Wiring</h3>
+        <p>The accelerometer and the NFC reader both use the Pi's I2C connection, so they connect to the same four pins.
+          Solder thin wires from each board to these pins, on the underside of the Pi:</p>
+        <table class="data-table">
+          <thead><tr><th>Pi pin</th><th>Signal</th><th>Accelerometer</th><th>NFC reader</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>3.3V</td><td>3V3</td><td>VCC</td></tr>
+            <tr><td>3</td><td>SDA</td><td>SDA</td><td>SDA</td></tr>
+            <tr><td>5</td><td>SCL</td><td>SCL</td><td>SCL</td></tr>
+            <tr><td>9</td><td>GND</td><td>GND</td><td>GND</td></tr>
+          </tbody>
+        </table>
+        <img class="photo" src="../assets/build-guide/wiring.png" alt="Wiring diagram: the BMI160 and the PN532 both wired to the Pi's pins 1 (3.3V), 3 (SDA), 5 (SCL) and 9 (GND)">
+        <p>The diagram shows the Pi from below. Pin 1 is the one with the square pad.</p>
+
+        <h3 id="accelerometer">Accelerometer</h3>
+        <p>The accelerometer only needs short wires. Fix it under the Pi with Kapton tape both under and over it: the tape
+          insulates it from the Pi, protects it and holds it in place. Put it in the same place and orientation as in the
+          photo: at the pin 1 end of the header, chip side out, with its 3V3, GND, SCL and SDA pins towards the header. In
+          any other orientation the game cannot read the shaking correctly.</p>
+        <img class="photo" src="../assets/build-guide/wired-underside.jpg" alt="The underside of the Pi: the accelerometer taped at the pin 1 end of the header, and the NFC reader's longer wires">
+
+        <h3 id="nfc">NFC reader</h3>
+        <p>The NFC reader needs longer wires than the accelerometer, because it sits at the bottom of the case (the photo
+          above shows them). Kapton tape over its solder joints keeps them from touching anything.</p>
+        <p>Before fitting it, set its two switches to I2C: switch 1 on, switch 2 off. The table printed beside the
+          switches gives every mode:</p>
+        <table class="data-table">
+          <thead><tr><th>Mode</th><th>Switch 1</th><th>Switch 2</th></tr></thead>
+          <tbody>
+            <tr><td>HSU</td><td>Off</td><td>Off</td></tr>
+            <tr><td><strong>I2C (this build)</strong></td><td><strong>On</strong></td><td><strong>Off</strong></td></tr>
+            <tr><td>SPI</td><td>Off</td><td>On</td></tr>
+          </tbody>
+        </table>
+        <img class="photo small" src="../assets/build-guide/switches.png" alt="The PN532's two switches set to I2C: switch 1 on, switch 2 off">
+
+        <h3 id="battery">Second battery</h3>
+        <p>Solder the second battery to the underside of the battery module, on the pads that match the first battery's on
+          the top side: red to red, black to black. If your module came with a battery already soldered, its wires show
+          you which pad is which.</p>
+        <img class="photo small" src="../assets/build-guide/battery-second.jpg" alt="The second battery's red and black wires soldered to the underside of the UPS-Lite">
+        <div class="warning"><strong>Use two identical batteries at the same charge, and check the polarity before
+          soldering.</strong> The two batteries are joined in parallel, and a reversed or very unequal battery can
+          overheat.</div>
+      </div>
+    </div>
+
+    <div class="content-section" id="assembly">
+      <h2 class="section-title">Assembly</h2>
+      <div class="section-content">
+        <ol class="steps">
+          <li>Join the GamePi13 to the Pi. Line up the GamePi13's socket with the Pi's pins, with every pin going into the
+            socket, and press the boards together. With the pins aligned, they fit together nicely.</li>
+          <li>Put the four 9 mm spacers from the GamePi13 kit between the boards, at the corners. Hold each one in place
+            from below with a 10 mm spacer (the black ones in the photo): screw its male end into the 9 mm spacer through
+            the Pi's mounting hole.
+            <img class="photo" src="../assets/build-guide/stack-spacers.jpg" alt="The GamePi13 and the Pi joined, with the brass 9 mm spacers between them and the black male spacers below, glued in place"></li>
+          <li><strong>Lock every spacer in place.</strong> This step is very important: if the spacers work loose, the case
+            can get stuck. Glue each corner where the 9 mm spacer, the Pi and the male spacer meet. This guide used
+            superglue and silicone glue; use whatever you have, as long as the spacers end up firmly fixed.
+            <img class="photo" src="../assets/build-guide/spacers-glued.jpg" alt="Left, marked correct: a spacer glued where it meets the Pi. Right, marked wrong: a spacer with no glue"></li>
+          <li>Take the back shell and lay the NFC reader in the space at its bottom. Check first that its switches are set
+            to I2C (see <a href="#nfc">NFC reader</a>).
+            <img class="photo" src="../assets/build-guide/shell-nfc.jpg" alt="The parts for this step: the Pi stack, the back shell with the NFC reader at its bottom, the battery module and the second battery"></li>
+          <li>Put the battery module, with the second battery, on top of the NFC reader. The second battery fits at the
+            front of the case, along the edge under the Down and B buttons, with its cable running between the battery
+            module and the NFC reader.
+            <img class="photo" src="../assets/build-guide/shell-battery.jpg" alt="The battery module in the back shell, over the NFC reader, with the second battery still beside it">
+            The photos below show the second battery in place, with the Pi stack set on top.
+            <img class="photo" src="../assets/build-guide/battery-front.jpg" alt="The second battery in place at the front of the case, under the Pi stack">
+            <img class="photo" src="../assets/build-guide/stack-in-shell.jpg" alt="The Pi stack sitting in the back shell, on the battery module"></li>
+          <li>Put the Pi stack on top of the battery module, with the screw holes lined up. This also lines up the battery
+            module's pins with the Pi.</li>
+          <li>With all the boards in place, fit the four shorter M3 screws (10.4 mm) from below, through the back shell.
+            Do not force them: once they hold, they are tight enough.</li>
+          <li>Insert the SD card and turn the handheld on with the battery module's power button. Everything should work,
+            including the NFC reader and the accelerometer. To check that the accelerometer reads the right axis, train in Free Mode with a shaking
+            minigame such as Count Match (Color) (see the <a href="manual.html#training">Manual</a>).</li>
+          <li>Now the top shell. Fit the side door's brass insert in its hole: melt it in with a soldering iron, or fix it
+            with superglue as in the photo.
+            <img class="photo small" src="../assets/build-guide/buttons-corner.jpg" alt="A corner of the top shell, with the side door's brass insert glued in its hole"></li>
+          <li id="shaker">Make the shaker. Inside the top shell, near the screen opening, there is a very small hole
+            (circled in red). Put a tiny piece of metal or plastic in it: it moves and makes a noise when you shake the
+            handheld. Do not expect a loud noise; a screw head gave good results.
+            <img class="photo" src="../assets/build-guide/shaker-hole.jpg" alt="The inside of the top shell, with the shaker hole circled in red"></li>
+          <li>Detach the buttons from the sprues: four direction buttons, four square buttons for A, B, X and Y, two round
+            ones for Start and Select, two rectangular ones for L and R, and the power button.
+            <img class="photo" src="../assets/build-guide/buttons-detached.jpg" alt="The detached buttons: L and R at the top, Start and Select, A, B, X and Y on the left, the direction buttons on the right, and the power button at the bottom right"></li>
+          <li>Put the buttons, except the power button, in their holes in the top shell, from the inside. Every button
+            except L and R has two small tabs that hold it in place. On the Down and B buttons the tabs form an L instead
+            of facing each other; small notches in the case show where they go.
+            <img class="photo" src="../assets/build-guide/buttons-in-shell.jpg" alt="All the buttons in place in the top shell"></li>
+          <li>With the buttons and the shaker in place, join the board assembly to the top shell. This is a little
+            finicky: be patient and do not force the parts, they fit nicely together. Put the power button in place,
+            lined up with the battery module's power switch. If you use the keychain, put it in place now too.
+            <img class="photo" src="../assets/build-guide/power-side.jpg" alt="The side of the handheld, with the power button over the battery module's switch"></li>
+          <li>Before fitting the front screws, check that you can feel every button pressing its GamePi13 button. Then fit
+            the four longer M3 screws (11.6 mm) from the top. If no spacer came loose, they all fit.</li>
+          <li>Finally, press the screen frame into place. It holds without glue.
+            <img class="photo" src="../assets/build-guide/finished-front.jpg" alt="The finished handheld, with its screen frame, buttons and keychain"></li>
+          <li>Close it off with the side door: put the door in place and fix it with its screw, which goes into the brass
+            insert from step 9.</li>
+        </ol>
+        <img class="photo" src="../assets/build-guide/top-edge.jpg" alt="The finished handheld from the top: the L and R buttons, a USB port and the vents">
+        <img class="photo small" src="../assets/build-guide/finished-keychain.jpg" alt="The finished handheld with the keychain hanging from its corner">
+      </div>
+    </div>
+
+    <div class="content-section" id="software">
+      <h2 class="section-title">Software</h2>
+      <div class="section-content">
+        <p>The SD card image from <a href="#sd">Preparing the SD card</a> already has the game. To install it from the
+          zip instead, follow the <a href="installation-guide.html#gamepi">Installation</a> page's GamePi section
+          (<code>setup.sh --service</code>). Turn on I2C in
+          <code>raspi-config</code> for the battery, accelerometer and NFC reader.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

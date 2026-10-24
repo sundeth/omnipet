@@ -2,6 +2,7 @@
 Scene Connect - Network connectivity and battles (View-based architecture)
 Uses view architecture similar to scene_battle.py for clean separation of concerns.
 """
+import os
 import pygame
 import traceback
 
@@ -14,8 +15,10 @@ from scenes.connect_views import (
     MainMenuView,
     PetSelectionView,
     WifiHostingView,
-    WifiDiscoveryView,
     DComView,
+    WiFiComWarningView,
+    WiFiComView,
+    XrosView,
     DiscordView,
     LinkDialogView,
     OmninetLinkView,
@@ -31,6 +34,7 @@ from scenes.connect_views import (
     ArenaHistoryView,
     ArenaTeamCreationView,
     ArenaReclaimView,
+    ArenaStandingsView,
 )
 
 
@@ -46,35 +50,50 @@ class DiscordModule:
         import os
         import core.constants as constants
         
-        self.bot_url = getattr(constants, 'DISCORD_BOT_URL', 'http://localhost:5000').rstrip('/')
+        # The relay is part of Omninet (its /api/v1/discord routes exist where
+        # the server has a bot token); it was http://localhost:5000
+        from services.omninet_service import omninet_service
+        self.bot_url = (omninet_service._get_base_url().rstrip('/')
+                        + getattr(constants, 'DISCORD_API_PATH', '/api/v1/discord'))
         self.client = self
         self.is_connected = False
         self.linked_account = None
         self.account_name = None
         self.user_id = None
         self.current_room_id = None
+        self.last_error = None
         
         # Load saved data
         self._load_data()
         runtime_globals.game_console.log(f"[DiscordModule] Initialized with bot URL: {self.bot_url}")
     
+    #: Where the linked account is kept when set (the test harness points it
+    #: at each run's temporary save folder). None: discord_data.json in the
+    #: base save folder, beside Omninet's device credentials -- the app's
+    #: storage on Android, where a cwd-relative "save" is not.
+    SAVE_PATH = None
+
     def _get_save_path(self):
-        import os
-        return os.path.join("save", "discord_data.json")
+        if DiscordModule.SAVE_PATH:
+            return DiscordModule.SAVE_PATH
+        from core.game_globals import _get_base_save_dir
+        return os.path.join(_get_base_save_dir(), "discord_data.json")
     
     def _save_data(self):
         """Save linked account data."""
         import json
         import os
         try:
-            if not os.path.exists("save"):
-                os.makedirs("save")
+            path = self._get_save_path()
+            folder = os.path.dirname(path)
+            if folder:
+                os.makedirs(folder, exist_ok=True)
             data = {
                 "linked_account": self.linked_account,
                 "account_name": self.account_name,
                 "user_id": self.user_id
             }
-            with open(self._get_save_path(), 'w') as f:
+            with open(path, 'w') as f:
                 json.dump(data, f)
             runtime_globals.game_console.log("[DiscordModule] Saved account data")
         except Exception as e:
@@ -114,8 +133,11 @@ class DiscordModule:
         return self.account_name
     
     def login(self, pairing_code: str) -> bool:
-        """Link account with Discord."""
+        """Link account with Discord. On failure ``last_error`` says why:
+        "offline" (the server has no Discord relay, or cannot be reached) or
+        "invalid" (the relay does not know the code)."""
         import requests
+        self.last_error = None
         try:
             runtime_globals.game_console.log(f"[DiscordModule] Linking with code: {pairing_code}")
             response = requests.post(
@@ -123,6 +145,16 @@ class DiscordModule:
                 json={"code": pairing_code},
                 timeout=5
             )
+            if response.status_code != 200:
+                # The relay answers an unknown code with its own {"error"};
+                # a server without the relay (no bot token) has no such
+                # route at all, and FastAPI's {"detail": "Not Found"} comes
+                # back instead.
+                try:
+                    relay_answer = "error" in response.json()
+                except ValueError:
+                    relay_answer = False
+                self.last_error = "invalid" if relay_answer else "offline"
             if response.status_code == 200:
                 data = response.json()
                 self.linked_account = pairing_code.upper()
@@ -136,8 +168,77 @@ class DiscordModule:
                 return False
         except Exception as e:
             runtime_globals.game_console.log(f"[DiscordModule] Link exception: {e}")
+            self.last_error = "offline"
             return False
     
+    # -- Battle rooms (the relay's game rooms) ------------------------------
+    def _request(self, method, path, payload=None):
+        """(status, JSON or None); (0, None) when the relay cannot be reached."""
+        import requests
+        try:
+            response = requests.request(method, f"{self.bot_url}{path}", json=payload, timeout=5)
+            try:
+                return response.status_code, response.json()
+            except ValueError:
+                return response.status_code, None
+        except Exception as e:
+            runtime_globals.game_console.log(f"[DiscordModule] {method} {path} failed: {e}")
+            return 0, None
+
+    def get_available_rooms(self):
+        """The rooms open on the relay: [{id, room_id, name, host, status, ...}]."""
+        status, data = self._request("GET", "/rooms")
+        return data if status == 200 and isinstance(data, list) else []
+
+    def create_room(self, room_name):
+        """A new room hosted by this account: {room_id, room_code} or None."""
+        status, data = self._request("POST", "/room", {
+            "host": self.account_name or "Tamer", "name": room_name, "user_id": self.user_id})
+        if status == 200 and isinstance(data, dict) and data.get("success"):
+            self.current_room_id = data.get("room_id")
+            return data
+        return None
+
+    def join_room(self, room_id):
+        status, data = self._request("POST", f"/room/{room_id}/join", {
+            "player": self.account_name or "Tamer", "user_id": self.user_id})
+        if status == 200 and isinstance(data, dict) and data.get("success"):
+            self.current_room_id = room_id
+            return True
+        return False
+
+    def poll_room(self):
+        """The current room's status ({status, host, guests, opponent,
+        data_queue}), or None."""
+        if not self.current_room_id:
+            return None
+        status, data = self._request("GET", f"/room/{self.current_room_id}/status")
+        return data if status == 200 and isinstance(data, dict) else None
+
+    def send_room_data(self, data):
+        if not self.current_room_id:
+            return False
+        status, _ = self._request("POST", f"/room/{self.current_room_id}/data", data)
+        return status == 200
+
+    def room_link(self, room_id, is_host):
+        """A battle link through room *room_id* (battle.relay_link)."""
+        from battle.relay_link import RelayLink
+
+        def post(data):
+            status, _ = self._request("POST", f"/room/{room_id}/data", data)
+            return status == 200
+
+        def fetch():
+            status, data = self._request("GET", f"/room/{room_id}/status")
+            if status == 200 and isinstance(data, dict):
+                return data.get("data_queue") or []
+            # A room the relay no longer has is gone; anything else (the
+            # network) is tried again.
+            return None if status == 404 else []
+
+        return RelayLink(post, fetch, "host" if is_host else "guest", peer=room_id)
+
     def logout(self):
         """Unlink account."""
         import os
@@ -190,12 +291,16 @@ class SceneConnect:
         
         # If a caller set runtime_globals.scene_connect_initial_view, jump
         # directly to that view (e.g. "shop_modules" after login when the
-        # player hasn't bought any modules yet).  Consumed once.
+        # player hasn't bought any modules yet).  Consumed once. It may also
+        # be a (view, kwargs) pair, which is how an arena replay returns.
         initial = getattr(runtime_globals, 'scene_connect_initial_view', None)
         runtime_globals.scene_connect_initial_view = None
         if initial:
             try:
-                self._change_view(initial)
+                if isinstance(initial, tuple):
+                    self._change_view(initial[0], **(initial[1] or {}))
+                else:
+                    self._change_view(initial)
             except Exception as exc:
                 runtime_globals.game_console.log(
                     f"[SceneConnect] Failed to open initial view '{initial}': {exc}; "
@@ -227,7 +332,9 @@ class SceneConnect:
         # This ensures a clean slate for the new view
         self.ui_manager.components.clear()
         self.ui_manager.focusable_components.clear()
-        self.ui_manager.focused_index = 0
+        # Nothing is focused until a component registers; 0 would point past
+        # the end of an empty list.
+        self.ui_manager.focused_index = -1
         runtime_globals.game_console.log(f"[SceneConnect] UI manager cleared, all components removed")
         
         # Update shared state
@@ -242,8 +349,10 @@ class SceneConnect:
             "main_menu": MainMenuView,
             "pet_selection": PetSelectionView,
             "wifi_hosting": WifiHostingView,
-            "wifi_discovery": WifiDiscoveryView,
             "dcom": DComView,
+            "wificom_warning": WiFiComWarningView,
+            "wificom": WiFiComView,
+            "xros": XrosView,
             "discord": DiscordView,
             "link_dialog": LinkDialogView,
             "omninet_link": OmninetLinkView,
@@ -259,6 +368,7 @@ class SceneConnect:
             "arena_history": ArenaHistoryView,
             "arena_team_creation": ArenaTeamCreationView,
             "arena_reclaim": ArenaReclaimView,
+            "arena_standings": ArenaStandingsView,
         }
         
         view_class = view_map.get(view_name)
@@ -275,7 +385,7 @@ class SceneConnect:
             }
             
             # Add selected_pets only to views that consume it (not pet_selection which generates it)
-            if view_name in ['dcom', 'wifi_hosting', 'wifi_discovery', 'battle_confirm']:
+            if view_name in ['dcom', 'wificom', 'xros', 'wifi_hosting', 'discord', 'battle_confirm']:
                 view_kwargs['selected_pets'] = self.selected_pets
 
             # Main menu's EXIT button must use the same exit routing as a B-press
@@ -324,6 +434,10 @@ class SceneConnect:
                 runtime_globals.game_console.log(f"[SceneConnect] Error drawing view: {e}")
                 runtime_globals.game_console.log(f"Traceback:\n{traceback.format_exc()}")
     
+    def plays_own_input_sounds(self):
+        """A view running a charge minigame reads presses as play."""
+        return getattr(self.current_view, "phase", None) == "minigame"
+
     def handle_event(self, event) -> None:
         """Handle input events."""
         if not isinstance(event, tuple) or len(event) != 2:
@@ -331,14 +445,14 @@ class SceneConnect:
         
         event_type, event_data = event
         
-        # CRITICAL: For minigame phases, bypass UI manager completely
-        # Minigames need direct event access without UI manager interference
-        if self.current_view and self.current_view_name == "dcom":
-            if hasattr(self.current_view, 'phase') and self.current_view.phase in ["minigame", "minigame_dmx"]:
-                # Pass ALL events to the view during minigame, don't filter
-                # View will handle what it needs
-                self.current_view.handle_event(event)
-                return  # IMPORTANT: Return immediately, don't pass to UI manager
+        # A charge minigame takes every event: it is mashed with the same
+        # keys the UI manager uses for focus and buttons, so the manager must
+        # not see them at all while one is running.
+        if (self.current_view
+                and getattr(self.current_view, 'phase', None) == "minigame"
+                and getattr(self.current_view, 'minigame', None)):
+            self.current_view.handle_event(event)
+            return
         
         # Handle mouse motion for UI cursor
         if event_type == "MOUSE_MOTION":

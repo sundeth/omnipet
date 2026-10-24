@@ -30,18 +30,27 @@ from core import runtime_globals
 class CodeEntry(UIComponent):
     # Virtual keyboard rendering parameters (in base coordinates, scaled by manager)
     VK_HEIGHT = 96
+    # Alphanumeric keypad (device pairing / Discord linking codes contain letters)
     VK_ROWS = [
         list("0123456789"),
         list("ABCDEFGHIJ"),
         list("KLMNOPQRST"),
         list("UVWXYZ") + ["BACK", "OK"],
     ]
+    # Phone-style digit-only keypad (email verification codes are always numeric)
+    VK_ROWS_NUMERIC = [
+        list("123"),
+        list("456"),
+        list("789"),
+        ["BACK", "0", "OK"],
+    ]
 
-    def __init__(self, x, y, length=4, callback=None, on_focus_callback=None):
-        # Size based on length (each char is 40x50 approx)
-        self.base_char_w = 40
-        self.base_char_h = 50
-        self.base_spacing = 10
+    def __init__(self, x, y, length=4, callback=None, on_focus_callback=None,
+                 numeric=False, char_w=40, char_h=50, spacing=10):
+        # Size based on length (each char is char_w x char_h, base coordinates)
+        self.base_char_w = char_w
+        self.base_char_h = char_h
+        self.base_spacing = spacing
         total_w = (self.base_char_w * length) + (self.base_spacing * (length - 1))
 
         super().__init__(x, y, total_w, self.base_char_h)
@@ -52,19 +61,41 @@ class CodeEntry(UIComponent):
         # scene to clear stale "Invalid code" messages on the next attempt.
         self.on_focus_callback = on_focus_callback
 
+        # Numeric-only mode: the email verification code is always digits, so
+        # restrict the charset and use the digit keypad.  Alphanumeric mode
+        # stays the default for device-pairing and Discord-link codes which
+        # include letters.
+        self.numeric = numeric
+        self.charset = string.digits if numeric else (string.digits + string.ascii_uppercase)
+        self.default_char = '0' if numeric else 'A'
+        self.vk_rows = self.VK_ROWS_NUMERIC if numeric else self.VK_ROWS
+
         # State
-        self.chars = ['A'] * length  # Default to 'A's
+        self.chars = [self.default_char] * length  # Default to first charset char
         self.selected_index = 0  # Currently selected character position (for keyboard)
         self.mouse_over_index = -1  # Mouse hover tracking
-
-        # Charset: 0-9, A-Z
-        self.charset = string.digits + string.ascii_uppercase
 
         self.focusable = True
         self.sticky_focus = True  # Same focus rules as TextInput
         self.shadow_mode = "component"
+        # A focus click must not also cycle the selected box; cycling only
+        # happens once the entry is already focused.  See the UI manager's
+        # click-activation guard (activate_on_click).
+        self.activate_on_click = False
 
-        runtime_globals.game_console.log(f"[CodeEntry] Created length={length}")
+        runtime_globals.game_console.log(f"[CodeEntry] Created length={length} numeric={numeric}")
+
+    def reset(self):
+        """Reset every box to the default character and select the first one.
+
+        Marks the component for redraw; callers that need the change to appear
+        immediately (rather than on the next focus/hover) should also set the
+        UI manager's ``master_ui_dirty`` flag so the cached surface rebuilds.
+        """
+        self.chars = [self.default_char] * self.length
+        self.selected_index = 0
+        self.mouse_over_index = -1
+        self.needs_redraw = True
 
     def on_focus_gained(self):
         """Notify the host scene so it can clear any prior error state."""
@@ -125,12 +156,12 @@ class CodeEntry(UIComponent):
             return False
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_BACKSPACE:
-                # Clear current box; step back if it was already 'A' (no change)
-                if self.chars[self.selected_index] != 'A':
-                    self._set_character(self.selected_index, 'A')
+                # Clear current box; step back if it was already the default
+                if self.chars[self.selected_index] != self.default_char:
+                    self._set_character(self.selected_index, self.default_char)
                 else:
                     self.selected_index = max(0, self.selected_index - 1)
-                    self._set_character(self.selected_index, 'A')
+                    self._set_character(self.selected_index, self.default_char)
                 return True
             if event.key == pygame.K_RETURN:
                 if self.callback:
@@ -318,7 +349,7 @@ class CodeEntry(UIComponent):
         sw, sh = screen_size
         kb_h = int(self.VK_HEIGHT * scale)
         kb_rect = pygame.Rect(0, sh - kb_h, sw, kb_h)
-        row_h = kb_h / len(self.VK_ROWS)
+        row_h = kb_h / len(self.vk_rows)
         return kb_rect, scale, row_h
 
     def draw_keyboard_overlay(self, target_surface):
@@ -341,10 +372,13 @@ class CodeEntry(UIComponent):
         backdrop.fill((20, 20, 20, 230))
         target_surface.blit(backdrop, kb_rect.topleft)
 
-        font_size = max(10, int(14 * scale))
-        font = pygame.font.SysFont(None, font_size)
+        # ProggySmall at its 16px design grid -- the pygame default font at
+        # arbitrary sizes renders ragged with anti-aliasing disabled.
+        from utils.asset_utils import font_load
+        from ui.ui_constants import TEXT_FONT
+        font = font_load(TEXT_FONT, 16 * max(1, int(round(scale))))
 
-        for r, row in enumerate(self.VK_ROWS):
+        for r, row in enumerate(self.vk_rows):
             key_w = kb_rect.width / len(row)
             y = kb_rect.y + r * row_h
             for c, label in enumerate(row):
@@ -382,9 +416,9 @@ class CodeEntry(UIComponent):
 
         local_y = pos[1] - kb_rect.y
         row_idx = int(local_y // row_h)
-        if row_idx < 0 or row_idx >= len(self.VK_ROWS):
+        if row_idx < 0 or row_idx >= len(self.vk_rows):
             return False
-        row = self.VK_ROWS[row_idx]
+        row = self.vk_rows[row_idx]
         key_w = kb_rect.width / len(row)
         local_x = pos[0] - kb_rect.x
         col_idx = int(local_x // key_w)
@@ -398,8 +432,8 @@ class CodeEntry(UIComponent):
                 self.callback(self.get_text())
             runtime_globals.game_sound.play("menu")
         elif label == "BACK":
-            # Reset selected box back to 'A' and step back one
-            self._set_character(self.selected_index, 'A')
+            # Reset selected box back to the default char and step back one
+            self._set_character(self.selected_index, self.default_char)
             self.selected_index = max(0, self.selected_index - 1)
         else:
             # Single-letter / digit key

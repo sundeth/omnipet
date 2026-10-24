@@ -490,7 +490,7 @@ class Button(UIComponent):
         decorator_use_shadow = self.manager and self.manager.should_render_shadow(self, "decorator")
         for decorator in self.decorators:
             if decorator in self.decorator_sprites:
-                use_highlight = self.focused or self.clicked
+                use_highlight = self.focus_visible() or self.clicked
                 sprite_key = 'highlight' if use_highlight else 'standard'
                 decorator_sprite = self.decorator_sprites[decorator][sprite_key]
                 

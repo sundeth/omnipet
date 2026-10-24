@@ -12,7 +12,7 @@ from ui.ui_manager import UIManager
 from battle import combat_constants
 import core.constants as constants
 from models.game_module import sprite_load
-from utils.pygame_utils import blit_with_shadow
+from utils.pygame_utils import blit_with_cache
 from ui.minigames.mogera_counter import MogeraCounter
 from ui.minigames.dummy_charge import DummyCharge
 from utils.scene_utils import change_scene
@@ -146,7 +146,10 @@ class MogeraTraining(Training):
         
         elif self.phase == "result":
             self.update_result_phase()
-        
+
+        elif self.phase == "currency":
+            self.update_currency_phase()
+
         self.frame_counter += 1
 
     def _start_charge_phase(self):
@@ -217,14 +220,14 @@ class MogeraTraining(Training):
             self.attack_positions = new_positions
 
     def check_victory(self):
-        """Check if training was successful"""
-        return self.strength >= 7
+        """M.O.G.E.R.A. destroyed: Phase 1 cleared and the meter built."""
+        return self.phase2_reached and self.strength >= 7
 
     def check_and_award_trophies(self):
         """Award trophy if strength reaches maximum (14) and perfect counter"""
         if self.strength == 14 and self.countered_count == 5:
             for pet in self.pets:
-                pet.trophies += 1
+                pet.award_trophies(1)
             runtime_globals.game_console.log(f"[TROPHY] Mogera training perfect score! Trophy awarded.")
 
     def draw(self, surface):
@@ -245,6 +248,8 @@ class MogeraTraining(Training):
             self.draw_impact(surface)
         elif self.phase == "result":
             self.draw_result(surface)
+        elif self.phase == "currency":
+            self.draw_currency(surface)
 
     def draw_mogera_appear(self, surface):
         """Draw Mogera appearing (alternating between mogera1 and mogera2)"""
@@ -254,7 +259,7 @@ class MogeraTraining(Training):
         
         mogera_x = int(50 * runtime_globals.UI_SCALE)
         mogera_y = runtime_globals.SCREEN_HEIGHT // 2 - mogera_sprite.get_height() // 2
-        blit_with_shadow(surface, mogera_sprite, (mogera_x, mogera_y))
+        blit_with_cache(surface, mogera_sprite, (mogera_x, mogera_y))
 
     def draw_charge(self, surface):
         """Draw the charge phase"""
@@ -268,6 +273,9 @@ class MogeraTraining(Training):
     def handle_event(self, event):
         """Handle input events"""
         event_type, event_data = event
+
+        if self.phase == "alert":
+            return
         
         if self.phase == "counter":
             # Pass to UI manager for button clicks
@@ -286,12 +294,12 @@ class MogeraTraining(Training):
         elif self.phase == "charge":
             if self.charge_game.handle_event(event):
                 return
-            
-            # Allow skip to result with B or START
+
+            # "Canceling out of training before M.O.G.E.R.A. has been attacked
+            # will not reward anything" (DMGZ manual): leave, as in Phase 1
             if event_type in ("START", "B"):
                 runtime_globals.game_sound.play("cancel")
-                self.phase = "result"
-                self.frame_counter = 0
+                change_scene("game")
         
         elif self.phase in ("wait_attack", "attack_move", "impact"):
             # Only allow B or START to skip to result, not A
@@ -324,11 +332,11 @@ class MogeraTraining(Training):
         else:
             # Show Mogera being targeted
             mogera_sprite = self.mogera1
-            blit_with_shadow(surface, mogera_sprite, (int(50 * runtime_globals.UI_SCALE), runtime_globals.SCREEN_HEIGHT // 2 - mogera_sprite.get_height() // 2))
+            blit_with_cache(surface, mogera_sprite, (int(50 * runtime_globals.UI_SCALE), runtime_globals.SCREEN_HEIGHT // 2 - mogera_sprite.get_height() // 2))
 
         # Draw attack projectiles
         for sprite, (x, y) in self.attack_positions:
-            blit_with_shadow(surface, sprite, (int(x), int(y)))
+            blit_with_cache(surface, sprite, (int(x), int(y)))
 
     def draw_result(self, surface):
         """Draw the result phase"""
@@ -353,19 +361,14 @@ class MogeraTraining(Training):
                 # Show Mogera result
                 x = int(50 * runtime_globals.UI_SCALE)
                 y = runtime_globals.SCREEN_HEIGHT // 2 - result_img.get_height() // 2
-                blit_with_shadow(surface, result_img, (x, y))
+                blit_with_cache(surface, result_img, (x, y))
             else:
                 # Use AnimatedSprite component with predefined result animations
                 if not self.animated_sprite.is_animation_playing():
-                    duration = combat_constants.RESULT_SCREEN_FRAMES / constants.FRAME_RATE
-                    
-                    # Choose which result animation to play
-                    if self.strength < 7:
-                        self.animated_sprite.play_bad(duration)
-                    elif self.strength < 14:
-                        self.animated_sprite.play_great(duration)
-                    else:
-                        self.animated_sprite.play_excellent(duration)
+                    # The banner of the grade paid (get_attack_count, the DMGZ
+                    # manual): a surviving M.O.G.E.R.A. is GOOD (it read BAD),
+                    # a destroyed one EXCELLENT (7-13 read GREAT).
+                    self.play_grade_banner(self.get_attack_count())
                 
                 # Draw the animated sprite
                 self.animated_sprite.draw(surface)
@@ -407,10 +410,15 @@ class MogeraTraining(Training):
                 self.attack_positions.append((scaled_sprite, (x, center_y - scaled_sprite.get_height() // 2)))
 
     def get_attack_count(self):
-        """Returns the number of attacks based on strength."""
+        """The outcome, as the DMGZ manual gives it (owner, 2026-10-17: like
+        the device). Failing the Anti-G phase pays nothing (Bad); clearing it
+        earns Strength "whether or not you succeed" at M.O.G.E.R.A., so a
+        surviving M.O.G.E.R.A. is a Good that is still a loss (DMGZ's phase-2
+        G-Cells), and destroying it an Excellent. Phase 1 is cleared from 3
+        counters of 5 (INFERENCE: the manual gives no number; the Color
+        line's training wants 3 hits of 5)."""
+        if not self.phase2_reached:
+            return 0
         if self.strength < 7:
             return 1
-        elif self.strength < 14:
-            return 2
-        else:
-            return 3
+        return 3

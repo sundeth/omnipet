@@ -23,6 +23,9 @@ class GameSound:
         """
         self.base_path = base_path
         self.sounds = {}
+        # Every play() request, muted or not: input dispatch reads it to tell
+        # whether a press already answered with a sound (vpet.dispatch_input).
+        self.play_requests = 0
         self.sounds_loaded = False
         self.sound_labels = {
             1: "noise_beep",
@@ -44,12 +47,35 @@ class GameSound:
             17: "happy2",
             18: "evolution_plus",
             19: "evolution_2020",
+            20: "training_ready",
+            21: "xros_start",
+            22: "xros_animation",
+            23: "xros_evolution",
+            # The Digivice iC's own minigame sounds (utilities/IC/make_ic_sounds.py).
+            24: "ic_shuffle",
+            25: "ic_fail",
+            26: "ic_success",
+            27: "ic_building_break",
+            28: "ic_poop_start",
+            29: "ic_poop_stage",
+            30: "ic20_ready",
+            31: "ic20_start",
+            32: "ic_press",
+            # A card pack opening (utilities/claude/make_card_sounds.py).
+            33: "card_pack_open",
+            34: "card_reveal",
+            35: "card_shiny",
         }
 
         # Initialize pygame mixer with a small buffer to minimise playback latency.
         # 512 samples @ 44100 Hz ≈ 12 ms latency; safe on both desktop and Pi Zero 2W.
-        if not pygame.mixer.get_init():
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+        # Guarded: SDL_Init(AUDIO) hard-fails in processes without the SDL
+        # bootstrap (for example headless tests) -- sound is simply disabled.
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+        except pygame.error as exc:
+            print(f"[GameSound] mixer unavailable, sound disabled: {exc}")
 
         # NOTE: do NOT eager-load here.  This instance is constructed
         # while ``runtime_globals`` is being imported, which on Android
@@ -74,7 +100,7 @@ class GameSound:
             # Build relative path from workspace root for asset_utils functions
             rel_path = os.path.join(self.base_path, filename)
             try:
-                if index < 18:
+                if index not in (18, 19):
                     sound = sound_load(rel_path)
                     self.sounds[label] = sound
                 else:
@@ -87,15 +113,20 @@ class GameSound:
 
     
 
-    def play(self, name: str) -> None:
+    def play(self, name: str):
         """
         Plays a sound by its label.
 
         Args:
             name (str): The sound label to play (e.g., 'menu', 'fail', 'evolution').
+
+        Returns:
+            The pygame Channel used for a sound effect, or None when playback
+            could not be started (including when sound is muted).
         """
+        self.play_requests += 1
         if not game_globals.configuration.sound_volume:
-            return
+            return None
         
         # Lazy load sounds on first access (ensures Android environment is set)
         if not self.sounds_loaded:
@@ -104,13 +135,41 @@ class GameSound:
         if name in self.sounds:
             if isinstance(self.sounds[name], pygame.mixer.Sound):
                 self.sounds[name].set_volume(game_globals.configuration.sound_volume / 10)
-                self.sounds[name].play()
+                return self.sounds[name].play()
             else:
                 pygame.mixer.music.load(self.sounds[name])
                 pygame.mixer.music.set_volume(game_globals.configuration.sound_volume / 10)
                 pygame.mixer.music.play()
         else:
             print(f"[!] Sound '{name}' not found.")
+        return None
+
+    def is_playing(self, name: str) -> bool:
+        """Return whether a named sound effect is actively using a mixer channel."""
+        if not self.sounds_loaded:
+            self.load_sounds()
+
+        sound = self.sounds.get(name)
+        return isinstance(sound, pygame.mixer.Sound) and sound.get_num_channels() > 0
+
+    def stop(self, name: str) -> None:
+        """Stop a named sound effect without interrupting unrelated sounds."""
+        if not self.sounds_loaded:
+            return
+
+        sound = self.sounds.get(name)
+        if isinstance(sound, pygame.mixer.Sound):
+            sound.stop()
+
+    def get_duration(self, name: str) -> float:
+        """Return a named sound effect's duration in seconds, or zero if unavailable."""
+        if not self.sounds_loaded:
+            self.load_sounds()
+
+        sound = self.sounds.get(name)
+        if isinstance(sound, pygame.mixer.Sound):
+            return sound.get_length()
+        return 0.0
 
     def stop_all(self) -> None:
         """

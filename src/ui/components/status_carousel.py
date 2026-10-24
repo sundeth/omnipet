@@ -11,6 +11,49 @@ import core.constants as constants
 from utils.asset_utils import image_load
 
 
+#: Silhouettes already made, by (module, form, sprite preferences), None for
+#: a form without art: the Status scene asks on every pet it shows, and a
+#: form's sprites come out of its zip, which is slow on the Pi Zero 2W.
+_SILHOUETTES = {}
+
+
+def evolution_silhouette(pet):
+    """The form *pet* would evolve into now (`GamePet.preview_evolution`,
+    a route's % chance counted as certain), as its IDLE1 frame blacked out,
+    at the art's own size. None when no route matches or it has no sprite.
+    Each form's silhouette is made once (`_SILHOUETTES`)."""
+    try:
+        target = pet.preview_evolution()
+    except Exception as exc:
+        runtime_globals.game_console.log(f"[StatusCarousel] evolution preview failed: {exc}")
+        return None
+    if not target:
+        return None
+    from core import game_globals
+    cfg = getattr(game_globals, "configuration", None)
+    key = (pet.module, target.get("name"),
+           getattr(cfg, "sprite_resolution_preference", 0),
+           getattr(cfg, "enable_old_sprites", False))
+    if key in _SILHOUETTES:
+        return _SILHOUETTES[key]
+    from utils.module_utils import get_module
+    from utils.sprite_utils import load_pet_sprites
+    from models.animation import PetFrame
+    module = get_module(pet.module)
+    frames = load_pet_sprites(
+        target["name"], module.folder_path, getattr(module, "name_format", "$_dmc"),
+        primary_sprite_format=getattr(module, "primary_sprite_format", "Color"),
+        secondary_sprite_format=getattr(module, "secondary_sprite_format", "HD"))
+    frame = frames.get(PetFrame.IDLE1.value)
+    shadow = None
+    if frame is not None:
+        shadow = frame.copy()
+        # Every pixel black, its transparency kept.
+        shadow.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MIN)
+    _SILHOUETTES[key] = shadow
+    return shadow
+
+
 class StatusCarousel(UIComponent):
     def __init__(self, x, y, width, height, pet_data=None):
         super().__init__(x, y, width, height)
@@ -127,7 +170,10 @@ class StatusCarousel(UIComponent):
             ("sleep_disturbances", "Sleep Disturbances", "sleep_disturbances", "Sleep Disturbances"),
             ("overfeed", "Overfeed", "overfeed", "Overfeed"),
             ("injuries", "Injuries", "injuries", "Injuries"),
+            ("sicknesses", "Sicknesses", "sicknesses", "Sicknesses"),
+            ("virus", "Virus", "virus", "Virus"),
             ("evolution_timer", "Evolution Timer", "evolution_timer", "Evolution Timer"),
+            ("next_evolution", "Next Evolution", "next_evolution", "Next Evolution"),
             ("sleeps", "Sleeps", "sleeps", "Sleeps"),
             ("wakes", "Wakes", "wakes", "Wakes"),
             ("poop_time", "Poop Time", "poop_time", "Poop Time"),
@@ -140,6 +186,16 @@ class StatusCarousel(UIComponent):
             if visible_stat_name not in visible_stats:
                 continue
                 
+            # Next Evolution draws the coming form's silhouette, or "?".
+            if stat_id == "next_evolution":
+                self.boxes.append({
+                    'id': stat_id,
+                    'name': display_name,
+                    'value': '',
+                    'sprite': self.pet_data.get(data_key),
+                })
+                continue
+
             # Special handling for Trophies and Vital Values - only show if Level is also visible
             if stat_id in ["trophies", "vital_values"] and "Level" not in visible_stats:
                 continue
@@ -240,24 +296,34 @@ class StatusCarousel(UIComponent):
             # Default formatting
             return str(value) if value is not None else "0"
     
+    @staticmethod
+    def box_tooltip(box):
+        """A box's tooltip. Next Evolution draws a shape, not a value: it
+        read "Next Evolution: " with nothing after it."""
+        if box.get('id') == 'next_evolution':
+            if box.get('sprite') is not None:
+                return "Next Evolution: the shape of the form it is heading for"
+            return "Next Evolution: no route met yet"
+        return f"{box['name']}: {box['value']}"
+
     def format_evolution_timer(self, pet_data):
-        """Calculate and format remaining evolution time"""
-        # Get evolution timer (in minutes) and current pet timer (in frames)
-        evolution_time_minutes = pet_data.get('evolution_timer')  # This would be pet.time in minutes
-        current_timer_frames = pet_data.get('timer', 0)  # This would be pet.timer in frames
-        evolve_flag = pet_data.get('evolve', False)  # This would be pet.evolve
-        
-        if evolution_time_minutes is None or evolution_time_minutes < 0 or not evolve_flag:
+        """Calculate and format remaining evolution time.
+
+        The time in the form is the pet's evolution clock, ``_evol_minutes``
+        (passed as 'evolution_minutes'): the one evolution reads, which also
+        catches up offline. It used to be the frame counter ``pet.timer``,
+        which only counts frames since the pet was loaded."""
+        evolution_time_minutes = pet_data.get('evolution_timer')  # pet.time, in minutes
+        evolve_flag = pet_data.get('evolve', False)  # pet.evolve, its routes
+
+        if not isinstance(evolution_time_minutes, (int, float)) or evolution_time_minutes < 0 or not evolve_flag:
             return ""
-        
-        # Convert evolution time from minutes to seconds
-        evolution_time_seconds = evolution_time_minutes * 60
-        
-        # Convert current timer from frames to seconds
-        current_time_seconds = current_timer_frames // constants.FRAME_RATE
-        
-        # Calculate remaining time
-        remaining_seconds = evolution_time_seconds - current_time_seconds
+
+        elapsed_minutes = pet_data.get('evolution_minutes')
+        if elapsed_minutes is None:
+            # Data from before the clock was passed in: the old reading.
+            elapsed_minutes = (pet_data.get('timer', 0) // constants.FRAME_RATE) / 60
+        remaining_seconds = int((evolution_time_minutes - elapsed_minutes) * 60)
         
         if remaining_seconds <= 0:
             return "00:00"
@@ -284,6 +350,8 @@ class StatusCarousel(UIComponent):
             "Sleep Disturbances": "Sleep Disturbance",  # Note: singular in filename
             "Overfeed": "Overfeed",
             "Injuries": "Injuries",
+            "Sicknesses": "Sicknesses",
+            "Virus": "Virus",
             "Evolution Timer": "Evolution Timer",
             "Sleeps": "Sleeps",
             "Wakes": "Wakes",
@@ -340,7 +408,9 @@ class StatusCarousel(UIComponent):
                 if scale_factor < 1.0 and scale_factor > 0:
                     new_width = max(1, int(original_size[0] * scale_factor))
                     new_height = max(1, int(original_size[1] * scale_factor))
-                    icon = pygame.transform.smoothscale(icon, (new_width, new_height))
+                    # Nearest-neighbor: keeps the pixel-art icons sharp
+                    # (smoothscale blurred their edges).
+                    icon = pygame.transform.scale(icon, (new_width, new_height))
         
         # Cache the final scaled icon
         self.status_icons[status_name] = icon
@@ -449,6 +519,10 @@ class StatusCarousel(UIComponent):
             pygame.draw.rect(box_surface, PURPLE_DARK, (0, 0, self.box_width, self.box_height), border_radius=border_radius)
             pygame.draw.rect(box_surface, PURPLE_DARK_LINE, (0, 0, self.box_width, self.box_height), width=1, border_radius=border_radius)
         
+        if box['id'] == 'next_evolution':
+            self._draw_next_evolution(box_surface, box, is_focused)
+            return box_surface
+
         # Load and draw icon
         icon = self.load_status_icon(box['name'])
         if icon:
@@ -469,6 +543,28 @@ class StatusCarousel(UIComponent):
         
         return box_surface
                 
+    def _draw_next_evolution(self, box_surface, box, is_focused):
+        """The coming form's silhouette at a whole multiple (or exact
+        fraction) of its own size, filling the box; "?" when there is none."""
+        scale = self.manager.ui_scale if self.manager else 1
+        margin = int(2 * scale)
+        sprite = box.get('sprite')
+        if sprite is not None:
+            from utils.sprite_utils import scale_sprite_pixel_perfect
+            if box.get('_scaled') is None:
+                box['_scaled'] = scale_sprite_pixel_perfect(
+                    sprite, (self.box_width - 2 * margin, self.box_height - 2 * margin))
+            scaled = box['_scaled']
+            blit_with_cache(box_surface, scaled, ((self.box_width - scaled.get_width()) // 2,
+                                                  (self.box_height - scaled.get_height()) // 2))
+            return
+        # A big "?": the title font at 1.5x, about a silhouette's height.
+        title_size = self.manager.get_title_font_size() if self.manager else 24
+        font = self.get_font("title", custom_size=title_size * 3 // 2)
+        text = font.render("?", True, PURPLE_LIGHT if is_focused else PURPLE)
+        blit_with_cache(box_surface, text, ((self.box_width - text.get_width()) // 2,
+                                            (self.box_height - text.get_height()) // 2))
+
     def get_visible_box_count(self):
         """Calculate how many boxes can fit in the visible area"""
         available_width = self.rect.width - 2 * self.margin_x
@@ -702,7 +798,7 @@ class StatusCarousel(UIComponent):
             if 0 <= self.focused_box_index < len(self.boxes):
                 box = self.boxes[self.focused_box_index]
                 if self.manager and hasattr(self.manager, 'show_tooltip'):
-                    self.manager.show_tooltip(f"{box['name']}: {box['value']}")
+                    self.manager.show_tooltip(self.box_tooltip(box))
             return True
         elif event_type == "LCLICK":
             # Handle left clicks for box interaction
@@ -779,7 +875,7 @@ class StatusCarousel(UIComponent):
                     
                     # Show tooltip
                     if self.manager and hasattr(self.manager, 'show_tooltip'):
-                        self.manager.show_tooltip(f"{box['name']}: {box['value']}")
+                        self.manager.show_tooltip(self.box_tooltip(box))
                     
                     self.needs_redraw = True
                     return True
@@ -816,7 +912,7 @@ class StatusCarousel(UIComponent):
                             
                             # Show tooltip
                             if self.manager and hasattr(self.manager, 'show_tooltip'):
-                                self.manager.show_tooltip(f"{box['name']}: {box['value']}")
+                                self.manager.show_tooltip(self.box_tooltip(box))
                             
                             self.needs_redraw = True
                             return True

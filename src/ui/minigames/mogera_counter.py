@@ -11,6 +11,7 @@ from models.animation import PetFrame
 import core.constants as constants
 from utils.pygame_utils import blit_with_shadow, load_attack_sprites, module_attack_sprites
 from utils.module_utils import get_module
+from utils.sprite_utils import snap_pet_sprite_size
 
 
 class MogeraCounter:
@@ -71,7 +72,7 @@ class MogeraCounter:
 
         # Cache for scaled pet frames per UI scale
         self._pet_frame_cache = {}
-        self._cached_pet_size = int(48 * runtime_globals.UI_SCALE)
+        self._cached_pet_size = snap_pet_sprite_size(48 * runtime_globals.UI_SCALE)
         
         # Create arrow buttons for mouse mode using UI manager's base coordinate system (240x240)
         ui_base = 240  # UI manager's base resolution
@@ -167,7 +168,7 @@ class MogeraCounter:
             self.attack_x += self.attack_speed
         
         # Calculate pet position for collision detection
-        pet_size = int(48 * runtime_globals.UI_SCALE)
+        pet_size = snap_pet_sprite_size(48 * runtime_globals.UI_SCALE)
         pet_x = runtime_globals.SCREEN_WIDTH - pet_size - int(20 * runtime_globals.UI_SCALE)
         
         # Check if attack hit the pet without being countered
@@ -367,7 +368,7 @@ class MogeraCounter:
             return False
 
         self.counter_attack_sprite = attack_sprite
-        pet_size = int(48 * runtime_globals.UI_SCALE)
+        pet_size = snap_pet_sprite_size(48 * runtime_globals.UI_SCALE)
         pet_x = runtime_globals.SCREEN_WIDTH - pet_size - int(20 * runtime_globals.UI_SCALE)
         pet_y = runtime_globals.SCREEN_HEIGHT // 2 - pet_size // 2
 
@@ -395,7 +396,7 @@ class MogeraCounter:
     def draw_active(self, surface):
         """Draw during active counter phase"""
         # Draw pet on the right side - positioned to align with attacks
-        pet_size = int(48 * runtime_globals.UI_SCALE)
+        pet_size = snap_pet_sprite_size(48 * runtime_globals.UI_SCALE)
         if pet_size != self._cached_pet_size:
             self._pet_frame_cache.clear()
             self._cached_pet_size = pet_size

@@ -28,6 +28,9 @@ class AreaSelection(UIComponent):
         # Build list of selectable areas based on module settings
         self.areas = []
         self._build_area_list()
+
+        # Entry fees drawn above an area's first circle: {area: "100P"}.
+        self.entry_prices = {}
         
         # Selection state
         self.selected_index = self._get_current_progress_index()
@@ -125,6 +128,12 @@ class AreaSelection(UIComponent):
             self.scroll_offset = self.target_scroll_offset
             self.needs_redraw = True
     
+    def set_entry_prices(self, prices):
+        """Show each area's entry fee ({area: text}) above the circle that
+        enters it: the area's own in sequential mode, else its round 1."""
+        self.entry_prices = dict(prices or {})
+        self.needs_redraw = True
+
     def get_selected_area_round(self):
         """Get the currently selected area and round"""
         if 0 <= self.selected_index < len(self.areas):
@@ -455,5 +464,16 @@ class AreaSelection(UIComponent):
             if label_rect.right > 0 and label_rect.left < self.rect.width:
                 from utils.pygame_utils import blit_with_cache
                 blit_with_cache(surface, label_surface, label_rect.topleft)
+
+            # The entry fee above the circle that enters the area.
+            price = self.entry_prices.get(area_data["area"])
+            if price and area_data["round"] in (None, 1):
+                price_surface = text_font.render(price, True, YELLOW_BRIGHT)
+                price_rect = price_surface.get_rect()
+                price_rect.centerx = int(circle_x)
+                price_rect.bottom = int(circle_y - scaled_radius - self.manager.scale_value(3))
+                if price_rect.right > 0 and price_rect.left < self.rect.width:
+                    from utils.pygame_utils import blit_with_cache
+                    blit_with_cache(surface, price_surface, price_rect.topleft)
         
         return surface

@@ -14,9 +14,20 @@ from ui.ui_constants import BASE_RESOLUTION
 from ui.windows.window_background import WindowBackground
 from core import game_globals, runtime_globals
 import core.constants as constants
-from models.game_freezer import GameFreezer
+from models.game_freezer import BOX_CAPACITY, GameFreezer
 from utils.scene_utils import change_scene
 from utils.pygame_utils import sprite_load
+
+
+def _format_lock_time(seconds: float) -> str:
+    """Time left on an arena lock, short enough for a menu row."""
+    minutes = int(seconds // 60)
+    if minutes >= 24 * 60:
+        return f"{minutes // (24 * 60)}d{(minutes // 60) % 24}h"
+    if minutes >= 60:
+        return f"{minutes // 60}h{minutes % 60}m"
+    return f"{max(1, minutes)}m"
+
 
 class SceneFreezerBox:
     def __init__(self):
@@ -73,7 +84,7 @@ class SceneFreezerBox:
         self.ui_manager.add_component(self.title_scene)
         
         # Box page indicator (only visible in box mode)
-        self.box_page_label = Label(180, 12, f"Box {self.current_freezer_page + 1}/10", is_title=False)
+        self.box_page_label = Label(180, 12, self._box_label_text(), is_title=False)
         self.box_page_label.visible = False
         self.ui_manager.add_component(self.box_page_label)
         
@@ -181,7 +192,7 @@ class SceneFreezerBox:
             self.prev_page_button.visible = mouse_enabled
             self.next_page_button.visible = mouse_enabled
             self.box_page_label.visible = True
-            self.box_page_label.set_text(f"Box {self.current_freezer_page + 1}/10")
+            self.box_page_label.set_text(self._box_label_text())
             #self.ui_manager.set_focused_component(self.freezer_grid)
             self.load_current_freezer_sprites()
             runtime_globals.game_console.log("[SceneFreezerBox] Switched to box view")
@@ -213,6 +224,11 @@ class SceneFreezerBox:
         if getattr(pet, "state", None) == "dead":
             self.menu.open(["Clear", "Stats"], self._on_menu_select, self._on_menu_cancel)
             self.ui_manager.set_active_menu(self.menu)
+        elif game_globals.is_pet_arena_locked(pet):
+            # On an arena team: it stays here until the season ends.
+            remaining = _format_lock_time(game_globals.arena_lock_remaining(pet))
+            self.menu.open([f"Arena {remaining}", "Stats"], self._on_menu_select, self._on_menu_cancel)
+            self.ui_manager.set_active_menu(self.menu)
         else:
             self.menu.open(["Add", "Stats"], self._on_menu_select, self._on_menu_cancel)
             self.ui_manager.set_active_menu(self.menu)
@@ -225,6 +241,10 @@ class SceneFreezerBox:
         """Handle next page button click"""
         self._change_freezer_page(1)
     
+    def _box_label_text(self):
+        """'Box N/M', M being the boxes the freezer has (it read /10)."""
+        return f"Box {self.current_freezer_page + 1}/{len(self.freezer_pets)}"
+
     def _change_freezer_page(self, direction):
         """Change freezer page."""
         max_pages = len(self.freezer_pets)
@@ -232,7 +252,7 @@ class SceneFreezerBox:
         
         # Update box page label if visible
         if self.box_page_label and self.box_page_label.visible:
-            self.box_page_label.set_text(f"Box {self.current_freezer_page + 1}/10")
+            self.box_page_label.set_text(self._box_label_text())
         
         # Refresh freezer grid if visible
         if self.freezer_grid and self.freezer_grid.visible:
@@ -278,9 +298,18 @@ class SceneFreezerBox:
                         runtime_globals.game_console.log(f"[SceneFreezerBox] Pet {selected_pet.name} not in party list!")
                 else:
                     # Store to freezer
+                    box = self.freezer_pets[self.current_freezer_page]
+                    if len(box.pets) >= BOX_CAPACITY:
+                        # A full box: a 26th Digimon was saved where its 5x5
+                        # grid never showed it (GameFreezer.rebuild).
+                        runtime_globals.game_console.log(
+                            f"Cannot store {selected_pet.name}: Box {self.current_freezer_page + 1} is full!")
+                        runtime_globals.game_sound.play("cancel")
+                        self.menu.close()
+                        return
                     if selected_pet in game_globals.pet_list:
                         game_globals.pet_list.remove(selected_pet)
-                        self.freezer_pets[self.current_freezer_page].pets.append(selected_pet)
+                        box.pets.append(selected_pet)
                         runtime_globals.game_console.log(f"Stored {selected_pet.name}.")
                     else:
                         runtime_globals.game_console.log(f"[SceneFreezerBox] Pet {selected_pet.name} not in party list!")
@@ -295,11 +324,19 @@ class SceneFreezerBox:
                         runtime_globals.game_console.log(f"[SceneFreezerBox] Pet {selected_pet.name} not in freezer!")
                     # Refresh freezer grid
                     self.freezer_grid.refresh_from_freezer_page(self.freezer_pets[self.current_freezer_page])
+                elif game_globals.is_pet_arena_locked(selected_pet):
+                    runtime_globals.game_console.log(
+                        f"Cannot add {selected_pet.name}: on an arena team until the season ends.")
+                    runtime_globals.game_sound.play("cancel")
+                    self.menu.close()
+                    return
                 else:
                     # Move from freezer to party
                     if len(game_globals.pet_list) < game_globals.configuration.max_pets:
                         if selected_pet in self.freezer_pets[self.current_freezer_page].pets:
                             self.freezer_pets[self.current_freezer_page].pets.remove(selected_pet)
+                            # A lock that has run out has no further use.
+                            selected_pet.arena_lock = None
                             selected_pet.patch()
                             # Reset position to fix Y coordinate after resolution changes
                             selected_pet.begin_position()
@@ -316,6 +353,11 @@ class SceneFreezerBox:
             self.save_freezer_data()
             self.freezer_pets[self.current_freezer_page].rebuild()
             self.load_current_freezer_sprites()
+
+            # Storing or withdrawing changes the party size, and the pet slot
+            # is sized from it.
+            from utils.pet_utils import refresh_pet_sizes
+            refresh_pet_sizes()
             
             # Refresh grids AFTER rebuild to ensure correct state
             if self.mode == "party":
