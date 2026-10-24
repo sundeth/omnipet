@@ -296,7 +296,10 @@ class ShopGameplayView:
             try:
                 success, message = omninet_service.purchase_item('gameplay', item.id)
                 if success:
-                    game_globals.coins -= item.price
+                    # the balance the server left, not the listed price
+                    remaining = omninet_service.last_coins_remaining
+                    game_globals.coins = (remaining if remaining is not None
+                                          else game_globals.coins - item.price)
                     game_globals.purchases.add_gameplay(item.id)
                     game_globals.save()
                     

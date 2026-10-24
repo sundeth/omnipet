@@ -13,39 +13,43 @@ vendored package in `src/wificom/`:
     mqtt.connect_to_mqtt()      topics, callbacks, real-time battle state
     mqtt.loop()                 serviced here, on the worker thread
 
-Everything MQTT happens on one background thread. The broker connection is a
-TLS handshake plus a round trip, and `mqtt.loop()` blocks for its timeout, so
-neither can sit on the frame loop. The view reads `state` and `status_text`
-each frame and never touches the client.
+**Everything MQTT happens on one background thread**, and only there: the
+broker connection is a TLS handshake plus a round trip, `mqtt.loop()` blocks
+for its timeout, and paho's manual loop is not thread-safe. The view reads
+`state` and `status_text` each frame and never touches the client.
+
+**The pet is played on the game's own thread.** The worker answers what
+needs no pet itself -- `P` (pause), `I` (version info), an unreadable
+command, a ROM the selected line cannot answer -- and hands every other
+DigiROM to the view (`take_incoming`). The view plays it (`play`), which
+queues the result for the worker to publish. That keeps the pets and the
+battle code on the thread that owns them, and lets a turn-2 ROM wait for the
+player: turn 2 means the adapter listens and the toy has to start the battle,
+which on Omnipet is the BATTLE! button.
+
+**One session, one exact battle format.** The player chooses the line on the
+WiFiCom screen and plays its charge before going online (`set_pet`), as the
+DCom flow does. wificom.dev's request envelope for an ordinary DigiROM is
+`{digirom, application_id, api_response, ack_id}` (wificom-lib `mqtt.py`) and
+names no line, so the selection is the player's; a request that does name
+one (`battle_format`) must name the selected line or it is not answered. A
+ROM is checked against the line (`executor.fits`) and refused rather than
+re-read as some other line -- several lines share one wire.
 
 `wificom.mqtt` is imported only once credentials have loaded, because it
-builds its topic strings at import time out of `import_secrets` -- importing
-it earlier would bake in the empty ones.
+builds its topic strings at import time out of `import_secrets` -- and
+reloaded when the credentials have changed since, or the topics would be
+the old device's.
 
-**A WiFiCom is a middleman, and starter-agnostic.** The same battle two
-toys would have over a cable is carried as DigiROMs through wificom.dev, so
-Omnipet has to be able to open one (the Battle button) and to answer one
-(anything arriving while the screen is open). Which it is doing is the only
-thing the two ends disagree about.
-
-`WiFiComBattle` drives it, over the same `PacketExchange` the cable and the
-versus battle use -- one place per protocol, and the packets that cannot be
-written until the other side has spoken (the DMX's inverse hits, the DMOG's
-opposite verdict) are resolved there rather than three times over. When the
-exchange completes and validates, the result is handed to the battle scene
-exactly as a DCom battle is.
-
-There is also a **toy on the other end** case: an app with a real WiFiCom
-sends a whole DigiROM and expects the executed exchange back, `s:` for each
-of its packets and `r:` for each of ours (`wificom.executor`). Both shapes
-arrive on the same topic, so the service tells them apart by whether the
-message continues a battle it is already having.
-
-Two commands are not ROMs at all and are answered without touching a pet:
-`P` (pause) and `I` (version info). Apps send `P` after consuming a result,
-so ignoring it makes a working WiFiCom look wedged.
+Real-time battles (wificom.dev's `topic_action: subscribe`, upstream's
+`realtime.py`) are not played: upstream runs them for Legendz and the
+Pendulum X's 3-prong battle only, neither of which is an Omnipet battle
+format. An invite is reported as unsupported, and an ordinary DigiROM still
+works -- upstream leaves the real-time battle when one arrives.
 """
 
+import importlib
+import json
 import queue
 import socket
 import threading
@@ -66,9 +70,16 @@ STATE_ERROR = "error"
 #: Seconds between the pings that keep the device visible to the website.
 #: Upstream sends one every loop of `run_wifi`, which idles at 5 seconds.
 PING_INTERVAL = 5.0
+#: Upstream's heartbeat during a real-time battle ("approx every 10 seconds").
+RTB_PING_INTERVAL = 10.0
 
-#: How long each `mqtt.loop()` call services the socket for.
+#: How long each `mqtt.loop()` call services the socket for (upstream's
+#: `mqtt.loop()` asks the client for one second).
 LOOP_TIMEOUT = 1.0
+
+#: The envelope key a request may use to name the battle format, in
+#: Omnipet's own spelling (`protocol_constants.BATTLE_FORMATS`).
+ENVELOPE_FORMAT_KEY = "battle_format"
 
 #: Host and port for the "is there internet" probe, matching the check the
 #: connect menu already uses for local WiFi.
@@ -112,6 +123,22 @@ def transport_available():
         return False
 
 
+def _input_topic(import_secrets):
+    """The input topic `mqtt.py` builds out of the current credentials."""
+    return (import_secrets.secrets_mqtt_username.lower() + "/f/"
+            + import_secrets.secrets_user_uuid + "-"
+            + import_secrets.secrets_device_uuid + "/wificom-input")
+
+
+def load_mqtt():
+    """`wificom.mqtt`, with topics built from the credentials loaded now."""
+    from wificom import import_secrets
+    from wificom import mqtt
+    if getattr(mqtt, "_mqtt_topic_input", None) != _input_topic(import_secrets):
+        mqtt = importlib.reload(mqtt)
+    return mqtt
+
+
 class WiFiComService:
     """Runs the WiFiCom MQTT connection for the game.
 
@@ -139,24 +166,32 @@ class WiFiComService:
         self.last_error = None
         #: Set by the worker when it publishes; read for the status line.
         self.last_sent = None
-        #: The last ROM an app sent us, and what we answered with. Read by
-        #: the view so the player can see the exchange happening.
+        #: The last ROM an app sent us, and what we answered with.
         self.last_received = None
         self.last_result = None
-        #: How many ROMs we have answered this session.
+        #: How many ROMs the pet has answered this session.
         self.exchanges = 0
-        #: The pet a received ROM is played against. Set by the view.
+        #: The session: the pet a ROM is played against, the exact battle
+        #: format the player chose and the charge it fights with.
         self.pet = None
-        #: The battle format the Battle button opens with. Set by the view.
         self.battle_format = None
-        #: The battle in progress, if any, and the finished one waiting to be
-        #: picked up by the view.
-        self.battle = None
-        self.finished_battle = None
+        self.charge = 0
+        #: Why the last DigiROM went unanswered, for the view; cleared by it.
+        self.notice = None
 
         self._thread = None
         self._stop_event = threading.Event()
         self._outbox = queue.Queue()
+        self._incoming = None
+        self._incoming_lock = threading.Lock()
+        #: The format the envelope of the DigiROM being read named, if any.
+        self._envelope_format = None
+        #: Upstream's "a DigiROM is loaded": from a ROM until P, I or an
+        #: unreadable command. It pings only while none is.
+        self._loaded = False
+        #: A turn-2 ROM handed to the game and not played yet: the adapter
+        #: is listening for the toy, and reports each listen that times out.
+        self._listening = None
         self._client = None
         self._mqtt = None
 
@@ -165,7 +200,10 @@ class WiFiComService:
     def start(self):
         """Bring the service up. Returns False if it cannot even try."""
         if self._thread is not None and self._thread.is_alive():
-            return True
+            if not self._stop_event.is_set():
+                return True
+            # Still on its way out from a stop that did not wait.
+            self._thread.join(timeout=LOOP_TIMEOUT + 1.0)
 
         if not transport_available():
             self._fail("MQTT unavailable")
@@ -176,24 +214,37 @@ class WiFiComService:
             return False
 
         self.last_error = None
+        self.notice = None
+        self.exchanges = 0
+        self._loaded = False
+        self._listening = None
         self.state = STATE_CONNECTING
         self._stop_event.clear()
         # Drop anything queued while offline rather than sending it late.
         self._drain_outbox()
+        self.take_incoming()
         self._thread = threading.Thread(target=self._run, daemon=True,
                                         name="wificom-service")
         self._thread.start()
         runtime_globals.game_console.log("[WiFiCom] Service starting")
         return True
 
-    def stop(self):
-        """Take the service down and wait briefly for the worker to notice."""
+    def stop(self, wait=True):
+        """Take the service down.
+
+        Whatever is still queued -- the result of the battle that is about to
+        play -- is published on the way out. *wait* waits for that (up to one
+        loop of the socket); without it the worker finishes on its own, so
+        the battle can start without the game pausing for the network.
+        """
         self._stop_event.set()
         thread = self._thread
-        if thread is not None and thread.is_alive():
+        if wait and thread is not None and thread.is_alive():
             thread.join(timeout=LOOP_TIMEOUT + 1.0)
-        self._thread = None
+        if wait or thread is None or not thread.is_alive():
+            self._thread = None
         self.state = STATE_OFFLINE
+        self.take_incoming()
         runtime_globals.game_console.log("[WiFiCom] Service stopped")
 
     @property
@@ -210,8 +261,11 @@ class WiFiComService:
             return "Connecting..."
         if self.state == STATE_ONLINE:
             if self.rtb_active:
-                return "Battle invite received"
-            return "Waiting..."
+                code = self.rtb_invite_code
+                if code:
+                    return f"Real-time battle #{code} is not supported"
+                return "Real-time battles are not supported"
+            return "Online. Waiting for a DigiROM..."
         if self.state == STATE_ERROR:
             return self.last_error or "Connection failed"
         return "Offline"
@@ -230,58 +284,58 @@ class WiFiComService:
             return None
         return self._mqtt.rtb.invite_code
 
-    def set_pet(self, pet, battle_format=None):
-        """The pet an incoming DigiROM is played against."""
+    def set_pet(self, pet, battle_format, charge=0):
+        """The session: the pet, the exact battle format and its charge."""
+        from battle.sim import protocol_constants
         self.pet = pet
-        self.battle_format = battle_format
+        self.battle_format = protocol_constants.canonical_format(battle_format or "") or None
+        self.charge = charge or 0
 
-    def start_battle(self):
-        """Open a battle: we are the starter. Returns (True, digirom) or (False, why)."""
-        if self.state != STATE_ONLINE:
-            return False, "Not connected"
-        if self.pet is None or not self.battle_format:
-            return False, "No pet to battle with"
-        if self.battle is not None and not self.battle.complete:
-            return False, "A battle is already running"
+    # -- the game's side ----------------------------------------------------
 
-        from wificom.battle_session import WiFiComBattle
+    def take_incoming(self):
+        """The DigiROM waiting to be played, once, or None."""
+        with self._incoming_lock:
+            rom, self._incoming = self._incoming, None
+        return rom
 
-        try:
-            self.battle = WiFiComBattle(self.pet, self.battle_format, opens=True)
-            opening = self.battle.open()
-        except Exception as error:  # pylint: disable=broad-except
-            runtime_globals.game_console.log(f"[WiFiCom] Could not open: {error!r}")
-            self.battle = None
-            return False, "Could not build packets"
-        if not opening:
-            self.battle = None
-            return False, "Could not build packets"
+    def play(self, rom):
+        """Play *rom* against the session's pet and publish what came back.
 
-        self._outbox.put(opening)
-        runtime_globals.game_console.log(
-            f"[WiFiCom] Opening a {self.battle_format} battle: {opening}")
-        return True, opening
+        Called on the game's thread. Returns the `executor.Played`.
+        """
+        from wificom import executor
+        self._listening = None
+        played = executor.play(rom, self.pet, self.battle_format, self.charge)
+        self.exchanges += 1
+        self.last_result = played.result
+        self.publish(played.result)
+        return played
 
-    def take_finished_battle(self):
-        """The completed battle, once, for the view to hand to the scene."""
-        finished, self.finished_battle = self.finished_battle, None
-        return finished
+    def publish(self, output):
+        """Queue *output* for the worker to publish on the output topic."""
+        self._outbox.put(output)
 
-    # -- receiving ---------------------------------------------------------
+    # -- receiving (worker thread) -----------------------------------------
 
-    def _handle_command(self, mqtt, command):
+    def _handle_command(self, command):
         """Answer one thing an app published on our input topic.
 
-        Mirrors upstream's `process_new_digirom` / `execute_digirom`: a ROM
-        is played and its exchange published, and the two non-ROM commands
-        are answered with a string of their own. Anything unreadable is
-        published as the error rather than dropped -- going quiet is
-        indistinguishable from being offline.
+        Mirrors upstream's `process_new_digirom`: the two non-ROM commands
+        and anything unreadable are answered here with a string of their own
+        -- going quiet is indistinguishable from being offline. A ROM the
+        selected line cannot answer gets what the adapter would report with
+        nobody answering. Returns the output to publish now, or None when
+        the ROM went to the game to be played.
         """
         from wificom import digirom, executor
         from wificom.dmcomm_shim import CommandError
 
         self.last_received = command
+        envelope_format, self._envelope_format = self._envelope_format, None
+        # Whatever was loaded is replaced, as upstream replaces it.
+        self._loaded = False
+        self._listening = None
         try:
             rom = digirom.parse_command(command)
         except CommandError as error:
@@ -297,106 +351,64 @@ class WiFiComService:
                 return version.toml()
             return "NotImplementedError:op=" + rom.op
 
-        if self.pet is None:
-            runtime_globals.game_console.log("[WiFiCom] No pet selected to answer with")
-            return repr(CommandError("No pet selected"))
+        self._loaded = True
+        refusal = None
+        if self.pet is None or not self.battle_format:
+            refusal = "no pet selected"
+        elif envelope_format is not None:
+            from battle.sim import protocol_constants
+            named = protocol_constants.canonical_format(str(envelope_format))
+            if named != self.battle_format:
+                refusal = "the request is for %s, and this pet is on %s" % (
+                    envelope_format, self.battle_format)
+        if refusal is None:
+            refusal = executor.fits(rom, self.battle_format)
+        if refusal is not None:
+            self.notice = refusal
+            runtime_globals.game_console.log(f"[WiFiCom] Not answering {command}: {refusal}")
+            return executor.unanswered(rom, self.battle_format, refusal).result
 
-        # Every battle message goes through one path, whether it is a peer
-        # taking turns or an app that sent its whole side at once. Both end
-        # in a battle the player watches; only the shape of the reply
-        # differs, and that follows from how much they sent.
-        reply = self._continue_battle(command)
-        if reply is not None:
-            return reply
+        # Upstream replaces whatever ROM it had with a new one; so does this.
+        with self._incoming_lock:
+            self._incoming = rom
+        if rom.turn == 2:
+            self._listening = rom
+        runtime_globals.game_console.log(
+            "[WiFiCom] %s DigiROM for the pet: %s" % (self.battle_format, command))
+        return None
 
-        # Not a battle on any wire we know: answer it as a one-shot so an app
-        # still gets something readable back.
-        try:
-            return executor.execute(rom, self.pet)
-        except Exception as error:  # pylint: disable=broad-except
-            runtime_globals.game_console.log(f"[WiFiCom] Execute failed: {error!r}")
-            return repr(error)
+    def _on_input(self, mqtt, client, topic, message):
+        """The input topic's callback: note the envelope, then upstream's.
 
-    def _continue_battle(self, command):
-        """Advance a battle, or start answering one. None if it is not one."""
-        from battle.sim import protocol_constants
-        from wificom import digirom as digirom_module
-        from wificom.battle_session import WiFiComBattle, format_for
-
-        if self.battle is None or self.battle.complete:
-            battle_format = format_for(command, self.pet)
-            if not battle_format:
-                return None
-            self.battle = WiFiComBattle(self.pet, battle_format, opens=False)
-            # A message carrying a whole side at once is an app with a real
-            # WiFiCom behind it: it will not answer again, so it wants the
-            # executed exchange rather than a command to reply to.
-            try:
-                rom = digirom_module.parse_command(command)
-                expected = protocol_constants.get_wire(battle_format).PACKET_COUNT
-                self.battle.whole_side = len(rom) >= expected
-            except Exception:  # pylint: disable=broad-except
-                self.battle.whole_side = False
-            runtime_globals.game_console.log(
-                "[WiFiCom] Answering a %s battle%s"
-                % (battle_format, " (whole side)" if self.battle.whole_side else ""))
-
-        battle = self.battle
-        reply = battle.consume(command)
-        if battle.failed:
-            runtime_globals.game_console.log(f"[WiFiCom] Battle ended: {battle.failed}")
-            self.battle = None
-            return None
-
-        if battle.complete:
-            result = battle.result()
-            if result is not None:
-                self.exchanges += 1
-                self.finished_battle = (battle, result)
-                runtime_globals.game_console.log(
-                    "[WiFiCom] Exchange complete: %d packet(s) each way, playing it out"
-                    % battle.packet_count)
-            self.battle = None
-
-        if reply is None:
-            return None
-        # An app that sent everything reads an exchange; a peer reads a ROM.
-        if getattr(battle, "whole_side", False):
-            return battle.exchange_string()
-        return reply
-
-    # -- sending -----------------------------------------------------------
-
-    def send_battle(self, pet, battle_format):
-        """Queue this pet's battle packets for the worker to publish.
-
-        The DigiROM is built by the same `DComBattleSimulator` the DCom cable
-        battles use, under the format of the pet's own module, so a pet puts
-        the same bytes on the wire whichever way it reaches an opponent.
-
-        Returns (True, digirom) or (False, reason).
+        Upstream's callback raises on a message that is not JSON or lacks a
+        field it reads; on a WiFiCom that ends in its crash report. Here it
+        is logged and the connection kept.
         """
-        if self.state != STATE_ONLINE:
-            return False, "Not connected"
-
         try:
-            from battle.sim.dcom_battle_simulator import (DComBattleSimulator,
-                                                          pet_to_digimon)
-            # No controller: nothing here goes near a serial port, and
-            # packet generation does not use one.
-            simulator = DComBattleSimulator(None, battle_format=battle_format)
-            digimon = pet_to_digimon(pet, battle_format)
-            packets = simulator.generate_player_packets(digimon)
-            if not packets:
-                return False, "Could not build packets"
-            digirom = simulator.build_command(packets)
-        except Exception as e:  # pylint: disable=broad-except
-            runtime_globals.game_console.log(f"[WiFiCom] Packet build failed: {e}")
-            return False, "Could not build packets"
+            envelope = json.loads(message)
+        except (TypeError, ValueError):
+            envelope = None
+        if isinstance(envelope, dict) and envelope.get("digirom") is not None:
+            self._envelope_format = envelope.get(ENVELOPE_FORMAT_KEY)
+        try:
+            mqtt.on_app_feed_callback(client, topic, message)
+        except Exception as error:  # pylint: disable=broad-except
+            runtime_globals.game_console.log(
+                f"[WiFiCom] Unreadable request ignored: {error!r}")
+        # Upstream has just subscribed to a real-time battle's topic with its
+        # own callback, which raises the same way on a bad message.
+        rtb = mqtt.rtb
+        if rtb.active and rtb.host and rtb.topic:
+            client.add_topic_callback(rtb.host + "/f/" + rtb.topic,
+                                      lambda c, t, m: self._guarded(mqtt.on_realtime_battle_feed_callback, c, t, m))
 
-        self._outbox.put(digirom)
-        runtime_globals.game_console.log(f"[WiFiCom] Queued DigiROM: {digirom}")
-        return True, digirom
+    @staticmethod
+    def _guarded(callback, client, topic, message):
+        try:
+            callback(client, topic, message)
+        except Exception as error:  # pylint: disable=broad-except
+            runtime_globals.game_console.log(
+                f"[WiFiCom] Unreadable real-time battle message ignored: {error!r}")
 
     # -- worker ------------------------------------------------------------
 
@@ -404,10 +416,9 @@ class WiFiComService:
         """Connect, then service the socket until asked to stop."""
         try:
             from wificom import transport
-            # Imported here, not at module scope: mqtt.py builds its topics
-            # at import time from the credentials, which are only known to be
-            # loaded now.
-            from wificom import mqtt
+            # Not at module scope: mqtt.py builds its topics at import time
+            # from the credentials, which are only known to be loaded now.
+            mqtt = load_mqtt()
         except Exception as e:  # pylint: disable=broad-except
             self._fail(f"WiFiCom unavailable: {e}")
             return
@@ -423,55 +434,93 @@ class WiFiComService:
             runtime_globals.game_console.log(
                 f"[WiFiCom] Could not install the DigiROM parser: {error}")
 
+        # Upstream reports whether the WiFiCom has a screen; Omnipet's is the
+        # one showing this session.
+        try:
+            from wificom import version
+            version.set_display(True)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
         client = transport.create_client()
         if client is None:
             self._fail("No broker configured")
             return
 
         try:
-            if not mqtt.connect_to_mqtt(client):
-                self._fail("Login refused")
-                return
+            connected = mqtt.connect_to_mqtt(client)
         except Exception as e:  # pylint: disable=broad-except
             runtime_globals.game_console.log(f"[WiFiCom] Connect failed: {repr(e)}")
-            self._fail("Could not reach wificom.dev")
+            connected = False
+        if not connected:
+            # Upstream's connect_to_mqtt swallows the reason; the client
+            # remembers whether the broker refused the login or was never
+            # reached, which are different things to tell the player.
+            if getattr(client, "refused_code", None) is not None:
+                self._fail("Login refused: check secrets.json")
+            else:
+                self._fail("Could not reach wificom.dev")
             return
+        client.add_topic_callback(
+            mqtt._mqtt_topic_input,  # pylint: disable=protected-access
+            lambda c, t, m: self._on_input(mqtt, c, t, m))
 
         self._client = client
         self.state = STATE_ONLINE
         runtime_globals.game_console.log("[WiFiCom] Online")
+        from wificom import executor
 
         next_ping = 0.0
+        next_rtb_ping = 0.0
         try:
             while not self._stop_event.is_set():
-                # Anything the player asked to send goes first, so pressing
-                # Battle! is not held up behind a ping.
+                # Results first: the app is holding a request open for them.
                 sent_anything = self._flush_outbox(mqtt)
 
-                # Then anything an app sent us. Upstream reads this at the top
-                # of every loop; the reply is published immediately, because
-                # the app is holding a request open waiting for it.
                 command = mqtt.get_subscribed_output()
                 if command is not None:
                     runtime_globals.game_console.log(f"[WiFiCom] RX: {command}")
-                    result = self._handle_command(mqtt, command)
-                    self.last_result = result
-                    runtime_globals.game_console.log(f"[WiFiCom] TX: {result}")
-                    mqtt.send_digirom_output(result)
-                    self.last_sent = result
-                    sent_anything = True
+                    output = self._handle_command(command)
+                    if output is not None:
+                        self._send(mqtt, output)
+                        sent_anything = True
 
-                if not sent_anything and time.monotonic() >= next_ping:
-                    # Upstream pings with a null output to stay visible to
-                    # the website; an active battle pings on its own topic.
-                    mqtt.send_digirom_output("RTB" if mqtt.rtb.active else None)
-                    next_ping = time.monotonic() + PING_INTERVAL
+                now = time.monotonic()
+                if mqtt.rtb.active:
+                    # Upstream's heartbeat while it is in a real-time battle.
+                    if now >= next_rtb_ping:
+                        mqtt.send_digirom_output("RTB")
+                        next_rtb_ping = now + RTB_PING_INTERVAL
+                elif sent_anything:
+                    next_ping = now + PING_INTERVAL
+                elif now >= next_ping:
+                    if self._listening is not None:
+                        # A turn-2 ROM the toy has not started (BATTLE! not
+                        # pressed): the adapter's listen timed out.
+                        self._send(mqtt, executor.TIMEOUT_MARKER)
+                    elif not self._loaded:
+                        # Upstream pings with a null output to stay visible,
+                        # and only while no DigiROM is loaded -- a ping after
+                        # a result would stand in for it.
+                        mqtt.send_digirom_output(None)
+                    next_ping = now + PING_INTERVAL
 
                 mqtt.loop()
+                # A dropped connection does not raise here the way it does in
+                # minimqtt (upstream then reboots): paho reports it and
+                # carries on, so it has to be looked for, or the screen says
+                # "Online" over a dead socket.
+                if not client.is_connected():
+                    self._fail("Connection lost")
+                    break
         except Exception as e:  # pylint: disable=broad-except
             runtime_globals.game_console.log(f"[WiFiCom] Loop ended: {repr(e)}")
             self._fail("Connection lost")
         finally:
+            try:
+                self._flush_outbox(mqtt)
+            except Exception:  # pylint: disable=broad-except
+                pass
             try:
                 mqtt.quit_rtb()
             except Exception:  # pylint: disable=broad-except
@@ -484,19 +533,20 @@ class WiFiComService:
             if self.state == STATE_ONLINE:
                 self.state = STATE_OFFLINE
 
+    def _send(self, mqtt, output):
+        mqtt.send_digirom_output(output)
+        self.last_sent = output
+        runtime_globals.game_console.log(f"[WiFiCom] TX: {output}")
+
     def _flush_outbox(self, mqtt):
         """Publish everything queued. Returns True if anything went out."""
         sent = False
         while True:
             try:
-                digirom = self._outbox.get_nowait()
+                output = self._outbox.get_nowait()
             except queue.Empty:
                 return sent
-            if mqtt.rtb.active:
-                mqtt.send_rtb_digirom_output(digirom)
-            else:
-                mqtt.send_digirom_output(digirom)
-            self.last_sent = digirom
+            self._send(mqtt, output)
             sent = True
 
     def _drain_outbox(self):

@@ -37,6 +37,43 @@ def get_all_available_event_data() -> List[EventData]:
     return all_event_data
 
 
+def target_from_range(target_range) -> int:
+    """A quest's target drawn from its ``target_amount_range`` [min, max],
+    any whole number between them inclusive, as the Module Editor says
+    ("drawn between Min and Max"). It used to be ``random.choice`` of the
+    list, so [3, 5] gave 3 or 5 and never 4. A one-number range is that
+    number."""
+    values = [int(v) for v in target_range]
+    return random.randint(min(values), max(values))
+
+
+def roll_over_day(today=None) -> bool:
+    """Start a new day once the calendar date has changed: the XAI number is
+    drawn again and yesterday's quests are dropped (``ensure_daily_quests``
+    deals the new ones).
+
+    Checked when the main scene is built and about once a second while the
+    main scene or the Library is open: a game left on one screen past
+    midnight kept yesterday's quests until the main scene was rebuilt.
+    Returns whether the day changed."""
+    import datetime as _datetime
+    today = today or _datetime.date.today()
+    if game_globals.xai_date >= today:
+        return False
+    game_globals.xai = random.randint(1, 7)
+    game_globals.xai_date = today
+    game_globals.quests = []
+    runtime_globals.game_console.log(
+        f"[Quests] New day detected, XAI set to {game_globals.xai}, quests reset")
+    return True
+
+
+def ensure_daily_quests() -> None:
+    """Deal the day's quests when there are none."""
+    if game_globals.quests is None or len(game_globals.quests) == 0:
+        game_globals.quests = generate_daily_quests()
+
+
 def create_quest_instance_from_data(quest_data: QuestData, module_name: str) -> GameQuest:
     """
     Create a GameQuest instance from QuestData template.
@@ -52,8 +89,7 @@ def create_quest_instance_from_data(quest_data: QuestData, module_name: str) -> 
     target_amount = quest_data.target_amount or 1
     if quest_data.target_amount_range:
         if isinstance(quest_data.target_amount_range, list) and len(quest_data.target_amount_range) >= 1:
-            # For daily quests, we could randomize within the range
-            target_amount = random.choice(quest_data.target_amount_range)
+            target_amount = target_from_range(quest_data.target_amount_range)
     
     # Generate standardized quest name based on type and target amount
     quest_type_enum = QuestType(quest_data.type)

@@ -777,6 +777,8 @@ class SceneLogin:
             ui = omninet_service.get_user_info()
             if ui and ui.get('coins') is not None:
                 game_globals.coins = int(ui['coins'])
+                if ui.get('contribution_points') is not None:
+                    game_globals.contribution_points = int(ui['contribution_points'])
                 game_globals.save()
         except Exception:
             pass

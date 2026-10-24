@@ -411,6 +411,9 @@ class VirtualPetGame:
         state = runtime_globals.game_state
 
         scene_mapping = {
+            # The error screen's Retry, and its switch to Free Mode, start
+            # the boot again; without it here they did nothing.
+            "boot": SceneBoot,
             "egg": SceneEggSelection,
             "game": SceneMainGame,
             "settings": SceneSettingsMenu,

@@ -195,13 +195,14 @@ def force_outcome(encounter, win):
 
 
 def run_round(env, encounter, draw_every=1, max_frames=6000, win=None,
-              skip_battle=False, on_charge=None):
+              skip_battle=False, on_charge=None, skip_result=False):
     """Play one round of an adventure encounter until its result is dealt with.
 
     The player mashes the module's charge minigame (CHARGE_PRESS) and
     otherwise waits. *win* True/False settles the round (force_outcome);
     None leaves it to the battle. *skip_battle* presses B once the battle
-    animation starts, as a player may.
+    animation starts, as a player may; *skip_result* presses B on the
+    result screen.
 
     Returns a dict:
         victory   "Victory"/"Defeat" as the encounter decided it (None if never)
@@ -231,6 +232,8 @@ def run_round(env, encounter, draw_every=1, max_frames=6000, win=None,
                     encounter.handle_event((press, None))
                 charge = charge or _charge_instance(encounter, minigame)
             if phase == "battle" and skip_battle:
+                encounter.handle_event(("B", None))
+            if phase == "result" and skip_result:
                 encounter.handle_event(("B", None))
             encounter.update()
             if draw_every and (frame % draw_every == 0 or encounter.phase != phase):

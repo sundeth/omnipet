@@ -42,8 +42,17 @@ OTHER_COMMANDS = ("P", "I")
 #: A packet group: hex digits, possibly carrying adapter operators.
 _PACKET = re.compile(r"^[0-9A-F@^]+$", re.I)
 
+#: A Colour packet: eight 16-bit words, each four hex digits or one of the
+#: two word instructions dmcomm-python and the dmcomm firmware share --
+#: ``++++`` (the sum of the words before it in this packet) and ``____``
+#: (the same word of the packet just received).
+_COLOUR_PACKET = re.compile(r"^(?:[0-9A-F]{4}|\+{4}|_{4})+$", re.I)
+
 #: Digits an operator consumes, so a group's literal width can be measured.
 _OPERATOR = re.compile(r"[@^].", re.I)
+
+#: The Colour word instructions, for reading a packet's literal digits.
+_WORD_INSTRUCTION = re.compile(r"\+{4}|_{4}")
 
 
 class OtherCommand:
@@ -94,8 +103,8 @@ class DigiROM:
         """
         out = []
         for packet in self.packets:
-            literal = "@" not in packet and "^" not in packet
-            digits = _OPERATOR.sub("0", packet)
+            literal = not any(mark in packet for mark in "@^+_")
+            digits = _WORD_INSTRUCTION.sub("0000", _OPERATOR.sub("0", packet))
             try:
                 out.append((bytes.fromhex(digits), literal))
             except ValueError:
@@ -145,10 +154,116 @@ def parse_command(text):
     packets = [p for p in rest[1:].split("-") if p != ""]
     if not packets:
         raise CommandError("No packets: %s" % command)
+    pattern = _COLOUR_PACKET if signal_type == "C" else _PACKET
     for packet in packets:
-        if not _PACKET.match(packet):
+        if not pattern.match(packet):
             raise CommandError("Bad packet: %s" % packet)
         if literal_width(packet) % 2:
             raise CommandError("Packet is not whole bytes: %s" % packet)
 
     return DigiROM(signal_type, turn, packets)
+
+
+# ---------------------------------------------------------------------------
+# Resolving a packet the way the adapter does
+# ---------------------------------------------------------------------------
+#
+# A ROM's operators are the adapter's to work out, at the moment it sends the
+# packet, against what it has seen so far. Omnipet stands where the adapter
+# and the toy both stand, so it has to work them out exactly as the adapter
+# would -- these follow dmcomm's `makePacket` and `makeColorPacket`
+# (dmcomm-project/dmcomm/dmcomm.ino), which dmcomm-python matches:
+#
+# * ``^X`` XORs digit X with the same digit of **the packet just received**.
+#   That is the toy's packet at the same index when the toy opened (turn 2),
+#   and the one before it when the adapter opened (turn 1); before anything
+#   has arrived it is zero.
+# * ``@X`` is a check digit: it makes the sum of every digit the adapter has
+#   sent in this exchange, this packet included, come to X (mod 16). The
+#   running sum carries from packet to packet.
+# * A Colour packet's ``++++`` is the 16-bit sum of the words before it in
+#   that packet, and ``____`` copies the word in the same place of the packet
+#   just received (zero before anything has arrived).
+
+
+class AdapterState:
+    """What an adapter carries from one packet of a ROM to the next."""
+
+    def __init__(self):
+        #: The running digit sum the ``@`` check digit is taken against.
+        self.checksum = 0
+        #: The last packet received from the toy, as bytes, or None.
+        self.last_received = None
+
+
+def resolve_packet(signal_type, template, state):
+    """One packet of a ROM as the adapter puts it on the wire.
+
+    Returns the packet's hex digits, or None when the template cannot be
+    read (dmcomm prints ``s:?`` and stops). *state* is updated.
+    """
+    if signal_type == "C":
+        return _resolve_colour(template, state)
+    return _resolve_classic(template, state)
+
+
+def _resolve_classic(template, state):
+    width = literal_width(template)
+    received = state.last_received
+    if received is not None and len(received) * 2 == width:
+        digits = [int(c, 16) for c in received.hex()]
+    else:
+        digits = [0] * width
+    check_at = check_target = None
+    position = cursor = 0
+    text = template.upper()
+    while cursor < len(text):
+        if position >= width:
+            return None
+        character = text[cursor]
+        if character in "@^":
+            if cursor + 1 >= len(text) or text[cursor + 1] not in "0123456789ABCDEF":
+                return None
+            operand = int(text[cursor + 1], 16)
+            if character == "@":
+                check_at, check_target = position, operand
+            else:
+                digits[position] ^= operand
+            cursor += 2
+        else:
+            if character not in "0123456789ABCDEF":
+                return None
+            digits[position] = int(character, 16)
+            cursor += 1
+        if character != "@":
+            state.checksum = (state.checksum + digits[position]) & 0xF
+        position += 1
+    if check_at is not None:
+        digits[check_at] = (check_target - state.checksum) & 0xF
+        state.checksum = check_target
+    return "".join("%X" % digit for digit in digits)
+
+
+def _resolve_colour(template, state):
+    text = template.upper()
+    if len(text) % 4:
+        return None
+    received = state.last_received
+    words = []
+    total = 0
+    for at in range(0, len(text), 4):
+        token = text[at:at + 4]
+        if token == "++++":
+            word = total & 0xFFFF
+        elif token == "____":
+            index = at // 4
+            word = (int.from_bytes(received[index * 2:index * 2 + 2], "big")
+                    if received is not None and len(received) >= index * 2 + 2 else 0)
+        else:
+            try:
+                word = int(token, 16)
+            except ValueError:
+                return None
+        words.append(word)
+        total += word
+    return "".join("%04X" % word for word in words)

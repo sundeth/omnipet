@@ -153,9 +153,10 @@ class ShopModulesView:
                 price=mod.get('price', 0),
                 owned=owned,
                 installed=installed,
-                creator=mod.get('author', ''),
+                # Omninet names the author owner_nickname
+                creator=mod.get('author') or mod.get('owner_nickname', ''),
                 version=mod.get('version', '1.0'),
-                official=mod.get('official', False),
+                official=mod.get('official', mod.get('is_official', False)),
                 description=mod.get('description', ''),
                 size_mb=mod.get('size_mb', 0),
                 contributors=mod.get('contributors', ''),
@@ -481,7 +482,10 @@ class ShopModulesView:
                 success, message = omninet_service.purchase_item('module', item.id)
                 if success:
                     # Update local state
-                    game_globals.coins -= item.price
+                    # the balance the server left, not the listed price
+                    remaining = omninet_service.last_coins_remaining
+                    game_globals.coins = (remaining if remaining is not None
+                                          else game_globals.coins - item.price)
                     game_globals.purchases.add_module(item.id, item.name)
                     game_globals.save()
                     
@@ -491,6 +495,11 @@ class ShopModulesView:
 
                     # Refresh detail view
                     self._setup_detail_view(item)
+                    if item.price <= 0:
+                        # The free first module is spent: the list
+                        # still offered the others free (and kept the
+                        # coins they then cost on the server).
+                        self._refresh_prices()
                 else:
                     runtime_globals.game_sound.play("cancel")
                     # Failure shown via in-view label below; suppress global slide, 90)
@@ -501,6 +510,18 @@ class ShopModulesView:
         
         threading.Thread(target=do_purchase, daemon=True).start()
     
+    def _refresh_prices(self):
+        """Price the listed modules again from the server (network: call
+        off the main thread)."""
+        ok, modules = omninet_service.get_shop_modules()
+        if not ok or not self.shop_list:
+            return
+        prices = {m.get('id'): m.get('price') for m in modules or [] if isinstance(m, dict)}
+        for listed in self.shop_list.items:
+            if isinstance(prices.get(listed.id), int):
+                listed.price = prices[listed.id]
+        self.shop_list.needs_redraw = True
+
     def _set_action_button_text(self, text, enabled=False):
         """In-place update of the detail action button from any thread.
 

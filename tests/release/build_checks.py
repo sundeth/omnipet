@@ -141,15 +141,17 @@ class Checks:
         # "Version 1.0.0 Beta 3" does not stand in for the release.
         if not re.search(r"^\s*Version\s+" + re.escape(self.version) + r"\s*$", cl, re.M):
             self.add("DOC-03", "error", "Documentation/pages/changelog.html", f"no section for {self.version}")
+        # The generated pages live in utilities/<MODULE>/documentation/, out of
+        # the published module (owner, 2026-10-24; MOD-18 refuses them there).
         for m in RELEASE_MODULES:
             d = os.path.join(ROOT, "modules", m)
-            doc = os.path.join(d, "documentation", "index.html")
-            if not os.path.isfile(doc):
-                self.add("DOC-01", "error", m, "no generated documentation (documentation/index.html)")
+            doc_dir = os.path.join(ROOT, "utilities", m, "documentation")
+            if not os.path.isfile(os.path.join(doc_dir, "index.html")):
+                self.add("DOC-01", "error", m, "no generated documentation (utilities/%s/documentation/index.html)" % m)
                 continue
             data = [os.path.join(d, f) for f in os.listdir(d) if f.endswith(".json")]
             newest = max((os.path.getmtime(p) for p in data), default=0)
-            docs = [os.path.join(dp, f) for dp, _, fs in os.walk(os.path.join(d, "documentation")) for f in fs if f.endswith(".html")]
+            docs = [os.path.join(dp, f) for dp, _, fs in os.walk(doc_dir) for f in fs if f.endswith(".html")]
             built = max((os.path.getmtime(p) for p in docs), default=0)
             if built < newest:
                 import datetime
@@ -369,9 +371,15 @@ class Checks:
             for m in sorted(set(re.findall(r"(?:\.\.\\|[\"'])(utilities\\[^\"'\s)]+)", text))):
                 self.add("BLD-07", "warn", rel, f"copies {m.replace(chr(92), '/')} from the gitignored utilities/ "
                                                 "folder into the build (a clean checkout cannot build it)")
-            for m in sorted(set(re.findall(r"(?:\.\.\\|[\"'])(config\\[^\"'\s)]+)", text))):
+            # Every literal "..\X" a Copy-Item takes must exist (a failed copy
+            # does not stop the script: ModuleEditor.bat, removed 2026-03-28,
+            # was missing from two zips until 2026-10-24). dist\ is
+            # PyInstaller's own output.
+            for m in sorted(set(re.findall(r'Copy-Item\s+(?:-\w+\s+)*"\.\.\\([^"$*]+)"', text))):
+                if m.startswith("dist\\"):
+                    continue
                 if not os.path.exists(os.path.join(ROOT, m.replace("\\", os.sep))):
-                    self.add("BLD-07", "error", rel, f"copies {m.replace(chr(92), '/')}, which no longer exists (P-04)")
+                    self.add("BLD-07", "error", rel, f"copies {m.replace(chr(92), '/')}, which no longer exists")
         for spec in ("Omnipet.spec", "pyinstall.spec"):
             text = read(os.path.join(ROOT, spec)) or ""
             for bad in ("utilities", "tests", "tmp"):

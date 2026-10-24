@@ -183,9 +183,12 @@ def resolve(module_name, module, data, pets, rng=random, friends=None, pet=None)
     a scheduled event is for."""
     from models.game_event import EventType, GameEvent
     kind = int(data.type or 0)
+    # An item pool pays one of its items at random, drawn as the event happens.
+    pool = getattr(data, "item_pool", None)
+    item = rng.choice(pool) if pool else data.item
     if kind == EventType.ITEM_PACKAGE.value:
         return GameEvent(data.id, data.name, module_name, data.global_event, EventType.ITEM_PACKAGE,
-                         data.chance_percent, data.area, data.round, data.item, data.item_quantity)
+                         data.chance_percent, data.area, data.round, item, data.item_quantity)
     if kind == EventType.SHOP_ACCESS.value:
         return GameEvent(data.id, data.name, module_name, data.global_event, EventType.SHOP_ACCESS,
                          data.chance_percent, data.area, data.round, shop=data.shop,
@@ -203,7 +206,7 @@ def resolve(module_name, module, data, pets, rng=random, friends=None, pet=None)
             _log(f"[Events] {data.name}: area {data.area} has no special encounters")
             return None
         return GameEvent(data.id, data.name, module_name, data.global_event, EventType.BATTLE_RUN,
-                         data.chance_percent, data.area, rounds[0], data.item, data.item_quantity,
+                         data.chance_percent, data.area, rounds[0], item, data.item_quantity,
                          reward_round=data.reward_round)
     if kind == EventType.CARD_BATTLE.value:
         from utils import card_battle
@@ -422,10 +425,24 @@ def after_connection(results, opponent_device_version=None, battle_format=None):
         by_module.setdefault(getattr(pet, "module", None), []).append((pet, won))
     for module_name, entries in by_module.items():
         for pet, won in entries:
-            connect_points.award(pet, won)
+            connect_points.award(pet, won, battle="connection")
         won_any = any(won for _pet, won in entries)
         after_battle("connection", module_name, [p for p, _w in entries], won_any,
                      opponent_device_version, battle_format=battle_format)
+
+
+def after_adventure(module_name, pets, won, area=None):
+    """After an adventure battle: the Connect Points of each pet that fought
+    whose module counts adventure battles (``connect_points.battles``; the
+    Vital Bracelets' battle drops), then *module_name*'s "adventure" events.
+    Returns what `after_battle` returns."""
+    from utils import connect_points
+    for pet in pets or []:
+        try:
+            connect_points.award(pet, won, battle="adventure")
+        except Exception as exc:
+            _log(f"[Connect Points] adventure award failed: {exc}")
+    return after_battle("adventure", module_name, pets, won, area=area)
 
 
 def _announce(text):

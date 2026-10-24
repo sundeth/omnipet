@@ -73,7 +73,9 @@ class CountMatchZTraining(Training):
             # Let the minigame handle the input
             if self.count_match_z and self.count_match_z.handle_event(event):
                 self.press_counter = self.count_match_z.get_press_counter()
-                
+        elif self.phase == "charge" and event_type == "B":
+            # B (and the EXIT button, which sends it) leaves, as in Dummy.
+            self.quit_charge()
         elif self.phase in ["wait_attack", "attack_move", "impact"] and event_type in ["B", "START"]:
             # Skip to result phase
             runtime_globals.game_sound.play("cancel")

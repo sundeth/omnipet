@@ -133,6 +133,36 @@ those of 2026-10-13.
 - **Where:** `src/ui/components/pet_selector.py` (opt-in callback; other pickers unchanged), `arena_team_creation_view.py`.
 - **Test:** seen by `tests/arena_sim` (game instances tap a veteran).
 
+### ~~23. A shop item a module also defines counts once per module and only that module's Digimon can take it (ONL-01)~~ Fixed 2026-10-22: the inventory counts a module's own stock only, once per id; a shop stock of the same id joins it
+- **What:** Omninet sells the Vital Bracelets' NEXT and Battle Clocks under the ids VB, VBE and VH give them (Omninet `storage/items/items.json`; `modules/VB|VBE|VH/item.json`). `SceneInventory.load_inventory_items` read each module item's amount with `get_inventory_value`, which falls back to the shop purchases, and added it up per module: one bought clock showed x3, listed as VB's item, so only VB Digimon could take it. On the dev shop a Battle Clock bought for an Agumon went to a VB Digimon with full DP and was refused; the NEXT Clocks moved the VB Digimon's clock.
+- **Where:** `src/scenes/scene_inventory.py` (`load_inventory_items`).
+- **Test:** `test_online_shop_delivery.py::test_a_shop_item_a_module_also_defines_is_held_once_and_any_digimon_takes_it`; found buying every dev shop entry.
+
+### ~~24. Bought items show an empty square in the inventory (ONL-01)~~ Fixed 2026-10-22: the icon (`GET /shop/item/{id}/sprite`) is kept in the save at purchase and at the account sync (`module_utils.ensure_shop_item_icon`, `<save>/shop_items/`)
+- **What:** the inventory looked for `assets/items/<sprite_name>`; the game ships no shop icons and Omninet names them without ".png" (`icon_itm701`).
+- **Where:** `src/scenes/scene_inventory.py` (`_shop_item_icon`), `src/utils/module_utils.py`, `shop_items_view.py`.
+- **Test:** `test_online_shop_delivery.py::test_a_bought_items_icon_is_kept_and_drawn_in_the_inventory`.
+
+### ~~25. A bought background draws the splash screen (ONL-01)~~ Fixed 2026-10-22 on the client: a file the download leaves empty is saved from the shop's picture of the background (`GET /shop/cosmetic/{id}/sprite`); nothing is registered without a picture
+- **What:** Omninet's cosmetic download names `bg_<name>.png` but sends `""` for it (see the observation below); the view wrote the 0-byte file and registered it, Settings offered the background and `WindowBackground` fell back to `assets/Splash.png`. All 11 backgrounds of the dev shop. Until the server sends the files, a day/night background gets its day picture for both. `WindowBackground._shop_paths` also looked for `bg_bg_<name>` (Omninet lists the sprite as `bg_<name>`); it found the file only through its last-resort fallback.
+- **Where:** `src/scenes/connect_views/shop_cosmetics_view.py` (`_on_download`), `src/ui/windows/window_background.py`.
+- **Test:** `test_online_shop_delivery.py::test_a_background_whose_download_has_no_picture_still_draws`; the fake now mirrors the empty download (`FakeOmninet.download_pictures`) and the `bg_` listing.
+
+### ~~26. After the free first module the list still says "Free" (ONL-01)~~ Fixed 2026-10-22: every shop view takes the balance the server returns (`coins_remaining`, `OmninetService.last_coins_remaining`); the module list is priced again after a free purchase
+- **What:** module prices come from the listing loaded when the page opened. After the free first module every other one still read "Free"; the server charged the fixed 50 and the view subtracted the listed 0, so the game showed 50 coins more than the account until the next login. The detail page also never showed the author: the client read `author`/`official`, Omninet sends `owner_nickname`/`is_official`.
+- **Where:** `src/scenes/connect_views/shop_modules_view.py`, `shop_items_view.py`, `shop_cosmetics_view.py`, `shop_gameplay_view.py`, `src/services/omninet_service.py`.
+- **Test:** `test_online_shop_delivery.py::test_after_the_free_first_module_the_next_one_costs_its_price`.
+
+### ~~27. Module installs refused on Windows: "Access denied" (ONL-01)~~ Fixed 2026-10-22: the unpacked folder is renamed into place if Windows allows it within 1.5 s, else copied (`module_utils._move_into_place`); `load_modules` skips the `.installing` / `.replaced` work folders
+- **What:** 7 of the 15 dev shop modules (DMC, DMGZ, DMOG, PENOG, VB, VBE, VH) failed with `[WinError 5] Acesso negado: '<m>.installing' -> '<m>'`; the player saw "Error, try again", and trying again failed as often. A scanner or the search indexer holds the files a zip has just written: on this PC a fresh VB folder could not be renamed for 29 s and 51 s in two of three tries (`os.rename` alone, outside the game). A leftover work folder holding a module.json was also loaded as a module of the same name.
+- **Where:** `src/utils/module_utils.py` (`install_zip_into`, `load_modules`).
+- **Test:** `test_online_shop_delivery.py::test_a_module_installs_while_a_scanner_holds_its_new_files`.
+
+### ~~28. A shop item whose effect could not be fetched stays unusable, though a module defines it (ONL-01)~~ Fixed 2026-10-22 on the client: the inventory takes the definition of the module item with the same id (and its icon) when the shop's is missing
+- **What:** the game has a shop item's effect only from `GET /shop/download/item/{id}`, which Omninet answers 500 once the item was bought twice (see the observation below). On a new device or a fresh save, every clock bought twice was refused ("has no implemented effect"). All six items Omninet sells are the Vital Bracelets' clocks, under VB/VBE/VH's ids. Items no module defines stay without effect until the server is fixed.
+- **Where:** `src/scenes/scene_inventory.py` (`load_inventory_items`, `_shop_item_icon`).
+- **Test:** `test_online_shop_delivery.py::test_an_item_whose_download_fails_is_the_module_item_of_its_id`.
+
 ## Gaps in the shared harness (not game bugs)
 
 - ~~`tests/support/harness.py` does not redirect `OmninetService._credentials_path`.~~ Done 2026-10-13: `Env` points it into its save folder. The service is created at import, before `Env` patches the save folder, so its path is the cwd-relative `save/omninet_device.json`, the repository's own save folder: any test that logs in without `fake_omninet.isolate_client` writes the developer's real device key file. Suggest `Env.__init__` set `omninet_service._credentials_path = os.path.join(self.save_root, "omninet_device.json")`.
@@ -141,7 +171,9 @@ those of 2026-10-13.
 ## Observations (no failing test)
 
 - **Server: module downloads need no purchase.** `GET /api/v1/modules/{id}/download` (Omninet `routes/modules.py:305-331`) requires no device key and checks no ownership; the game uses it for paid downloads too, so any module can be fetched without buying it.
-- **Server: cosmetic downloads carry no image.** `services/shop.py:274-277` returns every sprite as `""` (TODO), so against production the client writes 0-byte PNGs. The fake sends real base64 PNGs, as the schema describes.
+- **Server: cosmetic and item downloads carry no image.** `services/shop.py` (`download_cosmetic`, `download_item`) returns every sprite as `""` (TODO), and names only `bg_<name>.png` (and `_night`), not the `_high` files the storage holds. The client now falls back to the sprite endpoint (finding 25); the fake mirrors the empty answer (`download_pictures=True` for a server that sends them).
+- **Server: an item bought twice cannot be downloaded (2026-10-22, dev).** `GET /shop/download/item/{id}` answers 500 `MultipleResultsFound` ("Multiple rows were found when one or none was required") once the account has two purchase rows of the item: `ShopService.user_owns_item` uses `scalar_one_or_none()`, and items are bought again and again since 55412a0. The game reads an item's effect only from that download (the listing has none), so on a new device or a fresh save an item bought twice stays without effect and the inventory refuses it. Fix on Omninet: `.limit(1)` / `scalars().first()` in `user_owns_item`, or `json_data` in the item listing.
+- **Data: Count Bar and RPM cannot be bought (2026-10-22, dev).** Progress Mode offers only owned minigames (`SceneTraining.owns_training_mode`); `TRAINING_GAMEPLAY_IDS` has Count Bar (`...0008`) and RPM (`...0009`). Omninet's `storage/gameplay/gameplay.json` in git has Count Bar, the copy deployed for dev (`appdata/omninet/dev/gameplay/gameplay.json`, 2026-01-17) does not, and neither has RPM, the iC's battle minigame: on dev neither can ever be played in Progress Mode.
 - **Specials** is a "Coming Soon" placeholder; `GET /shop/specials` is never called.
 - Any HTTP 200 on `/health` (a captive-portal page) reads as "Omninet available"; the screens then fail gracefully.
 - Shop and arena workers rebuild components and call `change_view` from background threads while the main thread draws. The tests avoid the race by waiting without frames; a crawler should do the same.

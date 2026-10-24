@@ -23,7 +23,7 @@ from ui.components.button import Button
 from utils.asset_utils import image_load
 from utils.module_utils import get_module
 from utils.pygame_utils import blit_with_cache, get_font
-from utils.xros_utils import load_form_sprite
+from utils.xros_utils import load_form_sprite, xros_cost
 
 
 class XrosSelector:
@@ -72,8 +72,13 @@ class XrosSelector:
                 base = pygame.transform.scale(base, (sprite_size, sprite_size))
             option_sprites.append(base)
 
+            # A form that costs DP (`xros_cost`) shows it above its name.
+            option_costs = [None]
             for evo in options:
                 option_names.append(evo.get("to", "?"))
+                cost = xros_cost(evo)
+                option_costs.append(
+                    self.font.render(f"DP {cost}", True, (255, 220, 0)) if cost else None)
                 sprite = load_form_sprite(module, evo.get("to"),
                                           PetFrame.IDLE1.value, sprite_size)
                 option_sprites.append(sprite)
@@ -94,6 +99,7 @@ class XrosSelector:
                 "sprites": option_sprites,
                 "labels": [self.font.render(nm, True, (255, 255, 255))
                            for nm in option_names],
+                "costs": option_costs,
                 "index": 0,
                 "rect": rect,
                 "left_rect": pygame.Rect(rect.x - pad - arrow_w,
@@ -258,6 +264,10 @@ class XrosSelector:
             lx = rect.x + (rect.width - label.get_width()) // 2
             ly = rect.bottom - label.get_height() - int(4 * scale)
             blit_with_cache(surface, label, (lx, ly))
+            cost = entry["costs"][entry["index"]]
+            if cost is not None:
+                blit_with_cache(surface, cost, (rect.x + (rect.width - cost.get_width()) // 2,
+                                                ly - cost.get_height()))
 
             # Selection arrows on the focused box sides (theme colors)
             if focused:

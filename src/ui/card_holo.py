@@ -7,7 +7,8 @@ the card's artwork, the way a real holo card shimmers as it turns in the
 light. Only the art window is covered; the frame and border stay as printed.
 
 The foil is the shard texture `assets/ui/Card_Holo.png` (160x160, scaled down
-from the owner's texture, 2026-10-20) with its contrast raised, multiplied by
+from the owner's texture, 2026-10-20; owner, 2026-10-21: "the sprite license
+is free") with its contrast raised, multiplied by
 a diagonal rainbow with one brighter glint band, and added onto the art
 (BLEND_RGB_ADD) at HOLO_STRENGTH. Each frame of the sweep is made the first
 time it shows, once per art-window size, and kept, so drawing a holo card

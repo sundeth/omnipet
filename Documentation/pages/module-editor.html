@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+  <meta charset="UTF-8">
   <title>Module Editor - Omnipet Documentation</title>
   <link rel="stylesheet" href="../assets/main.css">
 </head>
@@ -9,702 +10,1094 @@
 <body>
   <div class="page-content">
     <div class="page-header">
-      <h1 class="page-title">Module Editor</h1>
-      <p class="page-subtitle">Create and customize your own Omnipet modules</p>
-    </div>
-
-    <div class="content-section">
-      <h2 class="section-title" onclick="toggleSection(this)">System Requirements<span class="arrow">▼</span></h2>
-      <div class="section-content" style="display:none;">
-        <p>These are the minimum system requirements to run the Module Editor:</p>
-        <ul style="list-style: none; padding: 0; margin-top: 20px;">
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            Windows 7 SP1, 8, 8.1, 10 or 11
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            NET Framework 4.7.2 or higher
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            200 MB of free disk space
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            1 GB of RAM
-          </li>
-        </ul>
+      <div class="page-header-text">
+        <h1 class="page-title">Module Editor</h1>
+        <p class="page-subtitle">Every window, tab and field of the editor that creates and edits Omnipet modules.</p>
       </div>
     </div>
 
-    <div class="content-section">
-      <h2 class="section-title" onclick="toggleSection(this)">Getting Started with the Editor<span
-          class="arrow">▼</span></h2>
-      <div class="section-content" style="display:none;">
-        <div style="text-align: center;"><img src="../assets/Editor1.PNG" alt="Getting Started with the Module Editor">
-        </div>
-        <p>After starting the editor you should be presented with a list of avaliable modules, if not then use the
-          button "Find" and locate the folder "modules" in your Omnipet Installation Directory.</p>
-        <p>If you get errors, make sure you selected the root folder of the modules, not the modules themselves.</p>
-        <p>When creating a new module, you will be asked to set a name for it, this name will be used as the folder
-          name, make sure you don't use invalid characters. Double click a module or select and click "Edit" to edit a
-          module.</p>
-        <p>Don't forget to save your changes and make backups!</p>
-        <p>The "Remove" button will permanently delete the selected module, so use it with caution.</p>
-      </div>
-    </div>
+    <nav class="page-toc">
+      <a href="#start">Getting started</a>
+      <a href="#window">Main window</a>
+      <a href="#module">Module</a>
+      <a href="#device">Device</a>
+      <a href="#pet">Pet</a>
+      <a href="#evolutions">Evolutions</a>
+      <a href="#battle">Battle</a>
+      <a href="#item">Item</a>
+      <a href="#shop">Shop/Currencies</a>
+      <a href="#collection">Collection</a>
+      <a href="#quests">Quests/Events</a>
+      <a href="#passwords">Passwords</a>
+      <a href="#tools">Report and documentation</a>
+      <a href="#omninet">Omninet</a>
+      <a href="#database">Digimon Database</a>
+    </nav>
 
-    <div class="content-section">
-      <h2 class="section-title" onclick="toggleSection(this)">Main View<span class="arrow">▼</span></h2>
-      <div class="section-content" style="display:none;">
-        <div style="text-align: center;"><img src="../assets/MainPageEditor.png"></div>
-        <ul style="list-style: none; padding: 0; margin-top: 20px;">
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">1</span>
-            The tab controls are used to navigate between different sections of the module editor.
-            <ul style="list-style: none; padding: 0; margin-top: 10px;">
-              <li style="margin-bottom: 5px;"><strong>Module</strong> - General information, unlocks and backgrounds
-              </li>
-              <li style="margin-bottom: 5px;"><strong>Pet</strong> - The pets and their evolution lines</li>
-              <li style="margin-bottom: 5px;"><strong>Battle</strong> - The module's adventure mode</li>
-              <li style="margin-bottom: 5px;"><strong>Item</strong> - The item editor</li>
-            </ul>
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">2</span>
-            The main editor area where you can edit the content of the selected tab.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">3</span>
-            This is the main buttons panel.
-            <ul style="list-style: none; padding: 0; margin-top: 10px;">
-              <li style="margin-bottom: 5px;"><strong>Save</strong> - Save data from all tabs into the disk.</li>
-              <li style="margin-bottom: 5px;"><strong>Cancel</strong> - Moves back to the Mod Selection form, this loses
-                all changes not saved to the module.</li>
-              <li style="margin-bottom: 5px;"><strong>Generate Documentation</strong> - Overrides the module's
-                documentation files using the currently saved data. Changes not yet saved are ignored.</li>
-            </ul>
-          </li>
-        </ul>
-      </div>
-    </div>
+    <!-- ============================================================ start -->
+    <div class="content-section" id="start">
+      <h2 class="section-title">Getting started</h2>
+      <div class="section-content">
+        <p>A module is a folder inside the game's <code>modules</code> folder: JSON files that describe a device
+          (its Digimon, evolutions, care rules, battles and items) plus its sprites. The Module Editor edits those files.
+          It runs on Windows with the .NET Framework 4.8.</p>
 
-    <div class="content-section">
-      <h2 class="section-title" onclick="toggleSection(this)">Module Editor Tab - Main<span class="arrow">▼</span></h2>
-      <div class="section-content" style="display:none;">
-        <div style="text-align: center;"><img src="../assets/ModuleTab.png"></div>
-        <h3>Guide to Main Tab Fields</h3>
-        <ul style="list-style: none; padding: 0; margin-top: 20px;">
-          <!-- Sprites -->
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Flag:</strong><br>
-            This sprite will be used as a mark on all pets of this module, displayed on the pet's status window, Party
-            Box, and Freezer Box. Standard size is 48x48.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Logo:</strong><br>
-            The module's logo image sprite, used in the Egg Selection Scene. Standard size is 480x240, file named
-            <code>logo.png</code>.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>BattleIcon:</strong><br>
-            This sprite is used in the Battle Menu for the module's adventure mode. Default size is 48x48, recommended
-            to use a square sprite.
-          </li>
-          <!-- General Info -->
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Name:</strong><br>
-            The module's display name.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Version:</strong><br>
-            The module's version number.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Description:</strong><br>
-            The module's description text.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Author:</strong><br>
-            The module's author name.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Name Format:</strong><br>
-            Template string for pet sprite folder names. '$' is replaced with the pet's name. Example:
-            <code>$_dmc</code> creates folders like <code>Agumon_dmc</code>.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Sprite Storage Format:</strong><br>
-            Defines how pet sprites are stored. Options include individual directories or ZIP files for better organization and compression.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Evolution Requirements:</strong><br>
-            Sets the complexity and types of evolution criteria available in this module. Affects which evolution conditions can be used.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Battle System Version:</strong><br>
-            Defines which battle mechanics and features are available. Newer versions support PvP battles and advanced combat features.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Ruleset:</strong><br>
-            Defines the type of mini-game used in the module's Adventure Mode and the way traited eggs are obtained.
-            Also defines the bonuses for power.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Adventure Mode:</strong><br>
-            Enables or disables adventure mode gameplay features. Required to add the module's Adventure Mode to the
-            Battle Menu.
-          </li>
-          <!-- Care Meat -->
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Meat Weight Gain:</strong><br>
-            Weight increase when feeding meat/hunger food. Applied only to pets above stage 1 and below 99 weight.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Meat Hunger Gain:</strong><br>
-            Amount of hunger restored per meat feeding. Pets can't eat when hunger equals stomach capacity or during
-            overfeed timer.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Meat Care Mistake Time:</strong><br>
-            Minutes of empty hunger before triggering a care mistake. Timer resets when pet is fed.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Overfeed Timer:</strong><br>
-            Minutes pet refuses food after trying to overfeed. During this time, pet will display 'nope' animation when
-            offered food.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Condition Heart:</strong><br>
-            When enabled, uses condition hearts system instead of mistake counter. Each care mistake reduces condition
-            hearts.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Can Eat Sleeping:</strong><br>
-            Allows pets to eat food while in nap state. When disabled, feeding attempts during sleep hours will fail.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Back To Sleep Time:</strong><br>
-            Minutes before pet automatically returns to sleep after being woken up during sleep hours.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Enable Shaken Egg:</strong><br>
-            Allows eggs to be "shaken" (shake_counter &gt;= 99) for evolution bonuses.
-          </li>
-          <!-- Care Protein -->
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Protein Weight Gain:</strong><br>
-            Weight increase when feeding protein/strength food. Applied only to pets above stage 1 and below 99 weight.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Protein Strengh Gain:</strong><br>
-            Amount of strength restored per protein feeding. Also added when training.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Protein Dp Gain:</strong><br>
-            DP is your stamina, gained every 4th protein feeding, if current DP is below maximum energy.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Protein Care Mistake Time:</strong><br>
-            Minutes of empty strength before triggering a care mistake. Timer resets when pet receives protein.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Protein Overdose Max:</strong><br>
-            Maximum protein overdose counter that affects battle sick chance. Each protein feeding increases overdose.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Protein Penalty:</strong><br>
-            Protein Penalty affects battle sick chance. Determines the amount of each penalty for Protein Overdose in percent.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Disturbance Penalty Max:</strong><br>
-            Maximum penalty from sleep disturbances that affects battle sick chance. Each disturbance adds 2 to penalty.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Sleep Care Mistake Timer:</strong><br>
-            Minutes of sleep deprivation before triggering a care mistake.
-          </li>
-          <!-- Training -->
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Training Effort Gain:</strong><br>
-            Effort points gained when winning training sessions. At 16+ effort, pets gain significant power bonuses.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Training Strengh Gain:</strong><br>
-            Strength increase from training sessions (both win and lose).
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Training Weight Win:</strong><br>
-            Weight loss when winning training.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Training Weight Lose:</strong><br>
-            Weight loss when losing training.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Traited Egg Starting Level:</strong><br>
-            Initial level for pets hatched from traited eggs. Higher levels provide stat bonuses.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Reverse Atk Frames:</strong><br>
-            Swaps attack animation frames (ATK1↔ATK2, TRAIN1↔TRAIN2) during sprite loading.
-          </li>
-          <!-- Battle -->
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Battle Base Sick Chance Win:</strong><br>
-            Percentage chance a won battle injures the pet (Skull). A battle never makes a pet sick.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Battle Base Sick Chance Lose:</strong><br>
-            Percentage chance a lost battle injures the pet (Skull), plus the protein and disturbance penalties.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Injury Chance Step:</strong><br>
-            Points a form's Injury Probability rises after each lost battle and falls after each won one
-            (1 on the Digivice iC). Each form starts from its own; 0 keeps it fixed.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Battle Atribute Advantage:</strong><br>
-            Percentage advantage when pet's attribute matches favorably against enemy.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Battle Global Hit Points:</strong><br>
-            When &gt; 0, makes the module ignore pets' individual Health Points.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Battle Sequential Rounds:</strong><br>
-            Controls battle area progression mechanics. When enabled, battles progress through rounds sequentially.
-          </li>
-          <!-- Death -->
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Max Injuries:</strong><br>
-            Injuries (Skull) in one form that kill: battles, and the causes whose effect is Skull. 0: none.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Max Sicknesses:</strong><br>
-            Sicknesses (Dots) in one form that kill, counted apart from injuries: the causes whose effect is Dots
-            (poop, 99g, sleep disturbances). 0: none.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Care Mistake:</strong><br>
-            Total care mistakes before death. Includes hunger, strength, sleep, and sickness mistakes.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Sick Timer:</strong><br>
-            Minutes a sickness (Dots) may go untreated, awake, before the pet dies.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Injury Timer:</strong><br>
-            Minutes an injury (Skull) may go untreated, awake, before the pet dies.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Care Can Battle / Train While Injured:</strong><br>
-            The same as While Sick, for an injured pet.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Hunger Timer:</strong><br>
-            Minutes of empty hunger before death.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Starvation Count:</strong><br>
-            Number of hunger depletion cycles before death.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Strength Timer:</strong><br>
-            Minutes of empty strength before death.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Stage45 Mistake:</strong><br>
-            Mistakes threshold for stage 4-5 pets after evolution time expires.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Stage67 Mistake:</strong><br>
-            Mistakes threshold for stage 6+ pets after 48 hours of age.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Save By:</strong><br>
-            How a dying pet can be saved: B presses, shakes, or Nothing (it dies).
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Save Amount:</strong><br>
-            Presses or shakes the save needs.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Save Time:</strong><br>
-            Seconds to make them in. Out of time, the pet dies.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px;">
-            <strong>Death Save Chance:</strong><br>
-            Chance (%) the pet lives once they are made: 100 on most devices, 5 on the Digivice iC.
-          </li>
-        </ul>
-      </div>
-    </div>
+        <h3>Module selector</h3>
+        <img class="shot free" src="../assets/editor/editor_selector.png" alt="Module selector listing the modules folder">
+        <p>The editor opens on the module selector, which lists the folders of the modules folder. On the first run it
+          lists the <code>modules</code> folder next to the editor's <code>Module Editor</code> folder; the folder chosen
+          with Find... is remembered.</p>
+        <table class="data-table">
+          <thead><tr><th>Control</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>Path box</td><td>The modules folder being listed.</td></tr>
+            <tr><td>Find...</td><td>Picks the modules folder. Choose the folder that holds the modules, not a module itself.</td></tr>
+            <tr><td>List</td><td>One line per module folder. Double-click opens the module.</td></tr>
+            <tr><td>Add</td><td>Asks for a folder name ("Module folder name:"), creates the folder with a <code>module.json</code> from the editor's template, its Name set to the folder name, and opens it. An existing folder is refused ("Module already exists.").</td></tr>
+            <tr><td>Remove</td><td>Deletes the selected folder and everything in it, after a confirmation. It cannot be undone.</td></tr>
+            <tr><td>Edit</td><td>Opens the selected module.</td></tr>
+          </tbody>
+        </table>
+        <div class="warning">The editor writes straight into the module folder, and several buttons write at once (see
+          <a href="#window">Saving</a>). Keep a copy of a module before large changes.</div>
 
-    <div class="content-section">
-      <h2 class="section-title" onclick="toggleSection(this)">Module Editor Tab - Unlocks<span class="arrow">▼</span>
-      </h2>
-      <div class="section-content" style="display:none;">
-        <div style="text-align: center;"><img src="../assets/EditorUnlocks.PNG"></div>
-        <p>Here its possible to manage in-game secrets and unlocks for your module.</p>
-        <p>Use the Add/Remove buttons to change the number of unlocks in the table. Click a cell to edit its value.</p>
-        <ul style="list-style: none; padding: 0; margin-top: 20px;">
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Name:</strong> This is the internal key for the unlock, it needs to be unique inside a module.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Label:</strong> The display name for the unlock, this is what will be shown in the game in the
-            Unlocks section of the Settings Menu.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Type:</strong> The type defines in which part of the game the unlock can be obtained.
-            <ul style="list-style: none; padding: 0; margin-top: 10px;">
-              <li style="margin-bottom: 5px;"><strong>Egg</strong> - Obtained through hatching an egg of a specific
-                version. Ignores Area, Amount and To.</li>
-              <li style="margin-bottom: 5px;"><strong>Adventure</strong> - Obtained by defeating the boss in the
-                module's adventure mode of a specific area. Ignores Version, Amount and To.</li>
-              <li style="margin-bottom: 5px;"><strong>Evolution</strong> - Obtained by reaching a specific evolution
-                stage. Ignores Version, Area and Amount.</li>
-              <li style="margin-bottom: 5px;"><strong>Digidex</strong> - Obtained by discovering a certain number of
-                unique pets. Ignores Version, Area and To.</li>
-              <li style="margin-bottom: 5px;"><strong>Versus</strong> - Obtained by participating in or winning versus battles. Unlocks content related to competitive battle modes.</li>
-              <li style="margin-bottom: 5px;"><strong>PvP</strong> - Obtained by winning Player vs Player battles. Requires specific numbers of PvP victories.</li>
-              <li style="margin-bottom: 5px;"><strong>Group</strong> - Obtained through group activities or multi-pet requirements. Unlocks content requiring multiple pets.</li>
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Version:</strong> The requirements that must be met to obtain the unlock.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Area:</strong> The area where the unlock can be obtained.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Amount:</strong> The number of records needed to obtain the unlock.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>To:</strong> The unlock can be obtained by reaching a specific evolution stage.
-          </li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="content-section">
-      <h2 class="section-title" onclick="toggleSection(this)">Module Editor Tab - Backgrounds<span
-          class="arrow">▼</span></h2>
-      <div class="section-content" style="display:none;">
-        <div style="text-align: center;"><img src="../assets/EditorBackgrounds.PNG"></div>
-        <p>Here you can manage the backgrounds of your module, including their properties and settings.</p>
-        <p>Use the Add/Remove buttons to change the number of backgrounds in the table. Click a cell to edit its value.
-        </p>
-        <p>Use Refresh to validate the background list - there are 2 validations checked:</p>
-        <ul style="list-style: none; padding: 0; margin-top: 20px;">
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            Does the background have a HiDefinition version? (Optional)
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            Does the background have a valid sprite? (Required) A valid sprite is named as
-            <code>bg_NAME(_day/_dusk/_night)(_high)</code>
-            and is located in the background folder.
-          </li>
-          <p>Use "Import" to load an existing background asset into the editor. If the file is named with background
-            expected naming conventions, it will be imported with its settings already configured.
-          </p>
-          <ul style="list-style: none; padding: 0; margin-top: 20px;">
-            <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-              <span style="position: absolute; left: 0; color: #667eea;">•</span>
-              <strong>Name:</strong> The name of the background, this is used directly to get the background file inside
-              the module. Don't use special characters and make it unique.
-            </li>
-            <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-              <span style="position: absolute; left: 0; color: #667eea;">•</span>
-              <strong>Label:</strong> The display name of the background, this is what will be shown in the game in the
-              Backgrounds section of the Settings Menu.
-            </li>
-            <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-              <span style="position: absolute; left: 0; color: #667eea;">•</span>
-              <strong>Day/Night:</strong> If enabled, the game will expect different background sprites for day, dusk,
-              and night, they should be named with _day/_dusk/_night suffix.
-            </li>
-          </ul>
-          <p>Examples:</p>
-          <ul>
-            <li><code>bg_forest</code> - A simple background without support for different times of day (Day/Night off).
-            </li>
-            <li><code>bg_forest_day</code> - The day version of the forest background.</li>
-            <li><code>bg_forest_dusk</code> - The dusk version of the forest background.</li>
-            <li><code>bg_forest_night</code> - The night version of the forest background.</li>
-            <li><code>bg_forest_high</code> - The high definition version of the forest background.</li>
-          </ul>
-      </div>
-    </div>
-
-    <div class="content-section">
-      <h2 class="section-title" onclick="toggleSection(this)">Pet Editor Tab<span class="arrow">▼</span></h2>
-      <div class="section-content" style="display:none;">
-        <div style="text-align: center;"><img src="../assets/EditorPet1.PNG"></div>
-        <p>Here you can manage the pets of your module, including their evolution lines and properties.</p>
-        <p>To the left, you will see a list of all pets in the module, select an existing pet to edit its properties. Or
-          use buttons Add, Remove, Copy, Paste.</p>
-        <img src="../assets/EditorNewPet.gif">
-        <p>To create a new pet the easy way, you can follow these steps:</p>
-        <ol>
-          <li><span style="position: absolute; left: 0; color: #667eea;">•</span>Click in Add.</li>
-          <li><span style="position: absolute; left: 0; color: #667eea;">•</span>Select the desired stage for the new
-            pet. The stage selection creates a new pet from a template, all values can be changed afterwards.</li>
-          <li><span style="position: absolute; left: 0; color: #667eea;">•</span>Fill the name of the new pet.</li>
-          <li><span style="position: absolute; left: 0; color: #667eea;">•</span>Click on Save! All other
-            functionalities work only on saved pets!</li>
-          <li><span style="position: absolute; left: 0; color: #667eea;">•</span>Click the Download button, it copy the
-            saved pet's name to the clipboard and open the sprite database (https://dmc-sprite-database.vercel.app/)
-          </li>
-          <li><span style="position: absolute; left: 0; color: #667eea;">•</span>Press Ctrl+V to paste the pet's name in
-            the search bar.</li>
-          <li><span style="position: absolute; left: 0; color: #667eea;">•</span>Click on Download on the sprite pack of
-            your choice.</li>
-          <li><span style="position: absolute; left: 0; color: #667eea;">•</span>Go back to the Editor and click
-            "Import". If done correctly, the sprites will be loaded.</li>
-          <li><span style="position: absolute; left: 0; color: #667eea;">•</span>Customize the stats as needed. And
-            click on save to apply the changes.</li>
+        <h3>Making a module</h3>
+        <ol class="steps">
+          <li>In the selector, Add a module and name its folder.</li>
+          <li>On the Module tab, set the name, the three images and the device's rules (care, battle, death).</li>
+          <li>On the Pet tab, Add each Digimon, starting with the egg (stage 0), and give each its sprites.</li>
+          <li>Open Edit Evolutions and draw the evolution routes; set each route's requirements and order.</li>
+          <li>Add the adventure enemies on the Battle tab, and the unlocks and backgrounds on the Module tab.</li>
+          <li>Save (Ctrl+S), then run Tools &gt; Module Report and fix what it lists.</li>
+          <li>Documentation &gt; Create Documentation writes the module's guide.</li>
         </ol>
-        <p>Here's a list of pet properties you can edit:</p>
-        <ul style="list-style: none; padding: 0; margin-top: 20px;">
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Name:</strong> The name of the pet. Used for sprite folder lookup. Must be unique and not contain
-            special characters.
-          </li>
-          
-          <div class="feature-card" style="margin: 20px 0; padding: 15px; background-color: #f0f8ff; border-left: 4px solid #667eea;">
-            <h4 style="margin-top: 0; color: #667eea;">📦 Sprite Storage Formats</h4>
-            <p><strong>Important:</strong> Pet sprites can now be stored in multiple formats:</p>
-            <ul style="margin: 10px 0;">
-              <li><strong>Directory Format:</strong> Traditional folder structure (e.g., <code>Agumon_dmc/</code> containing individual PNG files)</li>
-              <li><strong>ZIP Format:</strong> Compressed archive (e.g., <code>Agumon_dmc.zip</code> containing all sprite frames)</li>
-              <li><strong>Fallback System:</strong> The game automatically checks module folders first, then falls back to global assets folder</li>
-            </ul>
-            <p>The editor and game support both formats seamlessly. ZIP files offer better organization and smaller file sizes.</p>
-          </div>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Stage:</strong> Evolution stage: 0=Egg, 1=Baby, 2=Baby II, 3=Child, 4=Adult, 5=Perfect, 6=Ultimate,
-            7=Super, 8=Super+.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Version:</strong> Version roster this pet belongs to. Different versions may have different
-            evolution paths and requirements.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Time:</strong> Evolution timer in hours. Pet evolves when this time expires (if evolution
-            requirements are met).
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Attribute:</strong> Pet's attribute: Free, Data, Virus, or Vaccine. Determines type advantage in
-            battle (Data > Virus > Vaccine > Data).
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Energy:</strong> Maximum DP (energy) capacity. DP is consumed during battles and training.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Sleeps:</strong> Sleep start time (HH:mm). Pet will call to be put to sleep at this time.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>ATK Main:</strong> Primary attack animation ID. Used for main battle attacks and training.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Wakes:</strong> Wake up time (HH:mm). Pet will wake automatically at this time.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>ATK Alt:</strong> Alternative attack animation ID. Used for secondary attacks or special moves.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Power:</strong> Base battle power. Higher power increases damage output and battle effectiveness.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>HP:</strong> Health Points. Higher HP allows the pet to survive more damage in battles. If set to 0,
-            default values will be used.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Hunger Loss:</strong> Rate of hunger depletion over time (in minutes). Hunger will decrease by 1 at
-            this interval.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Stomach:</strong> Hunger capacity. Determines how much food the pet can eat before becoming full.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Strength Loss:</strong> Rate of strength depletion over time (in minutes). Strength affects power
-            and evolution.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Min Weight:</strong> Minimum weight threshold. Weight can cause sickness when it reaches 99g. Can be
-            lost through training, but never below the minimum.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Poop Timer:</strong> Time between pooping cycles (in minutes). Neglecting poop cleanup causes care
-            mistakes.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Condition Hearts:</strong> Condition/health hearts. Represents overall care quality and affects
-            evolution.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Heal Doses:</strong> Number of medicine doses needed to cure a sickness or an injury; 0: the
-            form can neither fall sick nor be injured.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Jogress Available:</strong> Can participate in Jogress (fusion) evolution with another compatible
-            pet.
-          </li>
-
-          <!-- Column 2 fields (right side of the Pet Editor form) -->
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Special:</strong> Marks this pet as special. Special pets may have unique evolution or unlock
-            requirements.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Special Key:</strong> Unique identifier for special evolution or unlock conditions. Only enabled if
-            Special is checked.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Unlocks:</strong> List of unlock conditions for this pet. Separate multiple conditions with commas.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Egg Group:</strong> Determines compatible egg types for this pet. Separate multiple groups with
-            commas.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Rarity:</strong> Rarity level for this pet. Affects availability and encounter rates in the wild.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Base EXP:</strong> Base experience points gained when this pet is used in battle.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Max Level:</strong> Maximum level this pet can reach. Experience requirements increase with each
-            level.
-          </li>
-          <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-            <span style="position: absolute; left: 0; color: #667eea;">•</span>
-            <strong>Type:</strong> Pet type, affects performance in battles and training. Types include:
-            <ul style="list-style: none; padding: 0; margin-top: 10px;">
-              <li style="margin-bottom: 5px;"><strong>Normal</strong> - Balanced stats and abilities.</li>
-              <li style="margin-bottom: 5px;"><strong>Attack</strong> - Higher power and attack-related stats.</li>
-              <li style="margin-bottom: 5px;"><strong>Defense</strong> - Higher HP and defense-related stats.</li>
-              <li style="margin-bottom: 5px;"><strong>Speed</strong> - Higher speed and evasion-related stats.</li>
-              <li style="margin-bottom: 5px;"><strong>Special</strong> - Unique abilities and higher base EXP.</li>
-            </ul>
-          </li>
-        </ul>
       </div>
     </div>
 
-    <div class="content-section">
-      <h2 class="section-title" onclick="toggleSection(this)">Pet Editor Tab - Evolution Editor<span
-          class="arrow">▼</span></h2>
+    <!-- ============================================================ window -->
+    <div class="content-section" id="window">
+      <h2 class="section-title">Main window</h2>
+      <div class="section-content">
+        <p>The editor window has a menu bar, one tab per module file and, at the bottom, Save and Close.</p>
+        <table class="data-table">
+          <thead><tr><th>Tab</th><th>What it edits</th><th>File</th></tr></thead>
+          <tbody>
+            <tr><td>Module</td><td>Module settings, unlocks and backgrounds</td><td><code>module.json</code></td></tr>
+            <tr><td>Device</td><td>The devices offered on the egg screen</td><td><code>devices.json</code></td></tr>
+            <tr><td>Pet</td><td>The Digimon, their sprites and (through Edit Evolutions) their evolutions</td><td><code>monster.json</code></td></tr>
+            <tr><td>Battle</td><td>Adventure enemies and special encounters</td><td><code>battle.json</code></td></tr>
+            <tr><td>Item</td><td>Items</td><td><code>item.json</code></td></tr>
+            <tr><td>Shop/Currencies</td><td>Shops and currencies</td><td><code>shop.json</code></td></tr>
+            <tr><td>Collection</td><td>Cards, card effects and card packs</td><td><code>cards.json</code></td></tr>
+            <tr><td>Quests/Events</td><td>Quests, events, Connect Points and the encounter schedule</td><td><code>quests.json</code>, <code>events.json</code></td></tr>
+            <tr><td>Passwords</td><td>Codes typed in the game's Specials menu</td><td><code>codes.json</code></td></tr>
+          </tbody>
+        </table>
+
+        <h3>Menus</h3>
+        <table class="data-table">
+          <thead><tr><th>Menu item</th><th>Shortcut</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>File &gt; Save</td><td>Ctrl+S</td><td>Saves every tab, the same as the Save button.</td></tr>
+            <tr><td>File &gt; Close</td><td>Ctrl+W</td><td>Closes the module without saving and returns to the selector.</td></tr>
+            <tr><td>Edit &gt; Edit Evolutions</td><td></td><td>Opens the <a href="#evolutions">evolution editor</a>.</td></tr>
+            <tr><td>Edit &gt; Enemy Editor</td><td></td><td>Opens the <a href="#battle">Fast Enemy Editor</a>.</td></tr>
+            <tr><td>Edit &gt; Special Encounters</td><td></td><td>Opens the Special Encounters editor.</td></tr>
+            <tr><td>Documentation &gt; Create Documentation</td><td>Ctrl+G</td><td>Writes the module's HTML guide (<a href="#tools">Report and documentation</a>).</td></tr>
+            <tr><td>Documentation &gt; Open Documentation</td><td>Ctrl+Shift+G</td><td>Opens the guide in the browser.</td></tr>
+            <tr><td>Tools &gt; Module Report</td><td>Ctrl+R</td><td>Saves every tab, then checks the module.</td></tr>
+            <tr><td>Tools &gt; Export Sprites</td><td>Ctrl+E</td><td>Copies the sprite set of every pet and enemy into a folder.</td></tr>
+            <tr><td>Tools &gt; Update ATK Sprites</td><td></td><td>Copies each pet's attack sprites to the enemies of the same name.</td></tr>
+            <tr><td>Tools &gt; Generate Pet Index</td><td></td><td>Renumbers the Index of every pet.</td></tr>
+            <tr><td>Tools &gt; Import Collection from Module</td><td></td><td>Merges another module's cards, effects and packs.</td></tr>
+            <tr><td>Omninet &gt; Account</td><td>Ctrl+Shift+A</td><td>Logs in to Omninet, creates an account, links the game, logs out.</td></tr>
+            <tr><td>Omninet &gt; Manage Module</td><td>Ctrl+M</td><td>Publishes, updates or unpublishes this module.</td></tr>
+            <tr><td>Omninet &gt; Module Library</td><td>Ctrl+Shift+L</td><td>Lists the modules published on Omninet and downloads them.</td></tr>
+            <tr><td>Digimon Database</td><td></td><td>Compares the module's Digimon with the Digimon Database (<a href="#database">details</a>).</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Saving</h3>
+        <p>Save (or Ctrl+S) writes every tab's file and shows "Module saved!". Close never asks: anything not saved is
+          lost. On tabs with a list and a form, the form's own Save button puts the edits into the entry; the main Save
+          then writes the file. Some actions write their file at once.</p>
+        <table class="data-table">
+          <thead><tr><th>Tab</th><th>Form edits are kept by</th><th>Written to disk</th></tr></thead>
+          <tbody>
+            <tr><td>Module</td><td>Directly</td><td>Main Save. Clicking an image copies the PNG at once.</td></tr>
+            <tr><td>Device</td><td>The form's Save (switching device asks)</td><td>At once by the form's Save and by Remove; also by the main Save.</td></tr>
+            <tr><td>Pet</td><td>The form's Save; selecting another pet discards the edits</td><td>At once by Add, Remove, Paste, the form's Save and Generate Pet Index; also by the main Save.</td></tr>
+            <tr><td>Evolutions</td><td>The evolution editor's Save</td><td>Main Save (the evolution editor only changes the pets in memory).</td></tr>
+            <tr><td>Battle</td><td>The form's Save</td><td>At once by Add, Remove, Paste, the form's Save, the Fast Editor and Special Encounters Save, and Update ATK Sprites; also by the main Save.</td></tr>
+            <tr><td>Item</td><td>The form's Save; the main Save keeps the item shown</td><td>Main Save.</td></tr>
+            <tr><td>Shop/Currencies</td><td>As the selection moves</td><td>Main Save. No file is made for a module without shops or currencies.</td></tr>
+            <tr><td>Collection</td><td>Save (cards, packs), Apply (effect groups), Apply Effect (effects). The main Save keeps the shown card, group and pack, not the shown effect.</td><td>Main Save. Art uploads and deletions happen at once.</td></tr>
+            <tr><td>Quests/Events</td><td>Directly in the grids</td><td>Main Save.</td></tr>
+            <tr><td>Passwords</td><td>The form's Save; the main Save keeps the password shown</td><td>Main Save. With no passwords, <code>codes.json</code> is deleted.</td></tr>
+          </tbody>
+        </table>
+        <div class="warning">A file the editor cannot read opens as an empty list, and the next Save writes it back
+          empty. If a tab opens empty when it should not, close without saving and fix the file first.</div>
+        <div class="tip">Ctrl+C and Ctrl+V duplicate the selected entry on the Module (Unlocks, Backgrounds), Pet,
+          Battle, Item, Quests/Events (Quests, Events) and Passwords tabs, while the cursor is not in a text field. The
+          copy stays inside the editor. A pasted pet or enemy keeps the original's name: rename it, since evolutions and
+          enemies find a Digimon by name.</div>
+      </div>
+    </div>
+
+    <!-- ============================================================ module -->
+    <div class="content-section" id="module">
+      <h2 class="section-title" onclick="toggleSection(this)">Module tab<span class="arrow">&#9660;</span></h2>
       <div class="section-content" style="display:none;">
-        <div style="text-align: center;"><img src="../assets/EditorPetEvolution.PNG"></div>
-        <p>After adding a new pet, you can use the Evolution Editor to define its evolution requirements.</p>
-        <p>To the left you are again presented with the Pet List, but this time, a combo box filters your pets by
-          Version. Pets can only evolve into other pets of the same version., This means that Jogress evolutions between
-          versions need to duplicate the evolution result to work.</p>
-        <p>First drag the pets from the Pet List into the Evolution Editor area to begin defining their evolution paths.
-          You can click in "Organize" to adjust the layout automatically.</p>
-        <p>Click the "Toggle Connection" button to enable the Connection Tool</p>
-        <p>Click the "SOURCE" pet and then click the "TARGET" pet to create a connection between them.</p>
-        <p>Disable the Connection Tool by clicking the "Toggle Connection" button again.</p>
-        <p>Click the Criteria Box to define the evolution conditions.</p>
-        <p>Here you can edit the evolution conditions, by default, empty and 0 fields will be ignored. You can use value
-          <strong>999999</strong> to indicate infinite. Below is a complete list of all available evolution criteria:</p>
-        
-        <div class="feature-card" style="margin: 20px 0; padding: 15px; background-color: #f9f9f9; border-left: 4px solid #667eea;">
-          <h4 style="margin-top: 0; color: #667eea;">🎯 Evolution Criteria Reference</h4>
-          
-          <h5>Basic Requirements:</h5>
-          <ul style="margin: 10px 0;">
-            <li><strong>mistakes</strong> - Care mistake count range [min, max]</li>
-            <li><strong>condition_hearts</strong> - Condition hearts range (alternative to mistakes)</li>
-            <li><strong>training</strong> - Effort/training level range</li>
-            <li><strong>level</strong> - Pet level range</li>
-            <li><strong>weight</strong> - Pet weight range in grams</li>
-            <li><strong>overfeed</strong> - Overfeed count range</li>
-            <li><strong>sleep_disturbances</strong> - Sleep disturbance count range</li>
-          </ul>
+        <p>The Module tab has three sub-tabs: Main (the module's settings), Unlocks and Backgrounds. Main shows the three
+          images and the header fields above four inner tabs: Main, Battle &amp; Training, Care &amp; Death and Misc.
+          Every label and field has a tooltip.</p>
+        <img class="shot free" src="../assets/editor/editor_module_main.png" alt="Module tab, Main sub-tab">
 
-          <h5>Battle & Competition:</h5>
-          <ul style="margin: 10px 0;">
-            <li><strong>battles</strong> - Total battle count range</li>
-            <li><strong>win_count</strong> - Total wins range</li>
-            <li><strong>win_ratio</strong> - Win percentage range (0-100)</li>
-            <li><strong>pvp</strong> - PvP wins range</li>
-            <li><strong>stage-5</strong> to <strong>stage-9</strong> - Enemies defeated at specific stages</li>
-          </ul>
+        <h3>Images and header</h3>
+        <p>Clicking an image box picks a PNG, which is copied over the module's file of that name (no resize, no backup).</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Flag<br><code>Flag.png</code></td><td>The module's icon, used in the settings menu and the pet selector.</td><td>48x48 PNG</td></tr>
+            <tr><td>Logo<br><code>logo.png</code></td><td>Shown on the egg selection screen and in the Omninet module list.</td><td>480x240 PNG (the box shows it at half size)</td></tr>
+            <tr><td>BattleIcon<br><code>BattleIcon.png</code></td><td>The module's entry in the adventure list. Needed with Adventure Mode.</td><td>48x48 PNG</td></tr>
+            <tr><td>Name<br><code>name</code></td><td>The module's name. Its Digimon are registered under it; Omninet refuses a name another user owns.</td><td>Text; a new module takes its folder name</td></tr>
+            <tr><td>Version<br><code>version</code></td><td>The module's release version, shown on the egg screen and compared by the Module Library. It is not the Digimon's gameplay version.</td><td>Text, e.g. 1.0.0</td></tr>
+            <tr><td>Author<br><code>author</code></td><td>Author text.</td><td>Text</td></tr>
+            <tr><td>Description<br><code>description</code></td><td>Description text.</td><td>Text</td></tr>
+            <tr><td>Category<br><code>category</code></td><td>Which egg-selection button lists the module.</td><td>Classics, Modern, Conversions, Custom</td></tr>
+          </tbody>
+        </table>
 
-          <h5>Achievement & Progress:</h5>
-          <ul style="margin: 10px 0;">
-            <li><strong>quests_completed</strong> - Quest completion count range</li>
-            <li><strong>trophies</strong> - Trophy count range</li>
-            <li><strong>vital_values</strong> - Special achievement parameter range</li>
-          </ul>
+        <h3>Main</h3>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Traited Egg Rule<br><code>traited_egg_rule</code></td><td>When a dying pet leaves a Traited Egg (table below).</td><td>None, Stage V, Stage V Chance, Stage V and Battles, Win Ratio (Stage 4), Win Ratio (Stage 5), Win Ratio (Failed or Aged), Win Ratio (Failed or Aged, Lifetime), Generation, Evolution Timer, Evolution Timer (Area 45), Outlive Lifespan</td></tr>
+            <tr><td>Power Bonus Rule<br><code>power_bonus_rule</code></td><td>Where battle power above the species' Power comes from (table below).</td><td>None, Stage Table, Stage Table + Shaken, Stage Table Xros, Stage Table + G-Cells, Strength and Level, Strength Hearts +16, Strength Hearts +15, Effort, Effort Tiers, Star</td></tr>
+            <tr><td>Effort Power Tiers<br><code>effort_power_tiers</code></td><td>For the Effort Tiers rule: rows of stage, effort and power. Of the rows for the pet's stage (0: every stage), the one with the most effort at or below the pet's adds its power. Effort is one per training and resets on evolving.</td><td>Button opening a grid: Stage (0 any), Effort from, Power +</td></tr>
+            <tr><td>Jogress Cost<br><code>jogress_cost</code></td><td>The stat both pets must have full to jogress; it is set to 0 on the evolved pets. Across modules each pet pays its own module's cost.</td><td>Nothing, DP, Effort, Strength, Hunger</td></tr>
+            <tr><td>Traited Egg Starting Level<br><code>traited_egg_starting_level</code></td><td>Level of a pet hatched from a Traited Egg.</td><td>0-100</td></tr>
+            <tr><td>Visible Stats<br><code>visible_stats</code></td><td>The stats the Status screen shows. It also switches mechanics: without Strength the pet has no Strength meter; Vital Values and Trophies are tracked only when listed; Stomach shows the hunger fill as hunger/stomach. A module without the key shows none, and opens with none ticked.</td><td>Edit Visible Stats... (list below)</td></tr>
+            <tr><td>Sprite Name Format<br><code>name_format</code></td><td>How a Digimon's name becomes its sprite folder or ZIP name: <code>$</code> is the name, <code>:</code> becomes <code>_</code>.</td><td>Always <code>$_dmc</code> (not editable)</td></tr>
+            <tr><td>Primary Sprite Format<br><code>primary_sprite_format</code></td><td>The sprite library searched first: Color in <code>monsters</code>, Dot in <code>monsters_dot</code>, HD in <code>monsters_hidef</code>; the module's folder first, then the shared assets.</td><td>Color (Default), Dot, HD</td></tr>
+            <tr><td>Secondary Sprite Format<br><code>secondary_sprite_format</code></td><td>The library searched when the primary has no sprite. A Dot module needs a complete secondary.</td><td>Color, Dot, HD (never the same as the primary)</td></tr>
+            <tr><td>Enable Special Attack Sprite<br><code>enable_special_attack_sprite</code></td><td>Critical attacks use the Digimon's Special frame and Crit Attack sprite.</td><td>Checkbox</td></tr>
+            <tr><td>Reverse Atk Frames<br><code>reverse_atk_frames</code></td><td>Swaps ATK1 with ATK2 and TRAIN1 with TRAIN2 when the sprites load.</td><td>Checkbox</td></tr>
+            <tr><td>Count Evolution While Sleeping<br><code>count_evolution_while_sleeping</code></td><td>The evolution timer runs while the pet sleeps.</td><td>Checkbox</td></tr>
+            <tr><td>Evolution Win Ratio Chance<br><code>evolution_win_ratio_chance</code></td><td>The chance a route with Win Ratio or Total Win Ratio is taken, from the row with the highest ratio at or below the pet's; below every row, 0%.</td><td>Rows of win ratio from (%) and chance (%); default 0%: 100% ("Always (default)")</td></tr>
+            <tr><td>Double Needs After Failed Evolution<br><code>failed_evolution_double_needs</code></td><td>A pet whose evolution failed (its timer ran out with a Win Ratio route unmet) loses hunger and strength and poops twice as fast, and so does a Stage VI+ form after 48 hours.</td><td>Checkbox</td></tr>
+            <tr><td>Event Communication<br><code>event_communication</code></td><td>The Digimon Twin's Event Communication. Not used by the game yet.</td><td>Checkbox</td></tr>
+            <tr><td>Event Outcomes<br><code>event_communication_outcomes</code></td><td>Its outcome table (fill hunger, fill strength, item, egg, nothing, each with a chance). Not used by the game yet.</td><td>Edit Event Outcomes...</td></tr>
+          </tbody>
+        </table>
 
-          <h5>Special Conditions:</h5>
-          <ul style="margin: 10px 0;">
-            <li><strong>special_encounter</strong> - Boolean: requires special encounter flag</li>
-            <li><strong>time_range</strong> - Real-world time requirement ["HH:MM", "HH:MM"]</li>
-            <li><strong>jogress</strong> - Special evolution requiring two pets</li>
-            <li><strong>item</strong> - Evolution requiring specific items</li>
-          </ul>
+        <h4>Traited Egg Rule</h4>
+        <table class="data-table">
+          <thead><tr><th>Rule</th><th>A Traited Egg is left when</th></tr></thead>
+          <tbody>
+            <tr><td>None</td><td>Never.</td></tr>
+            <tr><td>Stage V</td><td>Always, from Stage V.</td></tr>
+            <tr><td>Stage V Chance</td><td>30% from Stage V (DMC, DMGZ, DMH).</td></tr>
+            <tr><td>Stage V and Battles</td><td>From Stage V with a 100-battle record (Digimon Twin).</td></tr>
+            <tr><td>Win Ratio (Stage 4) / (Stage 5)</td><td>At least that stage and 60% wins.</td></tr>
+            <tr><td>Win Ratio (Failed or Aged) / (Failed or Aged, Lifetime)</td><td>Stage V+, 60% wins, and only from a failed evolution or a Stage VI+ form after 48 hours: the current ratio, or the lifetime one.</td></tr>
+            <tr><td>Generation</td><td>As Stage V; each generation then evolves an hour earlier from Child up and starts with a point more Reliability, up to eight (Digivice iC).</td></tr>
+            <tr><td>Evolution Timer</td><td>48 hours since the last evolution.</td></tr>
+            <tr><td>Evolution Timer (Area 45)</td><td>The same, plus Area 45 cleared (Digital Monster X).</td></tr>
+            <tr><td>Outlive Lifespan</td><td>The pet outlives its lifespan (original Pendulum).</td></tr>
+          </tbody>
+        </table>
 
-          <p><strong>Note:</strong> All numeric criteria use ranges [minimum, maximum]. If a pet doesn't meet ANY of the specified criteria, the evolution will not occur.</p>
-        </div>
-        
-        <p>Once you have defined the evolution criteria, save your changes to apply them to the module.</p>
+        <h4>Power Bonus Rule</h4>
+        <table class="data-table">
+          <thead><tr><th>Rule</th><th>Power added</th></tr></thead>
+          <tbody>
+            <tr><td>None</td><td>Nothing.</td></tr>
+            <tr><td>Stage Table</td><td>+5/8/15/25/25 by stage at full Strength; again for a Traited Egg.</td></tr>
+            <tr><td>Stage Table + Shaken</td><td>+5/8/15/20/20; again for a Traited Egg; +10 for a shaken egg.</td></tr>
+            <tr><td>Stage Table + G-Cells</td><td>+5/8/15/20/20; Traited +5/8/15/15/15; PENGZ Red G-Cells pay the table once more.</td></tr>
+            <tr><td>Stage Table Xros</td><td>+5/10/20 across three stages.</td></tr>
+            <tr><td>Strength and Level</td><td>+16 (gameplay versions 1-2) or +15; +10 at levels 3, 6 and 9.</td></tr>
+            <tr><td>Strength Hearts +16</td><td>+4 per Strength heart, +16 full; nothing at 99 weight or empty Hunger.</td></tr>
+            <tr><td>Strength Hearts +15</td><td>The Digimon Mini's bands: +0/+4/+8/+15 at Strength 0-3/4-7/8-11/12+.</td></tr>
+            <tr><td>Effort</td><td>The original Pendulum's hidden effort (0-40).</td></tr>
+            <tr><td>Effort Tiers</td><td>The Effort Power Tiers table.</td></tr>
+            <tr><td>Star</td><td>+16 per star (Vital Bracelet).</td></tr>
+          </tbody>
+        </table>
+
+        <h4>Visible Stats</h4>
+        <p>Edit Visible Stats... opens a checklist with Select All and Select None: Age, Weight, Hunger, Stomach,
+          Strength, Trophies, Vital Values, Level, Experience, Mistakes/Condition Hearts, Sleep Disturbances, Overfeed,
+          Injuries, Sicknesses, Effort, Power, DP, Battles, Win Rate, Total Win Rate, Evolution Timer, Sleeps, Wakes, Poop
+          Time, Feed Time, Flags, G-Cells, Reliability, Digisoul, Injury Probability, Next Evolution, Virus.</p>
+
+        <h3>Battle &amp; Training</h3>
+        <img class="shot free" src="../assets/editor/editor_module_battle_training.png" alt="Battle and Training inner tab">
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Battle Minigame<br><code>battle_minigame</code></td><td>The charge minigame of the module's adventure battles; training uses it too. None skips the charge.</td><td>None, Dummy Bar, Count Bar, RPM, Count Match Color, Count Match Z, Count Match Classic, Xai Roll+Bar, Xai Bar, Punch, Mogera</td></tr>
+            <tr><td>Battle Protocol<br><code>battle_protocol</code></td><td>The device's battle protocol, for battles with real devices. Modules with the same protocol can jogress with each other.</td><td>None, DMOG, PENOG, DMM, IC, TWIN, DM20, PEN20, DMX, PENZ, DMC, PENC, DMXW</td></tr>
+            <tr><td>Training Strength Gain<br><code>training_strength_gain</code></td><td>Strength one training gives at each result.</td><td>Bad, Good, Great, Excellent; -1 fills the meter</td></tr>
+            <tr><td>Training Weight Loss<br><code>training_weight_loss</code></td><td>Weight lost at each training result.</td><td>Bad, Good, Great, Excellent</td></tr>
+            <tr><td>Training Effort Gain<br><code>training_effort_gain</code></td><td>Effort given at each training result.</td><td>Bad, Good, Great, Excellent</td></tr>
+            <tr><td>Adventure Mode<br><code>adventure_mode</code></td><td>Lists the module in the adventure's module selection. Needs BattleIcon.png and enemies on the Battle tab.</td><td>Checkbox</td></tr>
+            <tr><td>Adventure Style<br><code>adventure_style</code></td><td>Area Selection: pick any area and round reached. Next and Reset: only the next battle, or start over. Random: a random area and round.</td><td>Next and Reset, Area Selection, Random</td></tr>
+            <tr><td>Battle Cost Type<br><code>battle_cost_type</code></td><td>What a battle costs. Hunger needs Hunger above 0 even with an amount of 0; Nothing allows battling hungry.</td><td>DP, Hunger, Nothing</td></tr>
+            <tr><td>Battle Cost Amount<br><code>battle_cost_amount</code></td><td>How much of it a battle costs.</td><td>0-99.9, steps of 0.25</td></tr>
+            <tr><td>Training Costs As Battle<br><code>training_uses_battle_cost</code></td><td>Every training costs the battle cost (without the battle weight loss); a pet that could not pay for a battle cannot train.</td><td>Checkbox</td></tr>
+            <tr><td>Battle Item Use<br><code>battle_item_use</code></td><td>When battle items (effect status_boost) are chosen, from a list, never from the inventory. area: before an adventure battle; the item's Boost Time counts areas (battles, without sequential rounds). round: before every round; the effect lasts that round.</td><td>area, round</td></tr>
+            <tr><td>Battle Weight Loss<br><code>battle_weight_loss</code></td><td>Weight lost after every battle, on top of the cost.</td><td>0-99</td></tr>
+            <tr><td>Battle Base Sick Chance Win<br><code>battle_base_sick_chance_win</code></td><td>Chance (%) that a won battle injures the pet (Skull). A battle never makes a pet sick.</td><td>0-100</td></tr>
+            <tr><td>Battle Base Sick Chance Lose<br><code>battle_base_sick_chance_lose</code></td><td>Chance (%) that a lost battle injures the pet, plus the protein and disturbance penalties; the form's Injury Prob. rolls too.</td><td>0-100</td></tr>
+            <tr><td>Injury Chance Step<br><code>injury_chance_step</code></td><td>Points a form's Injury Prob. rises after each lost battle and falls after each win (Digivice iC: 1). 0 keeps it fixed.</td><td>0-100</td></tr>
+            <tr><td>Battle Attribute Advantage<br><code>battle_attribute_advantage</code></td><td>Points added to the hit rate of an attacker whose Attribute has the advantage, and taken from one at a disadvantage (Vaccine beats Virus, Virus beats Data, Data beats Vaccine).</td><td>0-100</td></tr>
+            <tr><td>Battle Attribute Advantage as Power<br><code>battle_attribute_advantage_power</code></td><td>Adds the advantage to the Power of the side that has it instead (Digital Monster X: +32).</td><td>Checkbox</td></tr>
+            <tr><td>Battle Global Hit Points<br><code>battle_global_hit_points</code></td><td>Above 0, every pet and enemy has this HP in the module's battles instead of its own.</td><td>0-100</td></tr>
+            <tr><td>Battle Damage Limit<br><code>battle_damage_limit</code></td><td>The most base damage one hit does in the module's own battles (adventure, OMNIPET), before battle bonuses; under 3 it also picks the simple attack animation where the Battle Protocol sets none. Written only when the module has it or it is not 99.</td><td>1-999 (default 99)</td></tr>
+            <tr><td>Battle Max Hit Rate<br><code>battle_max_hit_rate</code></td><td>The highest hit rate (%) in the module's own battles. Written only when the module has it or it is not 100.</td><td>0-100 (default 100)</td></tr>
+            <tr><td>Battle Panic Rate<br><code>battle_panic_rate</code></td><td>The Digimon Twin's Panic. Not used by the game yet.</td><td>0-100</td></tr>
+            <tr><td>Battle Panic Attribute Bonus<br><code>battle_panic_attribute_bonus</code></td><td>Attribute shift of the Panic rate. Not used by the game yet.</td><td>0-100</td></tr>
+            <tr><td>Battle Sequential Rounds<br><code>battle_sequential_rounds</code></td><td>Adventure battles go through the rounds in order.</td><td>Checkbox</td></tr>
+            <tr><td>Battle Enable Feeding<br><code>battle_enable_feeding</code></td><td>Allows feeding after 3 battles of a 5-round area, or 4 of a longer one (DMX/PENZ). Needs Battle Sequential Rounds.</td><td>Checkbox</td></tr>
+            <tr><td>Battle Keep Counts On Evolution<br><code>battle_keep_counts_on_evolution</code></td><td>Battles and wins carry over an evolution instead of resetting (Digimon Twin).</td><td>Checkbox</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Care &amp; Death</h3>
+        <img class="shot free" src="../assets/editor/editor_module_care_death.png" alt="Care and Death inner tab">
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Care Meat Weight Gain<br><code>care_meat_weight_gain</code></td><td>Weight added by one meat.</td><td>0-100</td></tr>
+            <tr><td>Care Meat Hunger Gain<br><code>care_meat_hunger_gain</code></td><td>Hunger restored by one meat.</td><td>0-100, steps of 0.5</td></tr>
+            <tr><td>Care Meat Care Mistake Time<br><code>care_meat_care_mistake_time</code></td><td>Minutes with empty Hunger before a care mistake.</td><td>1-1000</td></tr>
+            <tr><td>Care Overfeed Timer<br><code>care_overfeed_timer</code></td><td>Minutes the pet refuses food after an overfeed.</td><td>0-10000</td></tr>
+            <tr><td>Care Condition Heart<br><code>care_condition_heart</code></td><td>Uses condition hearts instead of a mistake count: each care mistake costs a heart.</td><td>Checkbox</td></tr>
+            <tr><td>Care Can Eat Sleeping<br><code>care_can_eat_sleeping</code></td><td>The pet can eat while asleep.</td><td>Checkbox</td></tr>
+            <tr><td>Care Back To Sleep Time<br><code>care_back_to_sleep_time</code></td><td>Minutes before a pet woken in its sleep hours goes back to sleep. 0: it stays awake and calls again for bed.</td><td>0-1000</td></tr>
+            <tr><td>Care Enable Shaken Egg<br><code>care_enable_shaken_egg</code></td><td>Eggs can be shaken, for the shaken bonus of the Stage Table + Shaken rule.</td><td>Checkbox</td></tr>
+            <tr><td>Care Flush Disturbance Sleep<br><code>care_flush_disturbance_sleep</code></td><td>Cleaning while the pet sleeps counts as a sleep disturbance.</td><td>Checkbox</td></tr>
+            <tr><td>Care Fixed 4 Hearts<br><code>care_fixed_4_hearts</code></td><td>The Hunger and Strength meters always show 4 hearts, whatever the Stomach.</td><td>Checkbox</td></tr>
+            <tr><td>Care Poop Chance<br><code>care_poop_chance</code></td><td>Chance of each poop size.</td><td>Single, Double, Triple, Giga (%), totalling 100</td></tr>
+            <tr><td>Care Poop Alarm<br><code>care_poop_alarm</code></td><td>The pet calls when it needs to poop.</td><td>Checkbox</td></tr>
+            <tr><td>Care 99g Effect<br><code>care_99g_effect</code></td><td>What reaching 99 weight does: Dots a sickness, Skull an injury, Burpmon (Digimon Twin, at 80), or Nothing.</td><td>Nothing, Dots, Skull, Burpmon</td></tr>
+            <tr><td>Care Poop Sickness Count<br><code>care_poop_sickness_count</code></td><td>Poops on screen that trigger the poop effect.</td><td>0-99</td></tr>
+            <tr><td>Care Poop Sickness Effect<br><code>care_poop_sickness_effect</code></td><td>What the poop pile does.</td><td>Dots, Skull, Nothing</td></tr>
+            <tr><td>Care Protein Weight Gain<br><code>care_protein_weight_gain</code></td><td>Weight added by one protein.</td><td>0-100</td></tr>
+            <tr><td>Care Protein Strengh Gain<br><code>care_protein_strengh_gain</code></td><td>Strength restored by one protein.</td><td>0-100, steps of 0.5</td></tr>
+            <tr><td>Care Protein Dp Gain<br><code>care_protein_dp_gain</code></td><td>DP gained every 4th protein, while DP is below Energy.</td><td>0-100</td></tr>
+            <tr><td>Care Protein Care Mistake Time<br><code>care_protein_care_mistake_time</code></td><td>Minutes with empty Strength before a care mistake.</td><td>0-1000</td></tr>
+            <tr><td>Care Protein Overdose Max<br><code>care_protein_overdose_max</code></td><td>Cap of the protein overdose count (one per 4 proteins), which raises the lost-battle injury chance.</td><td>0-100</td></tr>
+            <tr><td>Care Strength Max<br><code>care_strength_max</code></td><td>The most Strength a pet holds, whatever its Stomach (Digimon Mini, Twin: 15). Protein past it still weighs but adds no Strength. 0: the old rules.</td><td>0-99</td></tr>
+            <tr><td>Care Protein Penalty<br><code>care_protein_penalty</code></td><td>Percent added to the lost-battle injury chance per overdose point.</td><td>0-100</td></tr>
+            <tr><td>Care Disturbance Penalty Max<br><code>care_disturbance_penalty_max</code></td><td>Cap of the sleep-disturbance penalty (2 per disturbance) added to the lost-battle injury chance.</td><td>0-100</td></tr>
+            <tr><td>Care Sleep Care Mistake Timer<br><code>care_sleep_care_mistake_timer</code></td><td>Minutes a bedtime call may go unanswered before a care mistake.</td><td>0-1000</td></tr>
+            <tr><td>Care Block Actions When Sleeping<br><code>care_block_actions_when_sleeping</code></td><td>A sleepy or sleeping pet cannot battle, eat or train.</td><td>Checkbox</td></tr>
+            <tr><td>Care Can Battle While Sick<br><code>care_can_battle_while_sick</code></td><td>A sick pet (Dots) can battle.</td><td>Checkbox</td></tr>
+            <tr><td>Care Can Train While Sick<br><code>care_can_train_while_sick</code></td><td>A sick pet can train.</td><td>Checkbox</td></tr>
+            <tr><td>Care Can Battle While Injured<br><code>care_can_battle_while_injured</code></td><td>An injured pet (Skull) can battle.</td><td>Checkbox</td></tr>
+            <tr><td>Care Can Train While Injured<br><code>care_can_train_while_injured</code></td><td>An injured pet can train.</td><td>Checkbox</td></tr>
+            <tr><td>Care Allow Below Min Weight<br><code>care_allow_below_min_weight</code></td><td>Weight can drop below the species' Min Weight, down to 1 (Digimon World). Evolving still sets the new form's weight.</td><td>Checkbox</td></tr>
+            <tr><td>Care Poop Mistake Time<br><code>care_poop_mistake_time</code></td><td>Minutes a poop may stay before it costs a care mistake and a point of virus (the Poop Unclean Time criterion). 0: never.</td><td>0-1440</td></tr>
+            <tr><td>Care Disturbance Sickness Count<br><code>care_disturbance_sickness_count</code></td><td>Every Nth sleep disturbance of the pet's life triggers the disturbance effect. 0: never.</td><td>0-100</td></tr>
+            <tr><td>Care Disturbance Sickness Effect<br><code>care_disturbance_sickness_effect</code></td><td>What it does.</td><td>Dots, Skull, Nothing</td></tr>
+            <tr><td>Care Needs Decay While Sleeping<br><code>care_needs_decay_while_sleeping</code></td><td>Hunger and Strength keep draining during sleep (Digimon Twin).</td><td>Checkbox</td></tr>
+            <tr><td>Death Max Injuries<br><code>death_max_injuries</code></td><td>Injuries (Skull) in one form that kill. 0: none.</td><td>0-100</td></tr>
+            <tr><td>Death Max Sicknesses<br><code>death_max_sicknesses</code></td><td>Sicknesses (Dots) in one form that kill, counted apart from injuries. 0: none.</td><td>0-100</td></tr>
+            <tr><td>Death Care Mistake<br><code>death_care_mistake</code></td><td>Care mistakes that kill. 0: none.</td><td>0-100</td></tr>
+            <tr><td>Death Sick Timer<br><code>death_sick_timer</code></td><td>Awake minutes a sickness may go untreated before death.</td><td>0-10000</td></tr>
+            <tr><td>Death Injury Timer<br><code>death_injury_timer</code></td><td>Awake minutes an injury may go untreated before death.</td><td>0-10000</td></tr>
+            <tr><td>Death Hunger Timer<br><code>death_hunger_timer</code></td><td>Awake minutes with empty Hunger before death. 0: off.</td><td>0-10000</td></tr>
+            <tr><td>Death Starvation Count<br><code>death_starvation_count</code></td><td>Hunger drains that find the meter empty before death; a full meter resets it. 0: off.</td><td>0-100</td></tr>
+            <tr><td>Death Debilitation Count<br><code>death_debilitation_count</code></td><td>The same for Strength (Xros Wars Color: 18).</td><td>0-100</td></tr>
+            <tr><td>Death Strength Timer<br><code>death_strength_timer</code></td><td>Awake minutes with empty Strength before death. 0: off.</td><td>0-10000</td></tr>
+            <tr><td>Death Stage45 Mistake<br><code>death_stage45_mistake</code></td><td>Care mistakes that kill a Stage IV-V form once its evolution time has passed. 0: off.</td><td>0-100</td></tr>
+            <tr><td>Death Stage67 Mistake<br><code>death_stage67_mistake</code></td><td>Care mistakes that kill a Stage VI+ form after 48 hours in the form. 0: off.</td><td>0-100</td></tr>
+            <tr><td>Death Save By<br><code>death_save_by</code></td><td>How a dying pet is saved: B presses or shakes; Nothing, it dies.</td><td>Nothing, B Press, Shake</td></tr>
+            <tr><td>Death Save Amount<br><code>death_save_amount</code></td><td>Presses or shakes the save needs. 0: no save.</td><td>0-999</td></tr>
+            <tr><td>Death Save Time<br><code>death_save_seconds</code></td><td>Seconds to make them in; out of time, the pet dies.</td><td>1-600</td></tr>
+            <tr><td>Death Save Chance<br><code>death_save_chance</code></td><td>Chance (%) the pet lives once they are made (Digivice iC 5, Pendulum Progress 50, most devices 100).</td><td>0-100</td></tr>
+            <tr><td>Lifespan Rule<br><code>lifespan_rule</code></td><td>How a life ends. None: it lives on. Activity Time (Digivice iC): a form that cannot evolve 2 hours after its evolution time, or at 144 hours without one, goes near death through the death save. Old Age (Digimon World): it dies Death Old Age days into its life. Age 5 (Xros Wars Color): from 5 days old, Hunger and poop come twice as fast and 16 care mistakes in one form kill. Evolution Window (Stage IV+ Pendulum Z, Stage V+ Digital Monster X): from that stage a form evolves only when its evolution time comes; with no route met then it fails for good.</td><td>None, Activity Time, Old Age, Age 5, Evolution Window (Stage IV+), Evolution Window (Stage V+)</td></tr>
+            <tr><td>Death Old Age<br><code>death_old_age</code></td><td>Days of life for the Old Age rule (asleep and awake, out of the Freezer). The pet cannot be saved.</td><td>0-999999</td></tr>
+          </tbody>
+        </table>
+        <div class="note">Sickness (Dots) and injury (Skull) are counted apart. Every battle roll is an injury; a battle
+          never makes a pet sick. Heal Doses on the Pet tab sets how many medicines cure either.</div>
+
+        <h3>Misc</h3>
+        <img class="shot free" src="../assets/editor/editor_module_misc.png" alt="Misc inner tab">
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Vital Value Base<br><code>vital_value_base</code></td><td>Vital Values gained per hour while well fed and healthy (when Vital Values is a visible stat).</td><td>0-1000</td></tr>
+            <tr><td>Vital Value Loss<br><code>vital_value_loss</code></td><td>Vital Values lost per minute while hungry, out of Strength or unwell.</td><td>0-1000</td></tr>
+            <tr><td>Hp Max Item Boost<br><code>hp_max_item_boost</code></td><td>Cap of the permanent HP bonus from items.</td><td>0-1000</td></tr>
+            <tr><td>Atk Max Item Boost<br><code>atk_max_item_boost</code></td><td>Cap of the permanent attack bonus from items.</td><td>0-1000</td></tr>
+            <tr><td>Power Max Item Boost<br><code>power_max_item_boost</code></td><td>Cap of the permanent power bonus from items.</td><td>0-1000</td></tr>
+            <tr><td>G-Cell Style<br><code>gcell_style</code></td><td>The G-Cell system. DMGZ: one 0-472 point meter (14 Blue cells, then Yellow and Red) paid by the flat values below. PENGZ: 14 cells sized by stage, Blue to 7 and Red from 8, paid by the PENGZ tables. G-Cell points reset on evolution.</td><td>Disabled, DMGZ, PENGZ</td></tr>
+            <tr><td>PENGZ G-Cell Tables</td><td>The PENGZ style's points per cell and its gains by stage (care mistake or empty-Strength call, battle win and loss, encounter win and loss), training gain by result, the Anguirus training and versus battles against another module's pet. "PENGZ values" restores the device's values. Enabled with the PENGZ style only.</td><td>Edit PENGZ Tables...</td></tr>
+            <tr><td>G-Cell Random Encounter Win / Loose<br><code>gcell_random_encounter_win</code>, <code>_loose</code></td><td>DMGZ: points for a won or lost random encounter.</td><td>-999-999</td></tr>
+            <tr><td>G-Cell Battle Win / Loose<br><code>gcell_battle_win</code>, <code>_loose</code></td><td>DMGZ: points for a won or lost battle.</td><td>-999-999</td></tr>
+            <tr><td>G-Cell Training Success<br><code>gcell_training_success</code></td><td>DMGZ: points for a successful training.</td><td>-999-999</td></tr>
+            <tr><td>G-Cell Training Phase2 / Phase1 Failure<br><code>gcell_training_phase2_failure</code>, <code>phase1</code></td><td>DMGZ: points for a training failed in its second or first phase.</td><td>-999-999</td></tr>
+            <tr><td>G-Cell Protein<br><code>gcell_protein</code></td><td>Points per protein (DMGZ and PENGZ).</td><td>-999-999</td></tr>
+            <tr><td>G-Cell Care Mistake<br><code>gcell_care_mistake</code></td><td>DMGZ: points per care mistake.</td><td>-999-999</td></tr>
+            <tr><td>Reliability Base<br><code>reliability_base</code></td><td>Starting Reliability of a first-generation pet. 0 disables Reliability.</td><td>0-31</td></tr>
+            <tr><td>Reliability Becoming Full</td><td>Change when feeding fills Hunger.</td><td>-31-31 (iC: +1)</td></tr>
+            <tr><td>Reliability Answering Call</td><td>Change when a call is answered.</td><td>-31-31 (iC: +1)</td></tr>
+            <tr><td>Reliability Ignoring Call</td><td>Change when a call runs out unanswered.</td><td>-31-31 (iC: -1)</td></tr>
+            <tr><td>Reliability Minigame Success</td><td>Change on a successful minigame.</td><td>-31-31 (iC: +1)</td></tr>
+            <tr><td>Reliability Two Poops</td><td>Change for every two uncleaned poops.</td><td>-31-31 (iC: -1)</td></tr>
+            <tr><td>Reliability Sickness or Injury</td><td>Change when a sickness or injury begins.</td><td>-31-31 (iC: -1)</td></tr>
+            <tr><td>Reliability Battle Win</td><td>Change after each won battle.</td><td>-31-31 (iC: +1)</td></tr>
+            <tr><td>Reliability Hourly</td><td>Change every 60 minutes.</td><td>-31-31 (iC: -1)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Unlocks</h3>
+        <img class="shot free" src="../assets/editor/editor_module_unlocks.png" alt="Unlocks sub-tab">
+        <p>Unlocks are permanent, module-wide progress: eggs, areas, backgrounds and anything a pet's Special Key or a
+          route names. Add creates a row (type egg); Remove deletes the selected row without asking. Every column is shown
+          for every type; each type reads only the columns below.</p>
+        <table class="data-table">
+          <thead><tr><th>Column</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Name<br><code>name</code></td><td>The unlock's key. A pet's Special Key, a route's Unlock and a background are matched to it exactly.</td><td>Text, e.g. <code>area_7_ver_1</code></td></tr>
+            <tr><td>Label<br><code>label</code></td><td>Shown to the player ("&lt;Label&gt; unlocked!").</td><td>Text</td></tr>
+            <tr><td>Card Reward<br><code>card</code></td><td>A Collection card given the first time the unlock is earned.</td><td>(none) or a card</td></tr>
+            <tr><td>Card Pack Reward<br><code>card_pack</code></td><td>A card pack opened the first time the unlock is earned.</td><td>(none) or a pack</td></tr>
+            <tr><td>Type<br><code>type</code></td><td>How it is earned (table below).</td><td>egg, adventure, evolution, digidex, battle, group, pvp, versus, encounter</td></tr>
+            <tr><td>Version<br><code>version</code></td><td>Gameplay version for egg, adventure and versus; also scopes Unlocks Area. Empty: every version.</td><td>Number or empty</td></tr>
+            <tr><td>Area<br><code>area</code></td><td>adventure: the area whose clear earns it.</td><td>Number</td></tr>
+            <tr><td>Unlocks Area<br><code>unlocks_area</code></td><td>An adventure area kept shut until this unlock is held.</td><td>Number; empty or 0 for none</td></tr>
+            <tr><td>Device Ver.<br><code>device_version</code></td><td>versus: this side's device version (Device tab), not the gameplay version.</td><td>Number</td></tr>
+            <tr><td>Opp. Device Ver.<br><code>opponent_device_version</code></td><td>versus: the other side's device version; either orientation of the pair counts.</td><td>Number</td></tr>
+            <tr><td>Opp. Device Vers.<br><code>opponent_device_versions</code></td><td>versus: any of these devices (used instead of the column before).</td><td>"0,1,2"</td></tr>
+            <tr><td>Own Species<br><code>own_names</code></td><td>versus: this side's Digimon, any of the list. Empty: any.</td><td>Names separated by <code>;</code></td></tr>
+            <tr><td>Opp. Species<br><code>opponent_names</code></td><td>versus: the other side's Digimon. Empty: any.</td><td>Names separated by <code>;</code></td></tr>
+            <tr><td>Protocol<br><code>protocol</code></td><td>versus: the battle format the connection must be fought on; it also lets Versus battles against another module's pet count.</td><td>Text, e.g. PENC, DMC</td></tr>
+            <tr><td>Stage<br><code>stage</code></td><td>evolution: earned by reaching any Digimon at or above this stage.</td><td>0-8</td></tr>
+            <tr><td>Amount<br><code>amount</code></td><td>The count to reach (digidex, battle, pvp; versus: battles; encounter: Friends).</td><td>Number</td></tr>
+            <tr><td>Distinct<br><code>distinct</code></td><td>versus: counts different opponent devices instead of battles.</td><td>Checkbox</td></tr>
+            <tr><td>Outcome<br><code>outcome</code></td><td>versus: win counts won battles only; empty counts any.</td><td>empty, win</td></tr>
+            <tr><td>To<br><code>to</code></td><td>evolution: reaching any of these Digimon earns it. Click the cell to pick them.</td><td>Pet list</td></tr>
+            <tr><td>List<br><code>list</code></td><td>group: every unlock listed must be held. Click the cell to pick them.</td><td>Unlock list</td></tr>
+          </tbody>
+        </table>
+        <table class="data-table">
+          <thead><tr><th>Type</th><th>Earned when</th></tr></thead>
+          <tbody>
+            <tr><td>egg</td><td>An egg of Version hatches (empty Version: any egg). This does not make the egg available; Special and Special Key on the Pet tab do.</td></tr>
+            <tr><td>adventure</td><td>Area is cleared by a pet of Version, or a beaten enemy's Unlock names it.</td></tr>
+            <tr><td>evolution</td><td>A pet reaches one of To, or any Digimon at or above Stage.</td></tr>
+            <tr><td>digidex</td><td>Amount distinct Digimon have been raised.</td></tr>
+            <tr><td>battle</td><td>Amount total victories.</td></tr>
+            <tr><td>group</td><td>Every unlock in List is held. Several rows with the same Name mean any one of their lists.</td></tr>
+            <tr><td>pvp</td><td>A party pet has Amount connection wins.</td></tr>
+            <tr><td>versus</td><td>Connection battles (DCom, Versus) matching the versus columns: one, or Amount of them. Several rows with the same Name mean any one of them.</td></tr>
+            <tr><td>encounter</td><td>A beaten special encounter or recruit names it in its Unlock, or, with Amount, that many Friends have joined.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Backgrounds</h3>
+        <img class="shot free" src="../assets/editor/editor_module_backgrounds.png" alt="Backgrounds sub-tab">
+        <table class="data-table">
+          <thead><tr><th>Column</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Name<br><code>name</code></td><td>The file name without <code>bg_</code>. It must be exactly the Name of the unlock that grants the background.</td><td>Text</td></tr>
+            <tr><td>Label<br><code>label</code></td><td>The name the player sees.</td><td>Text</td></tr>
+            <tr><td>DayNight<br><code>day_night</code></td><td>The background has day, dusk and night images.</td><td>Checkbox</td></tr>
+            <tr><td>HiRes</td><td>Whether a high-resolution image exists.</td><td>YES (green) / NO (red)</td></tr>
+            <tr><td>Valid</td><td>Whether the images the row needs exist.</td><td>YES (green) / NO (red)</td></tr>
+          </tbody>
+        </table>
+        <p>Files live in the module's <code>backgrounds</code> folder: <code>bg_&lt;name&gt;.png</code>, or with DayNight
+          <code>bg_&lt;name&gt;_day.png</code>, <code>_dusk.png</code> and <code>_night.png</code>; the high-resolution
+          image adds <code>_high</code> (<code>bg_forest_day_high.png</code>). Add creates a row, Remove deletes one,
+          Refresh checks the files again, and Import fills a row from a PNG's name (it does not copy the file: put the PNG
+          in the folder first).</p>
       </div>
     </div>
+
+    <!-- ============================================================ device -->
+    <div class="content-section" id="device">
+      <h2 class="section-title" onclick="toggleSection(this)">Device tab<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <img class="shot free" src="../assets/editor/editor_device.png" alt="Device tab">
+        <p>A device is the shell the player picks on the egg screen; one module may have several. The list shows each
+          device's picture, name and device version. Add creates "New Device"; Remove deletes the selected one and saves
+          at once. The form's Save writes <code>devices.json</code>; Cancel restores the stored values. A module with no
+          devices and no <code>devices.json</code> gets none written (it keeps the egg screen without devices).</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Sprite<br><code>sprite</code></td><td>The device picture, drawn over its screen on the egg screen. Click the box to choose a PNG; it is copied into the module's <code>devices</code> folder, replacing a file of the same name.</td><td>PNG (shipped devices: 105x80)</td></tr>
+            <tr><td>Name<br><code>name</code></td><td>Caption under the device on the egg screen.</td><td>Text</td></tr>
+            <tr><td>Device Version<br><code>device_version</code></td><td>The device's hardware version as it identifies itself over a connection, used by battle protocols and connection requirements. The hatched Digimon takes it. It is not the gameplay version.</td><td>0-9999</td></tr>
+            <tr><td>Background<br><code>background</code></td><td>The module background shown in the device's screen; it also becomes the game background when none is set yet.</td><td>A module background, or blank</td></tr>
+            <tr><td>Screen Placement X, Y<br><code>background_x</code>, <code>background_y</code></td><td>Top-left corner of the screen inside the device picture, in its pixels.</td><td>-9999-9999</td></tr>
+            <tr><td>Scale<br><code>background_scale</code></td><td>Size of the low-resolution background in the screen.</td><td>1-100 %</td></tr>
+            <tr><td>Egg Selection<br><code>eggs</code></td><td>The eggs offered once the device is picked: "+" adds a stage 0 pet, clicking an egg removes it. A gold border marks a special egg. A device with a single available egg hatches it directly.</td><td>Stage 0 pets</td></tr>
+          </tbody>
+        </table>
+        <p>Device Preview shows the result. A device appears on the egg screen when it has a background or a picture
+          and at least one egg currently available.</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ pet -->
+    <div class="content-section" id="pet">
+      <h2 class="section-title" onclick="toggleSection(this)">Pet tab<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <img class="shot free" src="../assets/editor/editor_pet.png" alt="Pet tab">
+        <p>The list shows every Digimon of the module with its frame 0 sprite on its Attribute's colour (Data blue,
+          Vaccine green, Virus red, Free purple) and "Ver. | Idx. | Stage". It is sorted by version, then Index, then
+          stage and name. The search box with Go, &lt; and &gt; finds names containing the text.</p>
+        <table class="data-table">
+          <thead><tr><th>Button</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>Add</td><td>Opens Add Pet (below). The new pet is saved at once.</td></tr>
+            <tr><td>Remove</td><td>Deletes the selected pet after a confirmation and saves at once. Sprites, routes pointing at it and enemies of its name are left as they are.</td></tr>
+            <tr><td>Copy / Paste</td><td>Paste adds a duplicate of the copied pet (every field, same name and Index; its routes are copies) and saves at once.</td></tr>
+            <tr><td>Save / Cancel</td><td>Save stores the form and writes <code>monster.json</code>; Cancel restores the stored values. Save changes only what was edited: a value the form's lists or ranges do not offer (an attack id without a sprite, an unknown Attribute) is kept.</td></tr>
+            <tr><td>Edit Evolutions</td><td>Opens the <a href="#evolutions">evolution editor</a>.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Add Pet</h3>
+        <img class="shot free" src="../assets/editor/editor_add_pet.png" alt="Add Pet dialog">
+        <p>Stage picks the stage (Stage 0-8). Digimon lists "Custom" and the Digimon Database records of that stage
+          (only Custom when the Database cannot be reached). The new pet starts from the stage's template; a Database
+          Digimon also gets its name, Min Weight and Attribute. Module data, when the record has it, copies that module's
+          data for the Digimon and downloads its sprite sets into the module.</p>
+
+        <h3>Sprites</h3>
+        <p>The strip shows frames 0-15 of the pet's sprite set: IDLE1, IDLE2, HAPPY, ANGRY, TRAIN1, TRAIN2, ATK1, ATK2,
+          EAT1, EAT2, NOPE, NAP1, NAP2, SICK, LOSE and SPECIAL. The set is found by name (<code>&lt;Name&gt;_dmc</code>,
+          as a folder of <code>0.png</code>-<code>15.png</code> or a ZIP) in the primary format, then the secondary, then
+          the third; for each format the module's folder comes before the shared assets. An egg uses frames 0-2 only.</p>
+        <table class="data-table">
+          <thead><tr><th>Button</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>Download</td><td>Copies the pet's name and opens the DMC sprite database site (dmc-sprite-database.vercel.app).</td></tr>
+            <tr><td>Import</td><td>Copies <code>&lt;Name&gt;_dmc.zip</code> from the Windows Downloads folder into the module's folder of the primary format, replacing a ZIP of that name.</td></tr>
+            <tr><td>Refresh</td><td>Reloads the frames from disk.</td></tr>
+            <tr><td>SPECIAL box</td><td>Click to choose a PNG saved as frame 15 where the pet's sprites were found, which may be the shared assets. Frame 15 enables the special animation.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Fields</h3>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Name<br><code>name</code></td><td>The key everything joins on: evolution targets, enemies and Friend encounters name it exactly, and it finds the sprites. Renaming does not rename sprites or references.</td><td>Text</td></tr>
+            <tr><td>Special<br><code>special</code></td><td>With Special Key: nothing evolves into this pet and no egg hatches it until that unlock is held.</td><td>Checkbox</td></tr>
+            <tr><td>Stage<br><code>stage</code></td><td>Evolution Stage (table below). Egg sets Stomach to 0.</td><td>Egg, Baby I, Baby II, Child, Adult, Perfect, Ultimate, Super Ultimate, Super Ultimate+</td></tr>
+            <tr><td>Special Key<br><code>special_key</code></td><td>The unlock's Name (Unlocks sub-tab). Enabled while Special is ticked.</td><td>Text</td></tr>
+            <tr><td>Index<br><code>index</code></td><td>The Digimon's number on the original device or card, per version; the game uses it to identify a connected device's Digimon. Eggs: -1 (disabled); -1 on another pet is none.</td><td>-1-9999</td></tr>
+            <tr><td>Time<br><code>time</code></td><td>Evolution timer in minutes: the pet can evolve on the timer once this much time has passed in the form.</td><td>0-99999</td></tr>
+            <tr><td>Version<br><code>version</code></td><td>The gameplay version (roster) the pet belongs to; it decides which evolutions and unlocks apply. Not the device version.</td><td>0-100</td></tr>
+            <tr><td>Energy<br><code>energy</code></td><td>Maximum DP; DP is refilled to it on evolving.</td><td>0-100</td></tr>
+            <tr><td>Attribute<br><code>attribute</code></td><td>Battle advantage: Vaccine beats Virus, Virus beats Data, Data beats Vaccine; Free has none.</td><td>Free, Data, Virus, Vaccine</td></tr>
+            <tr><td>DigiSoul<br><code>digisoul</code></td><td>The Digimon's family on the Digivice iC (its Field in the Database): family weapons can be used only by their family, and the Status screen shows it. Empty: none.</td><td>empty, Beast, Bird, Machine, Water, Dragon, Insect, Holy, Dark</td></tr>
+            <tr><td>Personality<br><code>personality</code></td><td>Vital Bracelet personality (the card's activity type). Not used by the game yet.</td><td>Stoic, Active, Normal, Indoor, Lazy</td></tr>
+            <tr><td>Tags<br><code>tags</code></td><td>Labels a route's Defeat Tag counts defeats of (PENGZ: G-Monster).</td><td>Comma-separated</td></tr>
+            <tr><td>Sleeps / Wakes<br><code>sleeps</code>, <code>wakes</code></td><td>Bedtime and wake-up time. Hunger and Strength pause while the pet sleeps. Empty: none.</td><td>HH:MM</td></tr>
+            <tr><td>ATK Main<br><code>atk_main</code></td><td>The regular attack sprite. Ids are the device's attack id + 1; 0 (None) is no attack.</td><td>None, 1...: <code>atk/&lt;id&gt;.png</code> of the module, else the shared assets</td></tr>
+            <tr><td>ATK Alt<br><code>atk_alt</code></td><td>The alternate (big) attack sprite; None uses ATK Main.</td><td>Same list</td></tr>
+            <tr><td>Power<br><code>power</code></td><td>Base battle power; the Power Bonus Rule adds to it.</td><td>0-300</td></tr>
+            <tr><td>RPM<br><code>rpm</code></td><td>The shake rate the charge asks for on the RPM minigame (Digivice iC). 0 on every other minigame.</td><td>0-999</td></tr>
+            <tr><td>Crit Attack<br><code>atk_alt_2</code></td><td>The critical attack sprite, shown when Enable Special Attack Sprite is on.</td><td>None, 1...: <code>atk_crit</code></td></tr>
+            <tr><td>HP<br><code>hp</code></td><td>Hit points in a battle.</td><td>0-100</td></tr>
+            <tr><td>Injury Prob.<br><code>injury_probability</code></td><td>Base chance (%) that this form is injured after a lost battle.</td><td>0-100</td></tr>
+            <tr><td>Encounter Time<br><code>encounter_time_group</code></td><td>The Schedule group (Quests/Events) whose times its scheduled encounters come at. -1: none.</td><td>-1-99</td></tr>
+            <tr><td>Encounter Opp.<br><code>encounter_opponent_group</code></td><td>The pool of a pooled-encounter event it meets opponents from. -1: none.</td><td>-1-99</td></tr>
+            <tr><td>Battle Chances<br><code>encounter_chances</code></td><td>Vital Bracelet random battle: the chance (%) this character is met by a pet of its version at stage 1-4, 5-7 and 8. Each version's chances should total 100 per group.</td><td>"10/5/5"; "-" for none; empty if not on a card</td></tr>
+            <tr><td>Hunger Loss<br><code>hunger_loss</code></td><td>Minutes per Hunger heart lost. Higher is slower.</td><td>0-99999</td></tr>
+            <tr><td>Stomach<br><code>stomach</code></td><td>Hunger hearts the pet holds; feeding past full is overfeeding.</td><td>0-100</td></tr>
+            <tr><td>Strength Loss<br><code>strength_loss</code></td><td>Minutes per Strength heart lost. Higher is slower.</td><td>0-99999</td></tr>
+            <tr><td>Min Weight<br><code>min_weight</code></td><td>Minimum Weight: the lowest weight the form can reach.</td><td>0-100</td></tr>
+            <tr><td>Poop Timer<br><code>poop_timer</code></td><td>Minutes between poops.</td><td>0-99999</td></tr>
+            <tr><td>Evol Weight<br><code>evol_weight</code></td><td>Weight set on evolving into this form (0: kept).</td><td>0-99</td></tr>
+            <tr><td>Condition Hearts<br><code>condition_hearts</code></td><td>The form's condition hearts (with Care Condition Heart).</td><td>0-100</td></tr>
+            <tr><td>Heal Doses<br><code>heal_doses</code></td><td>Medicines needed to cure a sickness or an injury. 0: the form can neither fall sick nor be injured (usual for Baby I only).</td><td>0-100</td></tr>
+            <tr><td>Jogress Available<br><code>jogress_available</code></td><td>Stored but not read by the game: the jogress routes decide whether a pet can jogress.</td><td>Checkbox</td></tr>
+            <tr><td>Availability<br><code>availability</code></td><td>Normal: an ordinary Digimon. Unobtainable: an enemy-only record. Friend: a special encounter whose defeat registers it as a Friend (DigiXros reads the Friends).</td><td>Normal, Unobtainable, Friend</td></tr>
+            <tr><td>Star<br><code>star</code></td><td>Vital Bracelet stars (the Star power rule adds 16 each).</td><td>0-99</td></tr>
+            <tr><td>Attack<br><code>attack</code></td><td>Vital Bracelet AP: damage of a won round.</td><td>0-99</td></tr>
+            <tr><td>Critical Turn<br><code>critical_turn</code></td><td>Vital Bracelet: the round the critical hit lands on.</td><td>0-99</td></tr>
+          </tbody>
+        </table>
+        <table class="data-table center">
+          <thead><tr><th>Stage</th><th>Evolution Stage</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>Egg (Digitama)</td></tr>
+            <tr><td>1</td><td>Baby I</td></tr>
+            <tr><td>2</td><td>Baby II</td></tr>
+            <tr><td>3</td><td>Child</td></tr>
+            <tr><td>4</td><td>Adult</td></tr>
+            <tr><td>5</td><td>Perfect</td></tr>
+            <tr><td>6</td><td>Ultimate</td></tr>
+            <tr><td>7</td><td>Super Ultimate</td></tr>
+            <tr><td>8</td><td>Super Ultimate+</td></tr>
+          </tbody>
+        </table>
+        <div class="note">A Child or later form battles and needs Power and ATK Main. A Baby I or II needs them only when
+          one of its own routes asks for battles or training.</div>
+      </div>
+    </div>
+
+    <!-- ============================================================ evolutions -->
+    <div class="content-section" id="evolutions">
+      <h2 class="section-title" onclick="toggleSection(this)">Evolutions<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <img class="shot free" src="../assets/editor/editor_evolutions.png" alt="Evolution editor">
+        <p>Edit Evolutions (Pet tab, or Edit &gt; Edit Evolutions) opens the evolution editor for one version at a time.
+          The canvas shows every Digimon reachable from that version's eggs, one row per stage; each arrow is an
+          evolution route, with a box listing its requirements ("no criteria" for none). Several routes between the same
+          two Digimon sit side by side. Temporary evolutions are dashed.</p>
+        <table class="data-table">
+          <thead><tr><th>Control</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>Version</td><td>The version shown. Changing it rebuilds the canvas and drops unsaved lines.</td></tr>
+            <tr><td>Organize</td><td>Lays the canvas out again. It moves boxes only, never the route order.</td></tr>
+            <tr><td>Save</td><td>Stores the routes of every Digimon on the canvas and closes. The main Save then writes <code>monster.json</code>. Each route keeps its place in the order (a new one goes last) unless Evolution Order moved it, and routes the canvas cannot draw (a target on another version or missing) are kept as they are.</td></tr>
+            <tr><td>Cancel</td><td>Closes without storing the lines (edits already saved in a requirements box stay).</td></tr>
+            <tr><td>Create Evolution</td><td>Click the source Digimon, then the target: a new route without requirements is added as the source's last. The mode stays on until clicked again.</td></tr>
+            <tr><td>Create Temp Evolution</td><td>The same for a temporary evolution.</td></tr>
+            <tr><td>Evolution Order</td><td>Click a Digimon to reorder its routes (below).</td></tr>
+            <tr><td>Delete</td><td>Click a line to delete that route, or a Digimon to take it and its lines off the canvas (the pet itself is kept). One deletion per click of the button.</td></tr>
+            <tr><td>Pet list</td><td>Drag a Digimon onto the canvas to add it; its routes to Digimon already on the canvas are drawn.</td></tr>
+          </tbody>
+        </table>
+        <div class="warning">Routes are tried in order and the first whose requirements are all met is taken. Put
+          narrow or gated routes before broad fallbacks, and leave a gap where the device fails to evolve: do not add
+          routes to fill it. Deleting a line or a Digimon from the canvas deletes those routes when the canvas is
+          saved.</div>
+
+        <h3>Evolution Order</h3>
+        <img class="shot free" src="../assets/editor/editor_evolution_order.png" alt="Evolution Order window">
+        <p>The window lists the Digimon's Evolutions and Temporary Evolutions, each in its own order, with &#9650; and
+          &#9660; to move a route. The top route is tried first. OK applies the order to the canvas; the canvas Save keeps
+          it.</p>
+
+        <h3>Edit Evolution Criteria</h3>
+        <img class="shot free" src="../assets/editor/editor_evolution_criteria.png" alt="Edit Evolution Criteria dialog">
+        <p>Click a route's box to edit its requirements. A range is "min to max", inclusive; -1 in the right box leaves
+          the requirement out, and 999999 means no upper limit. 0 to 0 is an exact zero, not "unused". Copy and Paste
+          move a whole set of requirements between routes. Cancel leaves the route exactly as it was.</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Condition Hearts<br><code>condition_hearts</code></td><td>Condition hearts.</td><td>Range</td></tr>
+            <tr><td>Training<br><code>training</code></td><td>The pet's effort (not a training count).</td><td>Range</td></tr>
+            <tr><td>Battles<br><code>battles</code></td><td>Battles in this form.</td><td>Range</td></tr>
+            <tr><td>Win Ratio<br><code>win_ratio</code></td><td>Win percentage in this form; tested once the pet has fought. The module's Evolution Win Ratio Chance then rolls.</td><td>Range, 0-100</td></tr>
+            <tr><td>Win Count<br><code>win_count</code></td><td>Battles won in this form.</td><td>Range</td></tr>
+            <tr><td>Total Battles<br><code>total_battles</code></td><td>Battles over the pet's whole life.</td><td>Range</td></tr>
+            <tr><td>Total Win Ratio<br><code>total_win_ratio</code></td><td>Lifetime win percentage.</td><td>Range, 0-100</td></tr>
+            <tr><td>Mistakes<br><code>mistakes</code></td><td>Care mistakes.</td><td>Range</td></tr>
+            <tr><td>Level<br><code>level</code></td><td>The pet's level.</td><td>Range, 0-10</td></tr>
+            <tr><td>Overfeed<br><code>overfeed</code></td><td>Feedings while full.</td><td>Range</td></tr>
+            <tr><td>Sleep Disturbances<br><code>sleep_disturbances</code></td><td>Times woken or kept from sleep.</td><td>Range</td></tr>
+            <tr><td>Poops on Screen<br><code>poops</code></td><td>Poops on screen when the route is checked.</td><td>Range</td></tr>
+            <tr><td>Poop Unclean Time<br><code>virus</code></td><td>Virus: poops left past Care Poop Mistake Time over the pet's life. Tried at once and spent when taken.</td><td>Range</td></tr>
+            <tr><td>Minutes in Form<br><code>form_minutes</code></td><td>Minutes in the current form, asleep or awake.</td><td>Range</td></tr>
+            <tr><td>Area<br><code>area</code></td><td>This Digimon has won a battle in this adventure area or a later one. Progress cleared once for good belongs in Unlock Held instead.</td><td>0 (unused) or an area</td></tr>
+            <tr><td>Unlock Held<br><code>unlock</code></td><td>A module unlock the player holds, earned by any Digimon.</td><td>Unlock name</td></tr>
+            <tr><td>Jogress Type<br><code>jogress</code></td><td>Makes the route a jogress, which never happens on the timer. Single: two Digimon become one. Dual: each evolves by its own route. Jogress routes are first-match too: a named partner goes before the Attribute routes it also matches. A route in the oldest shape (stage and attribute without a jogress marker, PENZ) shows as Dual by attribute, and Save writes it in the current shape.</td><td>empty, Single, Dual</td></tr>
+            <tr><td>Jogress Name<br><code>jogress_name</code></td><td>The partner's name (or name start, with Jogress Prefix).</td><td>Pet name</td></tr>
+            <tr><td>Jogress Prefix<br><code>jogress_prefix</code></td><td>Matches the partner by the start of its name, any version.</td><td>Checkbox (Single only)</td></tr>
+            <tr><td>Stage (Jogress)<br><code>jogress_stage</code></td><td>The partner's stage. 0: any.</td><td>Number</td></tr>
+            <tr><td>Version (Jogress)<br><code>jogress_version</code></td><td>The partner's version. 0: this pet's.</td><td>Number</td></tr>
+            <tr><td>Attribute (Jogress)<br><code>jogress_attribute</code></td><td>The partner's Attribute, instead of a name. Across modules only these routes match.</td><td>empty, Da, Vi, Va, Free</td></tr>
+            <tr><td>Special Encounter<br><code>special_encounter</code></td><td>Ticked: beat a special encounter in this form. Empty: did not. Filled square: either.</td><td>Three states</td></tr>
+            <tr><td>Chance (%)<br><code>chance</code></td><td>Rolled after the other requirements; a failed roll falls through to the next route. -1: unused.</td><td>-1-100</td></tr>
+            <tr><td>At Death (%)<br><code>at_death</code></td><td>A death route: tried only when the pet would die, taken instead with this chance.</td><td>0 (unused)-100</td></tr>
+            <tr><td>Stage-5 ... Stage-9<br><code>stage-5</code> ... <code>stage-9</code></td><td>Enemies of that stage defeated in this form.</td><td>Range</td></tr>
+            <tr><td>Event Communication<br><code>event_communication</code></td><td>Digimon Twin Event Communications.</td><td>Range</td></tr>
+            <tr><td>Trophies<br><code>trophies</code></td><td>Trophies.</td><td>Range</td></tr>
+            <tr><td>Vital Values<br><code>vital_values</code></td><td>Vital Values.</td><td>Range</td></tr>
+            <tr><td>Reliability<br><code>reliability</code></td><td>Current Reliability.</td><td>Range, 0-31</td></tr>
+            <tr><td>DigiSoul DNA<br><code>digisoul_dna</code></td><td>The DigiSoul given most must be one of those checked.</td><td>Beast, Bird, Machine, Water, Dragon, Insect, Holy, Dark</td></tr>
+            <tr><td>Weight<br><code>weight</code></td><td>Current weight.</td><td>Range, 0-100</td></tr>
+            <tr><td>Quests Completed<br><code>quests_completed</code></td><td>Quests completed on the module.</td><td>Range, 0-100</td></tr>
+            <tr><td>PVP<br><code>pvp</code></td><td>Connection battles (Versus, Arena, DCom), won or lost.</td><td>Range</td></tr>
+            <tr><td>Defeat Tag / Amount<br><code>defeat_tag</code>, <code>defeat_tag_amount</code></td><td>Defeats in this form of opponents carrying the tag (Pet tab, Tags); tried every minute. Amount unused: one.</td><td>Tag; range</td></tr>
+            <tr><td>G-Cell Hatch<br><code>gcell_hatch</code></td><td>The pet hatched from a G-Cell Fragment egg.</td><td>Checkbox</td></tr>
+            <tr><td>Blue / Yellow / Red G-Cells<br><code>blue_gcells</code> ...</td><td>The DMGZ meter's cells.</td><td>Range</td></tr>
+            <tr><td>G-Cells<br><code>gcells</code></td><td>Cells of the module's G-Cell Style (PENGZ 0-14).</td><td>Range</td></tr>
+            <tr><td>G-Cell Level<br><code>gcell_level</code></td><td>The DMGZ meter's level: 1 Blue, 2 Yellow, 3 and 4 Red.</td><td>Range</td></tr>
+            <tr><td>Item / Item Amount<br><code>item</code>, <code>item_amount</code></td><td>An item used from the Armor / Item menu, that many uses; never on the timer.</td><td>Item; 1-999999</td></tr>
+            <tr><td>Time Range<br><code>time_range</code></td><td>Real-clock window; an end before the start wraps past midnight. Fill both ends.</td><td>HH:MM to HH:MM</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Temporary Evolution Criteria</h3>
+        <img class="shot free" src="../assets/editor/editor_temp_evolution.png" alt="Temporary Evolution Criteria dialog">
+        <p>A temporary evolution (Mode Change or DigiXros) is a battle-only form: the pet takes it for one battle and
+          reverts. Nothing should evolve into it and it needs no Special Key. Its requirements:</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Type<br><code>type</code></td><td>How the form is presented.</td><td>Mode Change, Xros</td></tr>
+            <tr><td>Strength<br><code>strength</code></td><td>The pet's Strength range for the form to be offered.</td><td>Range</td></tr>
+            <tr><td>Megahit<br><code>megahit</code></td><td>A condition met during the battle, not a gate before it.</td><td>Checkbox (Mode Change)</td></tr>
+            <tr><td>Unlock<br><code>unlock</code></td><td>A module unlock the player must hold.</td><td>Unlock name</td></tr>
+            <tr><td>Friend<br><code>friend</code></td><td>Friends that must be registered (Edit... picks them).</td><td>Pet list</td></tr>
+            <tr><td>Friend count<br><code>friend_count</code></td><td>How many Friends the module's list must hold (DMXW Shoutmon X7: Superior Mode, 13+).</td><td>Range</td></tr>
+            <tr><td>Battle area<br><code>battle_area</code></td><td>The area of the battle: an adventure area of this module, or 0 for any other battle (events, special encounters, Versus, DCom).</td><td>Range</td></tr>
+            <tr><td>DP cost<br><code>xros_cost</code></td><td>DP the form costs: offered only to a pet holding that much, spent as the battle starts (DMXW DigiXros: 1 for Shoutmon X2 up to 7 for Shoutmon X7). 0: free.</td><td>0-999</td></tr>
+            <tr><td>Background<br><code>background</code></td><td>Background while the form is active.</td><td>Module background (Xros)</td></tr>
+            <tr><td>Animation<br><code>animation</code></td><td>Animation played when the form is entered.</td><td>Module animation (Xros)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================================================ battle -->
+    <div class="content-section" id="battle">
+      <h2 class="section-title" onclick="toggleSection(this)">Battle tab<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <img class="shot free" src="../assets/editor/editor_battle.png" alt="Battle tab">
+        <p>The Battle tab holds the module's adventure enemies and special encounters (<code>battle.json</code>). The
+          list shows "Ver. | Stage | Area | Round" (special encounters first, on amber). Add opens Add Enemy: pick a
+          version and one of its pets, whose name, stage, Attribute, Power, HP and attacks are copied, or "Custom". Add,
+          Remove, Paste and the form's Save write the file at once. The sprite strip is the same as on the Pet tab.</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Name<br><code>name</code></td><td>Must be a Digimon's name exactly: the sprite and a Friend's record are found by it.</td><td>Text</td></tr>
+            <tr><td>Version<br><code>version</code></td><td>The version roster. Each round uses the enemy of the pet's own version if there is one, otherwise a random version present on that round.</td><td>0-999999</td></tr>
+            <tr><td>Stage<br><code>stage</code></td><td>The enemy's stage; beating it counts for the Stage-N route requirements.</td><td>Egg ... Super Ultimate+</td></tr>
+            <tr><td>Area<br><code>area</code></td><td>Adventure area.</td><td>1-999999</td></tr>
+            <tr><td>Attribute<br><code>attribute</code></td><td>Battle Attribute.</td><td>Free, Data, Virus, Vaccine</td></tr>
+            <tr><td>Round<br><code>round</code></td><td>Position in the area; rounds are fought in order. A special encounter keeps its round: a battle run fights an area's special rounds in turn; a lone encounter is 1.</td><td>1-999999</td></tr>
+            <tr><td>Power<br><code>power</code></td><td>Battle power, weighed against the pet's for the hit rate.</td><td>1-999999</td></tr>
+            <tr><td>Sp. Encounter<br><code>special_encounter</code></td><td>A special encounter, outside the round sequence, started by events, items, cards or passwords.</td><td>Checkbox</td></tr>
+            <tr><td>Handicap<br><code>handicap</code></td><td>Points taken off the hit rate of whoever attacks this enemy: a higher handicap makes it harder to hit.</td><td>0-999999</td></tr>
+            <tr><td>Prize<br><code>prize</code></td><td>Item won. A win draws one prize among the round's enemies (items and packs), then rolls its chance.</td><td>Item or empty</td></tr>
+            <tr><td>Main Attack<br><code>atk_main</code></td><td>Regular attack sprite (attack id + 1).</td><td>None, 1...</td></tr>
+            <tr><td>Unlock<br><code>unlock</code></td><td>An unlock given when it is beaten: an adventure unlock when its battle clears the area, an encounter unlock for a special encounter or recruit.</td><td>Unlock name</td></tr>
+            <tr><td>Alt Attack<br><code>atk_alt</code></td><td>Alternate attack sprite.</td><td>None, 1...</td></tr>
+            <tr><td>HP<br><code>hp</code></td><td>Hit points.</td><td>0-999999</td></tr>
+            <tr><td>Crit Attack<br><code>atk_alt_2</code></td><td>Critical attack sprite.</td><td>None, 1...</td></tr>
+            <tr><td>Friend<br><code>friend</code></td><td>Beating it registers a Friend (a round enemy or a raisable recruit). A special encounter of an Availability "Friend" Digimon registers without it.</td><td>Checkbox</td></tr>
+            <tr><td>Currency<br><code>currency</code></td><td>The currency (Shop/Currencies tab) it charges and pays.</td><td>Currency or empty</td></tr>
+            <tr><td>Entry Cost<br><code>currency_cost</code></td><td>Cost of entering its area, set on round 1 (Digivice iC Coliseums 0, 100, 500, 1000 P).</td><td>0-999999 (round 1 only)</td></tr>
+            <tr><td>Reward<br><code>currency_reward</code></td><td>Currency gained for beating it; a battle pays its largest reward once.</td><td>0-999999</td></tr>
+            <tr><td>Prize Pack<br><code>prize_card_pack</code></td><td>A card pack won, drawn like Prize.</td><td>Card pack or empty</td></tr>
+            <tr><td>Prize Chance<br><code>prize_chance</code></td><td>Chance (%) the prize drops once drawn.</td><td>0-100 (100: always)</td></tr>
+            <tr><td>Attack Pattern<br><code>attack_pattern</code></td><td>The attacks it throws, one per round, on the module's battle scale (Color: 1 normal, 2 super). Empty: the pattern from its stage and effort.</td><td>"1,2,2,2,2,1"</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Fast Enemy Editor and Special Encounters</h3>
+        <img class="shot free" src="../assets/editor/editor_fast_enemy.png" alt="Fast Enemy Editor">
+        <p>Fast Editor (or Edit &gt; Enemy Editor) shows the adventure as a grid: one tab per area, one column per round,
+          one row per version. Clicking a pet on the left (filtered by Version and Stage) places it in the first free round
+          of its version; right-clicking a cell removes it. The Unlock and Item boxes under a round show the value its
+          enemies share (empty when they differ, with the values in the box's tooltip); a box you change is written to
+          every version's enemy of that round, an unchanged one only fills the enemies you added. A cell holding several
+          enemies shows the first and "(+N)". Add Area adds the next area. Save writes the grid's enemies, plus any it
+          cannot show (a version no pet with power has, an area or round below 1), unchanged; Cancel discards.</p>
+        <p>Special Encounters opens the same editor for special encounters. Clicking a pet adds it to the version's
+          Round 1 cell, beside any encounter already there (the game meets one of a cell's encounters at random);
+          right-click removes the first.</p>
+        <h3>Update ATK Sprites</h3>
+        <p>Tools &gt; Update ATK Sprites copies ATK Main, ATK Alt and Crit Attack from each pet to every enemy of the same
+          name and writes <code>battle.json</code>. Image files are not touched.</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ item -->
+    <div class="content-section" id="item">
+      <h2 class="section-title" onclick="toggleSection(this)">Item tab<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <img class="shot free" src="../assets/editor/editor_item.png" alt="Item tab">
+        <p>The module's items (<code>item.json</code>). A module's own items are used on its own Digimon only. Add creates
+          "New Item"; Remove deletes after a confirmation; Ctrl+C / Ctrl+V duplicate an item under a new id. The form's Save keeps the edits (selecting another item
+          discards them); the main Save writes the file. The icon below the form is <code>items/&lt;Sprite Name&gt;.png</code>.</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Name<br><code>name</code></td><td>Item routes, shops and other items refer to it by this name. A name containing "Digimental" is drawn as an Armor evolution.</td><td>Text</td></tr>
+            <tr><td>Description<br><code>description</code></td><td>Inventory text.</td><td>Text</td></tr>
+            <tr><td>Sprite Name<br><code>sprite_name</code></td><td>The icon, a PNG in the module's <code>items</code> folder. A name with no file there is listed and kept.</td><td>File name</td></tr>
+            <tr><td>Effect<br><code>effect</code></td><td>What using the item does (table below).</td><td>empty, status_change, status_boost, component, digimental, dna, currency, devolve, bedding, cure, accessory, closeup, evolve, random_evolve, encounter, bundle, multiplier, training_limit</td></tr>
+            <tr><td>Component Item<br><code>component_item</code></td><td>component: the item crafted from Amount copies.</td><td>Item (component only)</td></tr>
+            <tr><td>Status<br><code>status</code></td><td>The stat, ailment, slot or gain the effect works on.</td><td>hunger, strength, hp, attack, xai_roll, skip_to_boss, exp_multiplier, armor, power, vital_values, timer, dp, reliability, injury_rate, sick, injury, head, face, aura, pp, bp, ap, vp, "pp,bp,ap,hp"</td></tr>
+            <tr><td>Amount<br><code>amount</code></td><td>Size of the change or boost; component: copies per craft.</td><td>0-9999</td></tr>
+            <tr><td>Boost Time<br><code>boost_time</code></td><td>status_boost with Battle Item Use area: the areas it lasts (battles, without sequential rounds). multiplier: minutes. 0 is not permanent: a status_boost ends at its first countdown, a multiplier at once (the report flags a status_boost below 1).</td><td>0-9999</td></tr>
+            <tr><td>Weight Gain<br><code>weight_gain</code></td><td>Weight added or removed on use, whatever the effect.</td><td>-99-99</td></tr>
+            <tr><td>Protocol Value<br><code>protocol_value</code></td><td>The value a battle item sends in the DigiROM while active (Digivice iC). 0: none.</td><td>0-255</td></tr>
+            <tr><td>Attack Sprite<br><code>attack_sprite</code></td><td>Attack sprite thrown while the boost is active. 0: the pet's own.</td><td>0-999</td></tr>
+            <tr><td>DigiSoul<br><code>digisoul</code></td><td>dna: the DigiSoul fed (Amount of it). status_boost: only Digimon of that family can use it.</td><td>empty, Beast, Bird, Machine, Water, Dragon, Insect, Holy, Dark</td></tr>
+            <tr><td>Currency<br><code>currency</code></td><td>currency: the currency paid, Amount of it.</td><td>Currency</td></tr>
+            <tr><td>Reusable<br><code>reusable</code></td><td>Not used up on use.</td><td>Checkbox</td></tr>
+            <tr><td>Target<br><code>target</code></td><td>evolve: the Digimon it becomes (pet's version). encounter: the special encounter fought.</td><td>Name</td></tr>
+            <tr><td>Min Stage / Max Stage<br><code>min_stage</code>, <code>max_stage</code></td><td>Stages that can take the item. 0: no limit.</td><td>0-9</td></tr>
+            <tr><td>Extra Effects<br><code>extra_effects</code></td><td>More effects applied after the main one: Effect, Status, Amount, Boost, Currency, DigiSoul, Item.</td><td>Effects status_change, status_boost, dna, currency, devolve, item</td></tr>
+          </tbody>
+        </table>
+        <table class="data-table">
+          <thead><tr><th>Effect</th><th>Uses</th><th>In the game</th></tr></thead>
+          <tbody>
+            <tr><td>empty</td><td>Status hunger or strength, Amount</td><td>A food.</td></tr>
+            <tr><td>status_change</td><td>Status, Amount</td><td>Changes a stat: hunger and strength as food; hp, attack and power permanently up to the module's caps; dp, timer, vital_values, reliability, injury_rate.</td></tr>
+            <tr><td>status_boost</td><td>Status, Amount, Boost Time, DigiSoul, Protocol Value, Attack Sprite</td><td>A battle item, chosen before a battle, not from the inventory.</td></tr>
+            <tr><td>component</td><td>Amount, Component Item</td><td>Crafts one Component Item.</td></tr>
+            <tr><td>digimental</td><td></td><td>Used from the Armor / Item menu by Digimon whose route names it.</td></tr>
+            <tr><td>dna</td><td>DigiSoul, Amount</td><td>Feeds DigiSoul.</td></tr>
+            <tr><td>currency</td><td>Currency, Amount</td><td>Pays currency.</td></tr>
+            <tr><td>devolve</td><td></td><td>Returns the pet to the form it evolved from.</td></tr>
+            <tr><td>bedding</td><td>Amount (minutes)</td><td>The pet sleeps, is healed and loses one care mistake.</td></tr>
+            <tr><td>cure</td><td>Status sick, injury or empty</td><td>Heals that ailment (empty: either).</td></tr>
+            <tr><td>accessory</td><td>Status head, face or aura</td><td>Puts the accessory on or off.</td></tr>
+            <tr><td>closeup</td><td></td><td>Brings the Digimon up close.</td></tr>
+            <tr><td>evolve</td><td>Target, Min/Max Stage</td><td>Evolves the pet into Target.</td></tr>
+            <tr><td>random_evolve</td><td></td><td>Evolves into a random next form of the pet's routes.</td></tr>
+            <tr><td>encounter</td><td>Target</td><td>Starts that special encounter.</td></tr>
+            <tr><td>bundle</td><td>Extra Effects rows of effect item</td><td>Gives Item x Amount for each row.</td></tr>
+            <tr><td>multiplier</td><td>Status pp and/or vp, Amount (factor), Boost Time (minutes)</td><td>Multiplies those gains for a time.</td></tr>
+            <tr><td>training_limit</td><td></td><td>Listed only; the game refuses it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================================================ shop -->
+    <div class="content-section" id="shop">
+      <h2 class="section-title" onclick="toggleSection(this)">Shop/Currencies tab<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <img class="shot free" src="../assets/editor/editor_shop.png" alt="Shop sub-tab">
+        <p>Shops and currencies (<code>shop.json</code>), in two sub-tabs. Edits are kept as the selection moves. Items
+          and unlocks come from the Item and Module tabs, saved or not; card packs from the Collection tab. A module
+          without shops or currencies gets no file.</p>
+        <h3>Shop</h3>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Name<br><code>name</code></td><td>The shop's name in the game; events open it by this name.</td><td>Text</td></tr>
+            <tr><td>Unlock (optional)<br><code>unlock</code></td><td>The shop is listed once this unlock is held. Empty: always open.</td><td>Unlock</td></tr>
+            <tr><td>Event only<br><code>event_only</code></td><td>Hidden until a ShopAccess event (Quests/Events) opens it, for good, for a time or for one visit.</td><td>Checkbox</td></tr>
+            <tr><td>Icon<br><code>icon</code></td><td>The shop's icon, from the module's <code>icons</code> folder.</td><td>PNG name (48x48)</td></tr>
+            <tr><td>Currency<br><code>currency</code></td><td>The currency every price is paid in.</td><td>Currency</td></tr>
+            <tr><td>Items<br><code>items</code></td><td>The lines on sale: Item or Card Pack, One Card a Day, Price, Unlock (optional), Versions (optional, "1, 2": only while the party holds a pet of the module on one of them).</td><td>Grid</td></tr>
+          </tbody>
+        </table>
+        <p>Add Item adds the first item not listed, Add All Items every one, Remove Item the selected lines. Add Card Pack
+          sells a pack, opened when bought. Add Card Offer adds a One Card a Day line: one card of the pack, a different
+          one each day and the same all day, priced by rarity as "Common 500, Rare 1500, Legendary 5000". Other prices are
+          whole numbers.</p>
+        <h3>Currency</h3>
+        <img class="shot free" src="../assets/editor/editor_shop_currency.png" alt="Currency sub-tab">
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Name<br><code>name</code></td><td>Shops name their currency by it; renaming it here renames it in the shops.</td><td>Text</td></tr>
+            <tr><td>Icon (optional)<br><code>icon</code></td><td>Icon from the <code>icons</code> folder.</td><td>PNG name</td></tr>
+            <tr><td>Unit<br><code>unit</code></td><td>Written after an amount (100P).</td><td>Text</td></tr>
+            <tr><td>Cap<br><code>cap</code></td><td>The most a player can hold; earnings past it are lost. 0: no limit (Digivice iC 9999).</td><td>0-999999999</td></tr>
+            <tr><td>Training Gain<br><code>training_gain</code></td><td>Paid for each training result, once per training, at the best result.</td><td>Bad, Good, Great, Excellent (0-999)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================================================ collection -->
+    <div class="content-section" id="collection">
+      <h2 class="section-title" onclick="toggleSection(this)">Collection tab<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <p>The module's cards, what reading them does, and card packs (<code>cards.json</code>; art in the module's
+          <code>cards</code> folder). In the game they appear on the CARDS screen. A card is read for one Digimon of its
+          module, whose version picks version-specific effects.</p>
+        <h3>Cards</h3>
+        <img class="shot free" src="../assets/editor/editor_collection_cards.png" alt="Collection, Cards sub-tab">
+        <p>The filter shows one card type. Add asks for the type; Remove deletes the card (its art files at once). Import
+          reads card ZIPs made with the Digimon Database card maker (Soul Plate, iD Plate, DDP Chip), asking before
+          replacing a card with the same id. Edit Art opens the card in the card maker. The form's Save keeps the edits;
+          Export RFID Data saves the card's tag data as JSON. Click Front or Back to upload art.</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Front / Back<br><code>sprites</code></td><td>Card art. All DDP Chips share one back, <code>cards/DDP Chip_back.png</code>; Save writes it as the back of every DDP Chip that has none, as the game reads each card's own.</td><td>Soul Plate 125x275, iD Plate 205x325, others 250x350</td></tr>
+            <tr><td>Name<br><code>name</code></td><td>Name in the album ("???" until owned).</td><td>Text</td></tr>
+            <tr><td>Type<br><code>type</code></td><td>Soul Plates are read by DigiSoul Charge, other cards by Plate Charge. A Collectible is only viewed.</td><td>Soul Plate, DDP Chip, iD Plate, Custom, Collectible</td></tr>
+            <tr><td>Series<br><code>series</code></td><td>Printed series; iD Plates sort by it.</td><td>Text</td></tr>
+            <tr><td>Number<br><code>number</code></td><td>Number within the series.</td><td>0-9999</td></tr>
+            <tr><td>Value<br><code>value</code></td><td>The binary the card carries; Effects match it.</td><td>1-10 digits of 0/1</td></tr>
+            <tr><td>L / R<br><code>lr</code></td><td>iD Plate side-button state.</td><td>L/R, L, R</td></tr>
+            <tr><td>Rarity<br><code>rarity</code></td><td>Sets the default odds in packs (Common 70, Rare 25, Legendary 5) and the One Card a Day price.</td><td>Common, Rare, Legendary</td></tr>
+          </tbody>
+        </table>
+        <h3>Effects</h3>
+        <img class="shot free" src="../assets/editor/editor_collection_effects.png" alt="Collection, Effects sub-tab">
+        <p>An effect group says what reading a value does. Select a group, change it and press Apply; select one of its
+          effects, change it and press Apply Effect.</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Tool<br><code>tool</code></td><td>The menu that reads the card.</td><td>Any, Plate Charge, DigiSoul Charge</td></tr>
+            <tr><td>Binary<br><code>value</code></td><td>The value the group answers to.</td><td>1-10 digits of 0/1</td></tr>
+            <tr><td>L / R<br><code>lr</code></td><td>Restricts to a side-button state (5-digit values only).</td><td>Any, L, R, L/R</td></tr>
+            <tr><td>Effects: Type</td><td>Item: gives Item x Amount. DNA: feeds DigiSoul (X of each: all eight). Encounter: starts the special encounter at Area and Round. Unlock: grants the unlock.</td><td>Item, DNA, Encounter, Unlock</td></tr>
+            <tr><td>Version<br><code>version</code></td><td>Applies only for a Digimon of that version. -1: every version.</td><td>-1-99</td></tr>
+          </tbody>
+        </table>
+        <h3>Card Packs</h3>
+        <img class="shot free" src="../assets/editor/editor_collection_packs.png" alt="Collection, Card Packs sub-tab">
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Name<br><code>name</code></td><td>The pack's name in shops.</td><td>Text</td></tr>
+            <tr><td>Sprite<br><code>sprite</code></td><td>Pack art (click to set).</td><td>PNG</td></tr>
+            <tr><td>Cards per pack<br><code>cards_per_pack</code></td><td>Cards in one pack; each is drawn on its own, so duplicates happen.</td><td>1-99</td></tr>
+            <tr><td>Shine chance %<br><code>shine_chance</code></td><td>Chance a drawn card is shiny (Soul Plates never are).</td><td>0-100 (0.05: 1 in 2000)</td></tr>
+            <tr><td>Cards / odds<br><code>cards</code></td><td>The cards and their weights (not percentages). Add Card, or Add All of Type/Series..., then Save.</td><td>Grid</td></tr>
+          </tbody>
+        </table>
+        <p>Tools &gt; Import Collection from Module copies another module's cards, effects and packs (and their art) into
+          this one, asking once whether to replace entries that already exist.</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ quests -->
+    <div class="content-section" id="quests">
+      <h2 class="section-title" onclick="toggleSection(this)">Quests/Events tab<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <p>Four sub-tabs: Quests (<code>quests.json</code>), and Events, Connect Points and Schedule
+          (<code>events.json</code>).</p>
+        <h3>Quests</h3>
+        <img class="shot free" src="../assets/editor/editor_quests.png" alt="Quests sub-tab">
+        <p>Three quests are offered each day from the modules in the party.</p>
+        <table class="data-table">
+          <thead><tr><th>Column</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Name<br><code>name</code></td><td>Written by the editor from the type and amounts. Only a Daily Gift shows its own name in the game.</td><td>Read-only</td></tr>
+            <tr><td>Type<br><code>type</code></td><td>What the player must do. Daily_Gift asks nothing: one of the module's gifts fills a daily slot, ready to claim.</td><td>Boss, Training, Battle, Feeding, Evolution, Armor_Evolution, Jogress, Daily_Gift</td></tr>
+            <tr><td>Min Amount / Max Amount<br><code>target_amount_range</code></td><td>The target; the game uses Min or Max.</td><td>Whole numbers</td></tr>
+            <tr><td>Reward Type<br><code>reward_type</code></td><td>Item gives the Reward Value item; Experience, Trophy and Vital Values add Quantity to the party.</td><td>Item, Trophy, Experience, Vital_Values</td></tr>
+            <tr><td>Reward Value<br><code>reward_value</code></td><td>The item given (Item rewards).</td><td>Item</td></tr>
+            <tr><td>Quantity<br><code>reward_quantity</code></td><td>How much is paid.</td><td>Number</td></tr>
+          </tbody>
+        </table>
+        <h3>Events</h3>
+        <img class="shot free" src="../assets/editor/editor_events.png" alt="Events sub-tab">
+        <table class="data-table">
+          <thead><tr><th>Column</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Name<br><code>name</code></td><td>Shown when the event fires.</td><td>Text</td></tr>
+            <tr><td>Global<br><code>global</code></td><td>A random event that also fires when the player is not raising this module's Digimon.</td><td>Checkbox</td></tr>
+            <tr><td>Until Friend<br><code>until_friend</code></td><td>EnemyBattle: stops once its Digimon is a Friend.</td><td>Checkbox</td></tr>
+            <tr><td>Type<br><code>type</code></td><td>What the event does (table below).</td><td>EnemyBattle, ItemPackage, FriendBattle, PoolBattle, BattleRun, ShopAccess, CardBattle</td></tr>
+            <tr><td>Chance %<br><code>chance_percent</code></td><td>Random trigger: a weight among the module's random events (keep the total at 100 or less). Battle triggers: a chance in 100. With Draw: its share of 100.</td><td>Number</td></tr>
+            <tr><td>Area / Round<br><code>area</code>, <code>round</code></td><td>EnemyBattle: the special encounter fought. BattleRun: the area run.</td><td>Numbers</td></tr>
+            <tr><td>Item / Quantity<br><code>item</code>, <code>item_quantity</code></td><td>ItemPackage: the item given. BattleRun: the reward.</td><td>Item; number</td></tr>
+            <tr><td>Trigger<br><code>trigger</code></td><td>random (empty): the idle roll. adventure, area_clear, connection: after that battle. schedule: at the Schedule times of the pet's Encounter Time group.</td><td>empty, random, adventure, area_clear, connection, schedule</td></tr>
+            <tr><td>Outcome<br><code>outcome</code></td><td>Battle triggers: after a win (default), a loss or any battle.</td><td>empty, win, loss, any</td></tr>
+            <tr><td>Opp. Device<br><code>opponent_device_version</code></td><td>connection: the other side's device version. -1: any but the pet's own.</td><td>Number or empty</td></tr>
+            <tr><td>Protocol<br><code>protocol</code></td><td>connection: the battle format it must be fought on (device numbers repeat across formats).</td><td>Text, e.g. IC, DMM</td></tr>
+            <tr><td>Versions<br><code>versions</code></td><td>The pet versions the event is for. Empty: all.</td><td>"1, 2"</td></tr>
+            <tr><td>Areas<br><code>trigger_areas</code></td><td>adventure, area_clear: the areas whose battles roll it. Empty: any.</td><td>"8, 9"</td></tr>
+            <tr><td>Shop<br><code>shop</code></td><td>ShopAccess: the shop opened (mark it Event only).</td><td>Shop name</td></tr>
+            <tr><td>Access Min<br><code>access_minutes</code></td><td>ShopAccess: 0 for good, N minutes, -1 one visit.</td><td>Number</td></tr>
+            <tr><td>Draw<br><code>draw</code></td><td>Events sharing a draw name are one roll: at most one of them happens.</td><td>Text</td></tr>
+            <tr><td>Reward Round<br><code>reward_round</code></td><td>BattleRun: the round after which Item is paid. 0: after the last.</td><td>Number</td></tr>
+            <tr><td>Delay<br><code>delay_minutes</code></td><td>FriendBattle after a battle: minutes it is held back.</td><td>"1-5"</td></tr>
+            <tr><td>Pool Field / Pools<br><code>pool_field</code>, <code>pools</code></td><td>PoolBattle: the monster field that picks the pool, and each pool's special encounters in turn.</td><td>Field name; Pools dialog</td></tr>
+            <tr><td>Item Sequence<br><code>item_sequence</code></td><td>CardBattle: the item each win pays in turn.</td><td>Item Sequence dialog</td></tr>
+          </tbody>
+        </table>
+        <table class="data-table">
+          <thead><tr><th>Type</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>EnemyBattle</td><td>Fights the special encounter at Area and Round.</td></tr>
+            <tr><td>ItemPackage</td><td>Gives Item x Quantity.</td></tr>
+            <tr><td>FriendBattle</td><td>Fights a Friend a party Digimon of the module still needs.</td></tr>
+            <tr><td>PoolBattle</td><td>Fights the next encounter of the pool the pet's Pool Field selects.</td></tr>
+            <tr><td>BattleRun</td><td>Fights every special round of Area in turn; Item is paid after Reward Round.</td></tr>
+            <tr><td>ShopAccess</td><td>Opens an Event only shop.</td></tr>
+            <tr><td>CardBattle</td><td>Vital Bracelet random battle: an opponent of the pet's version by its Battle Chances; each win pays the next item of Item Sequence.</td></tr>
+          </tbody>
+        </table>
+        <h3>Connect Points</h3>
+        <img class="shot free" src="../assets/editor/editor_connect_points.png" alt="Connect Points sub-tab">
+        <p>Each pet earns points for battles; when they reach the cap it draws one reward of its version and starts again
+          from 0. The points are kept through evolution.</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Cap<br><code>cap</code></td><td>Points that fill the meter (Digivice iC 15). 1: a drop table rolled after every battle that counts, with no meter. 0: off.</td><td>0-9999</td></tr>
+            <tr><td>Per win / Per loss<br><code>win</code>, <code>loss</code></td><td>Points for a won or lost battle. Per loss 0 with Cap 1: only wins roll.</td><td>0-9999</td></tr>
+            <tr><td>Battles<br><code>battles</code></td><td>The battles that give points: Adventure, Connection (another device or pet: DCom, Versus, online).</td><td>Adventure, Connection (default)</td></tr>
+            <tr><td>Rewards<br><code>rewards</code></td><td>Version (empty: every version) and Item. Every listed reward is equally likely; list an item twice to double its chance. "(no item)" is a draw that gives nothing (the Vital Bracelets: 56 in 100, so 44% of counted wins drop an item).</td><td>Grid</td></tr>
+          </tbody>
+        </table>
+        <h3>Schedule</h3>
+        <p>Time Group and Times (HH:MM, comma-separated): the minutes of each day a schedule-triggered event can fire for
+          the Digimon whose Encounter Time names the group (the Godzilla devices). Write times with two digits
+          ("07:05").</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ passwords -->
+    <div class="content-section" id="passwords">
+      <h2 class="section-title" onclick="toggleSection(this)">Passwords tab<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <img class="shot free" src="../assets/editor/editor_passwords.png" alt="Passwords tab">
+        <p>Codes the player types in the game's Specials menu (<code>codes.json</code>), offered while a Digimon of the
+          module is in the party. Codes use 0-9 and A-Z, up to 10 characters. Only the fields of the chosen type are
+          enabled.</p>
+        <table class="data-table">
+          <thead><tr><th>Field</th><th>What it does</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td>Codes name<br><code>title</code></td><td>What the Specials menu calls the module's codes. Empty: Password.</td><td>Text</td></tr>
+            <tr><td>Codes icon<br><code>icon</code></td><td>Specials menu icon from the <code>icons</code> folder. Empty: a keypad.</td><td>PNG name</td></tr>
+            <tr><td>Name<br><code>name</code></td><td>Label in the editor and the module guide; the player never sees it.</td><td>Text</td></tr>
+            <tr><td>Code<br><code>code</code></td><td>What the player types.</td><td>Letters and numbers</td></tr>
+            <tr><td>Type<br><code>type</code></td><td>item: adds Item x Amount. pet: adds Pet of Pet Version to the party (or the Freezer); it cannot enter PvP. unlock: grants the unlock. encounter: starts the special encounter at Area, round 1.</td><td>item, pet, unlock, encounter</td></tr>
+            <tr><td>Item / Amount</td><td>item type.</td><td>Item; 1-9999</td></tr>
+            <tr><td>Pet / Pet Version</td><td>pet type.</td><td>Pet; its versions</td></tr>
+            <tr><td>Device Version<br><code>device_version</code></td><td>pet type: the hardware the pet counts as (a Device tab device version), which battle protocols key off; a Copymon is a doll of a Digimon from another device. -1: the pet's own.</td><td>-1-999999</td></tr>
+            <tr><td>Unlock</td><td>unlock type.</td><td>Unlock</td></tr>
+            <tr><td>Area</td><td>encounter type.</td><td>1-9999</td></tr>
+            <tr><td>Cooldown<br><code>cooldown</code></td><td>Minutes before the code works again. 0: no wait. -1: once only.</td><td>-1-999999</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================================================ tools -->
+    <div class="content-section" id="tools">
+      <h2 class="section-title" onclick="toggleSection(this)">Report and documentation<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <h3>Module Report</h3>
+        <img class="shot free" src="../assets/editor/editor_report.png" alt="Module Report window">
+        <p>Tools &gt; Module Report (Ctrl+R) saves every tab, then checks the saved files. Each line is an [Error],
+          [Warning] or [Info] with the entries it concerns; Copy to Clipboard copies the text. A file that cannot be read
+          is treated as empty without a message.</p>
+        <table class="data-table">
+          <thead><tr><th>Section</th><th>What it checks</th></tr></thead>
+          <tbody>
+            <tr><td>Module</td><td>Name, flag, battle icon and enemies with Adventure Mode, version, author, description, visible stats against G-Cells, Vital Values and Reliability, training effort, battle cost.</td></tr>
+            <tr><td>Unlocks</td><td>adventure unlocks without an area or with an area missing from the Battle tab, egg unlocks without a version or egg, missing labels, unknown card rewards.</td></tr>
+            <tr><td>Backgrounds</td><td>Missing images, high-resolution images, names without an unlock, labels.</td></tr>
+            <tr><td>Devices</td><td>No devices (an [Info]: a module without devices keeps the egg screen without them); devices sharing a device version.</td></tr>
+            <tr><td>Pets</td><td>Duplicates, missing names, attacks, HP and sprites, incomplete frames, Special without a key or with an unknown key, eggs without evolutions, routes to missing Digimon or unknown unlocks, routes asking for training or G-Cells a Digimon cannot earn, routes without requirements, orphans, evolutions to a lower stage.</td></tr>
+            <tr><td>Battle</td><td>Enemies without power, name, sprite, HP or attack; stage 0 enemies; rounds no earlier round leads to; unknown unlocks; versions without pets.</td></tr>
+            <tr><td>Items</td><td>Names, icons, effects and their status, amount, boost time (a status_boost below 1 is an error), currency, target and extra effects.</td></tr>
+            <tr><td>Shops/Currencies</td><td>Names, currencies, items and packs sold, prices, unlocks, icons, enemy costs and rewards.</td></tr>
+            <tr><td>Card Pack Rewards</td><td>Unknown packs and prize chances.</td></tr>
+            <tr><td>Collection</td><td>Card ids and values, effect values and tools, unknown items, unlocks and cards, missing art, empty packs.</td></tr>
+            <tr><td>Quests/Events</td><td>Quest amounts and rewards; event triggers, outcomes, items, encounters, shops, pools, Battle Chances and random-event chances.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Create Documentation</h3>
+        <p>Documentation &gt; Create Documentation (Ctrl+G) writes the module's guide into its <code>documentation</code>
+          folder from the saved files, so save first. Pages are overwritten; nothing is deleted. Open Documentation
+          (Ctrl+Shift+G) opens <code>documentation/index.html</code>. The guide links to the module's images, so it works
+          inside the module folder; the <a href="module-guide.html">Module Guide</a> links to each installed module's
+          guide.</p>
+        <table class="data-table">
+          <thead><tr><th>Page</th><th>Contents</th></tr></thead>
+          <tbody>
+            <tr><td>Module Info</td><td>Logo, name, version, author, category, description and the module settings.</td></tr>
+            <tr><td>Unlocks</td><td>Each unlock and how to earn it.</td></tr>
+            <tr><td>Backgrounds</td><td>Each background's images.</td></tr>
+            <tr><td>Devices</td><td>Each device with its screen and eggs.</td></tr>
+            <tr><td>Charts</td><td>One evolution chart per version, with each route's requirements and each Digimon's details.</td></tr>
+            <tr><td>Enemies</td><td>Every area and round, with prizes, fees and rewards.</td></tr>
+            <tr><td>Items</td><td>Every item, then the shops.</td></tr>
+            <tr><td>Collection</td><td>Cards, effects and card packs (listed when the module has any).</td></tr>
+            <tr><td>Quests &amp; Events</td><td>Quests, events, Connect Points and the encounter schedule.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Export Sprites and Generate Pet Index</h3>
+        <p>Tools &gt; Export Sprites (Ctrl+E) asks for a folder and writes
+          <code>&lt;module name&gt;/&lt;monsters|monsters_dot|monsters_hidef&gt;/&lt;Name&gt;_dmc.zip</code> for every
+          pet and enemy, taking the first set found (module or shared assets), then lists the names it could not find.</p>
+        <p>Tools &gt; Generate Pet Index renumbers Index for every pet in list order, from 0 within each version (eggs -1),
+          and writes <code>monster.json</code> at once.</p>
+        <div class="warning">Index is the Digimon's number on the device. Generate Pet Index replaces device numbers that
+          are not consecutive; do not use it on a module whose numbers come from the device.</div>
+      </div>
+    </div>
+
+    <!-- ============================================================ omninet -->
+    <div class="content-section" id="omninet">
+      <h2 class="section-title" onclick="toggleSection(this)">Omninet<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <img class="shot free" src="../assets/editor/editor_omninet_account.png" alt="OmniNet Account window">
+        <h3>Account</h3>
+        <p>Omninet &gt; Account opens the account window. Logged out it offers Create New Account (nickname, e-mail,
+          password, then a code sent by e-mail) and Login with Existing Account (e-mail and password, then a code). Logged
+          in it shows the nickname and e-mail with Link Game Device (a 4-character code for the game's Link Device
+          button, valid 5 minutes), Logout and Close. The session is kept in <code>%APPDATA%\OmnipetModuleEditor</code>
+          and checked each time a module opens.</p>
+        <h3>Manage Module</h3>
+        <p>Omninet &gt; Manage Module (logged in) saves every tab and checks the module's name and Version with Omninet.
+          A free name offers Publish New; a module you own or contribute to offers Update Module, Unpublish (owner only)
+          and Contributors; a name owned by someone else cannot be published.</p>
+        <table class="data-table">
+          <thead><tr><th>Publishing needs</th><th>Uploaded</th></tr></thead>
+          <tbody>
+            <tr><td><code>logo.png</code> and <code>Flag.png</code>; <code>BattleIcon.png</code> and at least one adventure enemy with Adventure Mode; at least one pet.</td><td>The whole module folder as a ZIP, with the name, version, description and category read from its <code>module.json</code>.</td></tr>
+          </tbody>
+        </table>
+        <h3>Module Library</h3>
+        <p>Omninet &gt; Module Library lists every published module (no login needed) with Author, Category, the installed
+          and Omninet versions and your Ownership. Download, Update or Reinstall installs a module into the modules
+          folder; the module open in the editor cannot be replaced.</p>
+        <div class="warning">Update and Reinstall delete the installed module's folder before extracting the download.
+          Copy any local changes first.</div>
+      </div>
+    </div>
+
+    <!-- ============================================================ database -->
+    <div class="content-section" id="database">
+      <h2 class="section-title" onclick="toggleSection(this)">Digimon Database menu<span class="arrow">&#9660;</span></h2>
+      <div class="section-content" style="display:none;">
+        <p>These actions save every tab, read the public Digimon Database (kept in memory until the editor closes) and
+          show a report. Apply writes the change and reloads the tabs.</p>
+        <table class="data-table">
+          <thead><tr><th>Menu item</th><th>What it does</th><th>Writes</th></tr></thead>
+          <tbody>
+            <tr><td>Record Match</td><td>Lists which Database record each pet and enemy name matches, and the names that match none.</td><td>Nothing</td></tr>
+            <tr><td>Validate Digimon Names</td><td>Lists names that differ from the Database's English name.</td><td>Nothing</td></tr>
+            <tr><td>Normalize Digimon Names</td><td>Renames pets, route targets and enemies to the Database's English names, and the module's own sprite ZIPs with them.</td><td><code>monster.json</code>, <code>battle.json</code> (Apply)</td></tr>
+            <tr><td>Import Min Weight</td><td>Lists pets whose Min Weight differs from the Database's.</td><td><code>monster.json</code> (Apply)</td></tr>
+            <tr><td>Update Local Sprite Database</td><td>For the module's primary and secondary formats, downloads the Database sheet of every matched Digimon whose shared sheet is missing or differs.</td><td>The game's shared <code>assets</code> sprite folders</td></tr>
+          </tbody>
+        </table>
+        <div class="warning">Update Local Sprite Database replaces existing shared sheets that differ from the
+          Database's, without a backup.</div>
+      </div>
+    </div>
+
+    <p class="page-footer">See also the <a href="manual.html">Manual</a>, the <a href="module-guide.html">Module
+        Guide</a> and <a href="troubleshooting.html">Troubleshooting</a>.</p>
   </div>
+
   <script>
-    function toggleSection(titleElem) {
-      var content = titleElem.closest('.content-section').querySelector('.section-content');
-      var isOpen = titleElem.classList.contains('open');
-      if (isOpen) {
-        content.style.display = 'none';
-        titleElem.classList.remove('open');
-      } else {
-        content.style.display = '';
-        titleElem.classList.add('open');
-      }
+    function toggleSection(t) {
+      var s = t.closest('.content-section'), c = s.querySelector('.section-content'), open = t.classList.toggle('open');
+      c.style.display = open ? '' : 'none'; s.classList.toggle('collapsed', !open);
     }
+    document.querySelectorAll('.section-title[onclick]').forEach(function (t) { t.closest('.content-section').classList.add('collapsed'); });
+    document.querySelectorAll('.page-toc a, .section-content a[href^="#"]').forEach(function (a) {
+      a.addEventListener('click', function () {
+        var s = document.querySelector(a.getAttribute('href'));
+        var t = s && s.querySelector('.section-title[onclick]');
+        if (t && !t.classList.contains('open')) toggleSection(t);
+      });
+    });
   </script>
 </body>
 

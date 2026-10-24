@@ -14,7 +14,7 @@ from ui.ui_constants import BASE_RESOLUTION
 from ui.windows.window_background import WindowBackground
 from core import game_globals, runtime_globals
 import core.constants as constants
-from models.game_freezer import GameFreezer
+from models.game_freezer import BOX_CAPACITY, GameFreezer
 from utils.scene_utils import change_scene
 from utils.pygame_utils import sprite_load
 
@@ -84,7 +84,7 @@ class SceneFreezerBox:
         self.ui_manager.add_component(self.title_scene)
         
         # Box page indicator (only visible in box mode)
-        self.box_page_label = Label(180, 12, f"Box {self.current_freezer_page + 1}/10", is_title=False)
+        self.box_page_label = Label(180, 12, self._box_label_text(), is_title=False)
         self.box_page_label.visible = False
         self.ui_manager.add_component(self.box_page_label)
         
@@ -192,7 +192,7 @@ class SceneFreezerBox:
             self.prev_page_button.visible = mouse_enabled
             self.next_page_button.visible = mouse_enabled
             self.box_page_label.visible = True
-            self.box_page_label.set_text(f"Box {self.current_freezer_page + 1}/10")
+            self.box_page_label.set_text(self._box_label_text())
             #self.ui_manager.set_focused_component(self.freezer_grid)
             self.load_current_freezer_sprites()
             runtime_globals.game_console.log("[SceneFreezerBox] Switched to box view")
@@ -241,6 +241,10 @@ class SceneFreezerBox:
         """Handle next page button click"""
         self._change_freezer_page(1)
     
+    def _box_label_text(self):
+        """'Box N/M', M being the boxes the freezer has (it read /10)."""
+        return f"Box {self.current_freezer_page + 1}/{len(self.freezer_pets)}"
+
     def _change_freezer_page(self, direction):
         """Change freezer page."""
         max_pages = len(self.freezer_pets)
@@ -248,7 +252,7 @@ class SceneFreezerBox:
         
         # Update box page label if visible
         if self.box_page_label and self.box_page_label.visible:
-            self.box_page_label.set_text(f"Box {self.current_freezer_page + 1}/10")
+            self.box_page_label.set_text(self._box_label_text())
         
         # Refresh freezer grid if visible
         if self.freezer_grid and self.freezer_grid.visible:
@@ -294,9 +298,18 @@ class SceneFreezerBox:
                         runtime_globals.game_console.log(f"[SceneFreezerBox] Pet {selected_pet.name} not in party list!")
                 else:
                     # Store to freezer
+                    box = self.freezer_pets[self.current_freezer_page]
+                    if len(box.pets) >= BOX_CAPACITY:
+                        # A full box: a 26th Digimon was saved where its 5x5
+                        # grid never showed it (GameFreezer.rebuild).
+                        runtime_globals.game_console.log(
+                            f"Cannot store {selected_pet.name}: Box {self.current_freezer_page + 1} is full!")
+                        runtime_globals.game_sound.play("cancel")
+                        self.menu.close()
+                        return
                     if selected_pet in game_globals.pet_list:
                         game_globals.pet_list.remove(selected_pet)
-                        self.freezer_pets[self.current_freezer_page].pets.append(selected_pet)
+                        box.pets.append(selected_pet)
                         runtime_globals.game_console.log(f"Stored {selected_pet.name}.")
                     else:
                         runtime_globals.game_console.log(f"[SceneFreezerBox] Pet {selected_pet.name} not in party list!")

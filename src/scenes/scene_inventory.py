@@ -96,12 +96,17 @@ class SceneInventory:
                 for item in module.items:
                     if getattr(item, "effect", "") == "digimental":
                         continue
-                    amount = get_inventory_value(item.id)
+                    # The module's own stock: an Omninet purchase of the same
+                    # id (the Vital Bracelets' clocks are sold there too) is
+                    # the shop's cross-module item, added below. Counted
+                    # here, it showed once per module that defines the id
+                    # (x3 with VB, VBE and VH) and only that module's
+                    # Digimon could take it.
+                    amount = game_globals.inventory.get(item.id, 0)
                     if amount > 0:
-                        # Check if we already have this item ID
+                        # One stock per id, however many modules define it
                         if item.id in items_by_id:
-                            # Add to existing quantity
-                            items_by_id[item.id].quantity += amount
+                            continue
                         else:
                             # Create new item entry
                             sprite_name = item.sprite_name
@@ -121,27 +126,41 @@ class SceneInventory:
 
         # Shop-purchased items (cross-module): pulled from purchases.items
         # (quantity per id) + metadata from game_globals.shop_items_data
-        # (cached when the shop items view loaded).  Skip any item that
-        # already exists in items_by_id (i.e. also defined by a module).
+        # (cached when the shop items view loaded).  An id a module also
+        # holds stock of joins that module's entry.
         try:
             purchases = getattr(game_globals, 'purchases', None)
             shop_meta = getattr(game_globals, 'shop_items_data', {}) or {}
-            if purchases and shop_meta and getattr(purchases, 'items', None):
-                items_dir = os.path.join("assets", "items")
+            if purchases and getattr(purchases, 'items', None):
+                from utils.inventory_utils import get_item_by_id
+                from utils.module_utils import shop_item_effect_known
                 for shop_id, qty in purchases.items.items():
-                    if qty <= 0 or shop_id in items_by_id:
+                    if qty <= 0:
                         continue
-                    meta = shop_meta.get(shop_id)
+                    if shop_id in items_by_id:
+                        # Some held as the module's own item too: one entry,
+                        # used up module stock first (remove_from_inventory)
+                        items_by_id[shop_id].quantity += qty
+                        continue
+                    meta = dict(shop_meta.get(shop_id) or {})
+                    same = get_item_by_id(shop_id) if not shop_item_effect_known(meta) else None
+                    if same is not None:
+                        # Sold under a module item's id: that item, when the
+                        # shop's own data could not be fetched (Omninet's
+                        # item download fails once an item was bought twice)
+                        for key in ('name', 'description', 'sprite_name'):
+                            if not meta.get(key):
+                                meta[key] = getattr(same, key, meta.get(key))
+                        for key in ('effect', 'status', 'amount', 'boost_time', 'protocol_value',
+                                    'attack_sprite'):
+                            if hasattr(same, key):
+                                meta[key] = getattr(same, key)
+                        meta['module_items_dir'] = os.path.join(
+                            getattr(get_module(same.module), 'folder_path', ''), 'items')
                     if not meta:
                         continue
                     sprite_name = meta.get('sprite_name') or ''
-                    sprite_path = os.path.join(items_dir, sprite_name) if sprite_name else ''
-                    icon = pygame.Surface((48, 48), pygame.SRCALPHA)
-                    if sprite_path and os.path.exists(sprite_path):
-                        try:
-                            icon = image_load(sprite_path).convert_alpha()
-                        except Exception:
-                            pass
+                    icon = self._shop_item_icon(shop_id, meta)
                     # Build a lightweight game_item proxy holding the
                     # fields the inventory consumer expects.  cross_module
                     # is True so the apply-effect path bypasses the usual
@@ -168,6 +187,34 @@ class SceneInventory:
                 f"[SceneInventory] Shop items load error: {exc}")
 
         return items
+
+    @staticmethod
+    def _shop_item_icon(shop_id, meta):
+        """A shop item's icon: the one kept in the save at purchase
+        (`module_utils.ensure_shop_item_icon`), a copy shipped in
+        assets/items or in the module whose item it is, or the one the shop's
+        Items page fetched this session; an empty square only when none is
+        there."""
+        from utils.module_utils import shop_item_icon_path
+        from services.shop_image_cache import shop_image_cache
+        sprite_name = meta.get('sprite_name') or ''
+        candidates = [shop_item_icon_path(meta)]
+        for folder in (os.path.join("assets", "items"), meta.get('module_items_dir')):
+            if sprite_name and folder:
+                candidates.append(os.path.join(folder, sprite_name))
+                if not sprite_name.lower().endswith(".png"):
+                    candidates.append(os.path.join(folder, sprite_name + ".png"))
+        from utils.asset_utils import resolve_path
+        for path in candidates:
+            if path and os.path.isfile(resolve_path(path)):
+                try:
+                    return image_load(path).convert_alpha()
+                except Exception:
+                    pass
+        cached = shop_image_cache.get(shop_id, 'icon', kind='item')
+        if cached is not None:
+            return cached
+        return pygame.Surface((48, 48), pygame.SRCALPHA)
 
     def setup_ui(self):
         """Setup the UI components for the inventory scene."""

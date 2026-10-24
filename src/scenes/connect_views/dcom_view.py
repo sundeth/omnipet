@@ -518,8 +518,11 @@ class DComView:
         self._last_status_log = time.time()
         self._last_comm_log = time.time()
 
-        self.status_label.set_text(
-            getattr(self, '_transport_warning', None) or "Waiting for device...")
+        #: What the wait says besides its countdown: the adapter mismatch, the
+        #: turn-swap advice or what START did. The countdown line used to
+        #: overwrite it on the next frame.
+        self._wait_notice = getattr(self, '_transport_warning', None)
+        self.status_label.set_text(self._wait_notice or "Waiting for device...")
         self.cancel_button.visible = True
         self._arm_start_button()
 
@@ -568,7 +571,13 @@ class DComView:
         # Stock firmware cannot calculate our final outcome mid-exchange.
         # Keep the role whose reply can be encoded, rather than send a
         # placeholder merely because the peer has not answered yet.
-        self.status_label.set_text('Start battle on the device, then connect it.')
+        self._say_while_waiting('Start battle on the device, then connect it.')
+
+    def _say_while_waiting(self, text):
+        """Put *text* on the status line for the rest of the wait: the
+        countdown is added to it rather than replacing it."""
+        self._wait_notice = text
+        self.status_label.set_text(text)
 
     def _arm_start_button(self):
         """Offer the button, ready to be pressed, and take the focus.
@@ -592,6 +601,10 @@ class DComView:
         complete. Nothing visibly happening is what makes people press again,
         and a second press was never going to help.
         """
+        if not self.communicating:
+            # The wait is over (timed out, refused, the adapter gone): there
+            # is no exchange left to open and the port may be closed.
+            return
         if self.start_button:
             self.start_button.set_text("LOADING")
             self.start_button.set_enabled(False)
@@ -601,10 +614,13 @@ class DComView:
     def _open_exchange(self):
         """Open only when the adapter can send this protocol role without guessing a result."""
         if not PacketExchange.cable_opens(self.battle_format):
-            self.status_label.set_text('Start battle on the device. This adapter must answer.')
+            self._say_while_waiting('Start battle on the device. This adapter must answer.')
             return
         if self.turn == protocol_constants.DCOM_TURN_GO_FIRST and \
                 self.simulator.opening:
+            # Already opened when the wait began (this format's cable opens).
+            self._say_while_waiting("Opening the battle - hold your device "
+                                    "to the adapter")
             return
         self.turn = protocol_constants.DCOM_TURN_GO_FIRST
         self.simulator.opening = True
@@ -617,8 +633,8 @@ class DComView:
         runtime_globals.game_console.log(
             "[DComView] START pressed: opening the exchange ourselves "
             "(turn 1, and Player 1 where the wire has roles)")
-        self.status_label.set_text("Opening the battle - hold your device "
-                                   "to the adapter")
+        self._say_while_waiting("Opening the battle - hold your device "
+                                "to the adapter")
         self._build_and_send()
 
     def _send_packets(self):
@@ -1098,6 +1114,8 @@ class DComView:
             self.status_label.set_text(
                 f"Recorded {len(self.simulator.captures)} - run another on "
                 f"the device ({remaining}s)")
+        elif getattr(self, '_wait_notice', None):
+            self.status_label.set_text(f"{self._wait_notice} ({remaining}s)")
         else:
             self.status_label.set_text(f"Waiting for device... ({remaining}s)")
 
@@ -1232,6 +1250,11 @@ class DComView:
 
         if self.phase == "communicating" and self.communicating:
             self._update_dcom_communication()
+        if (self.phase == "communicating" and not self.communicating
+                and self.start_button and self.start_button.visible):
+            # The wait is over (timed out, refused, the adapter gone, an
+            # error): START has nothing left to open.
+            self.start_button.visible = False
 
     def draw(self, surface):
         """Draw view-specific elements."""

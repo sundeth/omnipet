@@ -123,14 +123,15 @@ class QuestPanel(UIComponent):
                         runtime_globals.game_sound.play("menu")
                     return True
         
-        # Handle string action events (A button)
-        elif isinstance(event, str):
-            if event == "A":
-                if self.on_claim and self.quest:
-                    self.on_claim(self.quest)
-                    runtime_globals.game_sound.play("menu")
-                return True
-                
+        # A on the focused panel claims it. The game hands events on as
+        # (action, data) tuples; this branch used to test for the bare string
+        # "A", which never arrives, so only taps and START (claim all) worked.
+        elif event_type == "A":
+            if self.on_claim and self.quest and self.quest.status == QuestStatus.SUCCESS:
+                self.on_claim(self.quest)
+                runtime_globals.game_sound.play("menu")
+            return True
+
         return False
     
     def render(self):

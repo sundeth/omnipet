@@ -296,24 +296,34 @@ class StatusCarousel(UIComponent):
             # Default formatting
             return str(value) if value is not None else "0"
     
+    @staticmethod
+    def box_tooltip(box):
+        """A box's tooltip. Next Evolution draws a shape, not a value: it
+        read "Next Evolution: " with nothing after it."""
+        if box.get('id') == 'next_evolution':
+            if box.get('sprite') is not None:
+                return "Next Evolution: the shape of the form it is heading for"
+            return "Next Evolution: no route met yet"
+        return f"{box['name']}: {box['value']}"
+
     def format_evolution_timer(self, pet_data):
-        """Calculate and format remaining evolution time"""
-        # Get evolution timer (in minutes) and current pet timer (in frames)
-        evolution_time_minutes = pet_data.get('evolution_timer')  # This would be pet.time in minutes
-        current_timer_frames = pet_data.get('timer', 0)  # This would be pet.timer in frames
-        evolve_flag = pet_data.get('evolve', False)  # This would be pet.evolve
-        
-        if evolution_time_minutes is None or evolution_time_minutes < 0 or not evolve_flag:
+        """Calculate and format remaining evolution time.
+
+        The time in the form is the pet's evolution clock, ``_evol_minutes``
+        (passed as 'evolution_minutes'): the one evolution reads, which also
+        catches up offline. It used to be the frame counter ``pet.timer``,
+        which only counts frames since the pet was loaded."""
+        evolution_time_minutes = pet_data.get('evolution_timer')  # pet.time, in minutes
+        evolve_flag = pet_data.get('evolve', False)  # pet.evolve, its routes
+
+        if not isinstance(evolution_time_minutes, (int, float)) or evolution_time_minutes < 0 or not evolve_flag:
             return ""
-        
-        # Convert evolution time from minutes to seconds
-        evolution_time_seconds = evolution_time_minutes * 60
-        
-        # Convert current timer from frames to seconds
-        current_time_seconds = current_timer_frames // constants.FRAME_RATE
-        
-        # Calculate remaining time
-        remaining_seconds = evolution_time_seconds - current_time_seconds
+
+        elapsed_minutes = pet_data.get('evolution_minutes')
+        if elapsed_minutes is None:
+            # Data from before the clock was passed in: the old reading.
+            elapsed_minutes = (pet_data.get('timer', 0) // constants.FRAME_RATE) / 60
+        remaining_seconds = int((evolution_time_minutes - elapsed_minutes) * 60)
         
         if remaining_seconds <= 0:
             return "00:00"
@@ -788,7 +798,7 @@ class StatusCarousel(UIComponent):
             if 0 <= self.focused_box_index < len(self.boxes):
                 box = self.boxes[self.focused_box_index]
                 if self.manager and hasattr(self.manager, 'show_tooltip'):
-                    self.manager.show_tooltip(f"{box['name']}: {box['value']}")
+                    self.manager.show_tooltip(self.box_tooltip(box))
             return True
         elif event_type == "LCLICK":
             # Handle left clicks for box interaction
@@ -865,7 +875,7 @@ class StatusCarousel(UIComponent):
                     
                     # Show tooltip
                     if self.manager and hasattr(self.manager, 'show_tooltip'):
-                        self.manager.show_tooltip(f"{box['name']}: {box['value']}")
+                        self.manager.show_tooltip(self.box_tooltip(box))
                     
                     self.needs_redraw = True
                     return True
@@ -902,7 +912,7 @@ class StatusCarousel(UIComponent):
                             
                             # Show tooltip
                             if self.manager and hasattr(self.manager, 'show_tooltip'):
-                                self.manager.show_tooltip(f"{box['name']}: {box['value']}")
+                                self.manager.show_tooltip(self.box_tooltip(box))
                             
                             self.needs_redraw = True
                             return True

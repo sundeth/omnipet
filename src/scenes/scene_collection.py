@@ -23,8 +23,8 @@ wheel (a row a notch) and a drag, with a bar at its right showing where it is.
 
 Layout (base 240x240 UI, YELLOW_BRIGHT theme like the Library; every
 resolution draws this square at a whole UI scale, its fonts sized to match):
-    y 9..25    title "CARDS" (COLLECTION runs into the title bar's chevrons),
-               FILTER at the top right
+    y 9..25    title "CARDS" (COLLECTION runs into the title bar's chevrons;
+               owner, 2026-10-21: "good as just cards"), FILTER at the top right
     y 30..194  the page: card grid, one card, the scan, or the Digimon choice
     y 198..223 VIEW / READ / EXIT, or the page's own USE / BACK: the bottom
                row of the adventure screens (y 198, 25 high, 9 from the edges)

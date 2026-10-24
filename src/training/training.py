@@ -30,6 +30,17 @@ from battle.combat_constants import (
 TRAINING_READY_SOUND = "training_ready"
 #: The currency screen, after the result, stays as long as the result does.
 CURRENCY_SCREEN_FRAMES = combat_constants.RESULT_SCREEN_FRAMES
+#: The result banner for each outcome grade, 0-3: the grade the training
+#: pays (grade_for / get_attack_count), so the screen never says GREAT for a
+#: Good or a loss. A minigame whose top result has its own name (the Color
+#: line's Megahit) passes it as ``top``.
+GRADE_BANNERS = ("bad", "good", "great", "excellent")
+
+
+def grade_banner(grade, top="excellent"):
+    """The banner name (an AnimatedSprite ``play_<name>``) for a 0-3 grade."""
+    grade = max(0, min(3, int(grade or 0)))
+    return top if grade == 3 else GRADE_BANNERS[grade]
 
 
 class Training:
@@ -514,6 +525,17 @@ class Training:
         """The 0-3 outcome *pet* is credited with. Shared by the whole party
         unless a mode throws each pet its own row (Count Bar)."""
         return self.get_attack_count()
+
+    def play_grade_banner(self, grade, top="excellent"):
+        """Play the result banner of the 0-3 *grade* (``grade_banner``)."""
+        duration = combat_constants.RESULT_SCREEN_FRAMES / constants.FRAME_RATE
+        getattr(self.animated_sprite, "play_" + grade_banner(grade, top))(duration)
+
+    def quit_charge(self):
+        """B or the EXIT button during the charge: leave without a result.
+        The play's cost is already paid, as in every minigame."""
+        runtime_globals.game_sound.play("cancel")
+        self.leave_training()
 
     def anguirus_for(self, pet):
         """Whether *pet* trained with Anguirus (the PENGZ Count Match's every

@@ -212,7 +212,7 @@ def _module_files():
 @unittest.skipUnless(os.path.isdir(MODULES), "modules/ is gitignored")
 class ModuleData(unittest.TestCase):
     #: Where a source gives the save (death_save_fields_20261020.py).
-    SOURCED = {"IC": ("B Press", 60, 30, 5), "PENPROG": ("Shake", 100, 30, 50),
+    SOURCED = {"IC": ("B Press", 60, 30, 50), "PENPROG": ("Shake", 100, 30, 50),
                "PENGZ": ("Shake", 50, 30, 100), "PENC": ("Shake", 50, 30, 100),
                "TWIN": ("B Press", 60, 30, 100), "DMM": ("B Press", 100, 60, 100)}
 

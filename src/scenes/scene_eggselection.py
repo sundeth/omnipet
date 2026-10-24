@@ -253,7 +253,11 @@ class SceneEggSelection:
         
         # Message text panel
         message_panel = TextPanel(30, 80, 180, 80)
-        message_panel.set_text("No modules installed. Install manually or download from the Shop.")
+        # Reached only with modules installed (none at all goes to the Shop):
+        # none of them has an egg to start from. It said "No modules
+        # installed".
+        message_panel.set_text("No installed module has an egg to start with. "
+                               "Install one manually or download one from the Shop.")
         self.ui_manager.add_component(message_panel)
 
         # Action buttons
@@ -706,10 +710,16 @@ class SceneEggSelection:
         for module_name in self.available_modules:
             self.module_stats_cache[module_name] = self.calculate_module_stats(module_name)
         
-        # If no modules found in category, show all modules as fallback
+        # If no modules found in category, show all modules as fallback --
+        # the ones the player may use: in Progress Mode only those owned (it
+        # listed every installed module, the Tutorial included).
         if not self.available_modules:
             runtime_globals.game_console.log(f"[SceneEggSelection] No modules found for category '{category}', showing all modules as fallback")
             for module_name, module in runtime_globals.game_modules.items():
+                if module_name.lower() == 'tutorial':
+                    continue
+                if game_globals.is_progress_mode() and not game_globals.purchases.owns_module_name(module_name):
+                    continue
                 eggs = module.get_monsters_by_stage(0)
                 if eggs:  # Only include modules that have eggs
                     self.available_modules.append(module_name)
@@ -1159,8 +1169,15 @@ class SceneEggSelection:
         runtime_globals.game_sound.play("menu")
         runtime_globals.game_console.log("[SceneEggSelection] Random selection chosen")
         
-        # Step 1: Select a random category
-        categories = ["Classic", "Modern", "Conversions", "Custom"]
+        # Step 1: Select a random category among those with a module to
+        # offer (the greyed-out ones used to be picked too, and their
+        # fallback ignored what the player owns)
+        categories = [c for c in ("Classic", "Modern", "Conversions", "Custom")
+                      if self._has_modules_for_category(c.lower(), exclude_tutorial=True)]
+        if not categories:
+            runtime_globals.game_sound.play("cancel")
+            runtime_globals.game_console.log("[SceneEggSelection] No module to pick at random")
+            return
         random_category = random.choice(categories)
         runtime_globals.game_console.log(f"[SceneEggSelection] Random category selected: {random_category}")
         
@@ -1172,8 +1189,12 @@ class SceneEggSelection:
             runtime_globals.game_console.log("[SceneEggSelection] No modules available for random category, aborting random selection")
             return
         
-        # Select random module
-        self.current_module_index = random.randint(0, len(self.available_modules) - 1)
+        # Select random module (never the Tutorial's)
+        playable = [i for i, name in enumerate(self.available_modules) if name.lower() != 'tutorial']
+        if not playable:
+            runtime_globals.game_console.log("[SceneEggSelection] Only the Tutorial in this category, aborting random selection")
+            return
+        self.current_module_index = random.choice(playable)
         selected_module_name = self.available_modules[self.current_module_index]
         runtime_globals.game_console.log(f"[SceneEggSelection] Random module selected: {selected_module_name}")
         

@@ -167,8 +167,8 @@ class MinigameOutcomeTests(unittest.TestCase):
             level = grade if won else 0
             gain = md.fight_money_gain("IC", level)["Fight Money"]
             self.assertEqual(md.balance("IC", "Fight Money") - self.fm_before, gain, "Fight Money")
-            # Other modules with a currency are paid too (the Vital
-            # Bracelets' Bits, 2026-10-17): only the iC's line is checked.
+            # Other modules with a currency are paid too: only the iC's
+            # line is checked.
             ic_paid = [row for row in run.result.paid if row[0] == "IC"]
             self.assertEqual(ic_paid, [("IC", "Fight Money", gain)] if gain else [])
         self.assertEqual(self.env.error_logs(), [], "errors logged during the play")

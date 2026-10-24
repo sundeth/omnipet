@@ -26,8 +26,8 @@ class PetSelectionView:
             change_view_callback: Callback to change to another view
             is_online_mode: True if this is an online (Discord) battle
             is_dcom_mode: True if this is a DCom battle
-            is_wificom_mode: True if this is a WiFiCom battle.  Narrows the
-                list further than DCom does -- see get_wificom_battle_targets.
+            is_wificom_mode: True if this is a WiFiCom battle: one pet, as
+                DCom (see get_wificom_battle_targets).
             max_pets: Maximum number of pets that can be selected
             return_view: View to return to on back (e.g., "main_menu" or submenu hint)
         """
@@ -73,8 +73,8 @@ class PetSelectionView:
         selector_y = 40
         
         self.pet_selector = PetSelector(selector_x, selector_y, selector_width, selector_height)
-        # A WiFiCom battle announces the pet to a real device, so the pet
-        # needs a protocol to speak and a roster entry to claim.
+        # A WiFiCom battle is a connection battle like DCom's: any pet that
+        # may fight one (see get_wificom_battle_targets).
         eligible = (get_wificom_battle_targets() if self.is_wificom_mode
                     else get_battle_pvp_targets())
         self.pet_selector.set_pets(eligible)
@@ -92,11 +92,12 @@ class PetSelectionView:
             else:
                 # Nothing qualifies, and the reason is not obvious from an
                 # empty selector.
-                instruction_text = "No pet can use WiFiCom yet"
+                instruction_text = "No pet can battle now"
         elif self.is_dcom_mode:
             instruction_text = "Select 1 pet for DCom battle"
         else:
-            instruction_text = f"Select up to {self.max_pets} pets. Press START when ready."
+            # Short enough for the 240 canvas (the longer sentence ran off it).
+            instruction_text = f"Pick up to {self.max_pets}, then START"
         
         self.instructions_label = Label(10, 165, instruction_text, is_title=False)
         self.ui_manager.add_component(self.instructions_label)
@@ -144,7 +145,10 @@ class PetSelectionView:
         runtime_globals.game_console.log(f"[PetSelectionView] Selected {len(self.selected_pets)} pets")
         
         if self.is_wificom_mode:
-            self.change_view("wificom", selected_pets=self.selected_pets)
+            # Through the temporary-evolution chooser, as DCom goes: the form
+            # that fights is what the packets are built from.
+            self.change_view("xros", selected_pets=self.selected_pets,
+                             next_view="wificom")
         elif self.is_dcom_mode:
             # Via the temporary-evolution chooser: the DigiXros form is what
             # fights, so it has to be picked before the packets are built.
@@ -163,8 +167,10 @@ class PetSelectionView:
             # For local battles (DCom/WiFi), return to main_menu with local_battle submenu shown
             self.change_view("main_menu", initial_submenu="local_battle")
         else:
-            # For online battles (Discord), return to main_menu with arena submenu shown
-            self.change_view("main_menu", initial_submenu="arena")
+            # Online battles (Discord) start from the main menu's DISCORD
+            # button: back to the main menu. It opened the old "arena"
+            # submenu (OMNINET / DISCORD / BACK), which nothing else shows.
+            self.change_view("main_menu")
     
     def update(self):
         """Update the view."""
@@ -184,7 +190,8 @@ class PetSelectionView:
         if event_type == "B":
             self._on_back()
             return True
-        elif event_type == "A":
+        elif event_type in ("A", "START"):
+            # The instructions say "Pick up to N, then START".
             self._on_confirm()
             return True
     

@@ -16,6 +16,7 @@ from ui.components.reward_popup_ui import RewardPopupUI
 from ui.ui_constants import BASE_RESOLUTION
 from ui.windows.window_background import WindowBackground
 from core import game_globals, runtime_globals
+import core.constants as constants
 from utils.scene_utils import change_scene
 from models.game_quest import QuestStatus
 
@@ -167,6 +168,13 @@ class SceneLibrary:
     
     def update(self) -> None:
         """Updates the library scene."""
+        # The Library left open past midnight shows the new day's quests
+        # (checked once a second, as the main scene does).
+        self._frames = getattr(self, "_frames", 0) + 1
+        if self._frames % constants.FRAME_RATE == 0:
+            from utils.quest_event_utils import ensure_daily_quests, roll_over_day
+            if roll_over_day():
+                ensure_daily_quests()
         # Update quest panels if quests have changed
         self._update_quest_panels()
         

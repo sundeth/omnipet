@@ -86,6 +86,32 @@ def pixel_font_size(rel_path, size, floor=0):
     return native, max(1, int(floor) // native, nearest)
 
 
+_missing_glyph_cache = {}
+
+
+def _missing_glyphs(path):
+    """The characters of _PixelFont.SUBSTITUTES that the font at *path*
+    draws as its missing-glyph box (the shape it gives a private-use
+    character). Measured once per font file."""
+    if path in _missing_glyph_cache:
+        return _missing_glyph_cache[path]
+    missing = frozenset()
+    try:
+        probe = pygame.font.Font(path, 16)
+
+        def shape(ch):
+            surface = probe.render(ch, False, (255, 255, 255), (0, 0, 0))
+            w, h = surface.get_size()
+            return (w, h, bytes(surface.get_at((x, y))[0] > 127 for y in range(h) for x in range(w)))
+
+        box = shape(chr(0xE000))
+        missing = frozenset(ch for ch in _PixelFont.SUBSTITUTES if shape(ch) == box)
+    except Exception:  # pylint: disable=broad-except
+        pass
+    _missing_glyph_cache[path] = missing
+    return missing
+
+
 class _PixelFont(pygame.font.Font):
     """The game's font: always renders without anti-aliasing.
 
@@ -103,12 +129,25 @@ class _PixelFont(pygame.font.Font):
     the full size instead, as it was before the grid was enforced.
     """
 
+    #: What replaces a character the font draws as its missing-glyph box
+    #: (DigimonBasic, the title font, has no ' ` [ ] |: a team called
+    #: "Tamer's Team" showed "TAMER[box]S TEAM"). Characters the font has
+    #: are never touched.
+    SUBSTITUTES = {"'": "", "`": "", "[": "(", "]": ")", "|": "/"}
+
     def __init__(self, path, size, scale=1):
         super().__init__(path, size)
         self.scale = scale
         self._path = path
         self._native_size = size
         self._full_size_font = None
+        self._missing = _missing_glyphs(path)
+
+    def _clean(self, text):
+        """*text* with the characters this font cannot draw substituted."""
+        if not self._missing or not isinstance(text, str):
+            return text
+        return "".join(self.SUBSTITUTES.get(ch, ch) if ch in self._missing else ch for ch in text)
 
     def _full_size(self, text):
         """The font at ``scale`` times the native size, for text that is not
@@ -120,6 +159,7 @@ class _PixelFont(pygame.font.Font):
         return self._full_size_font
 
     def render(self, text, antialias=False, color=(255, 255, 255), bgcolor=None):
+        text = self._clean(text)
         font = self._full_size(text)
         if font is not None:
             if bgcolor is not None:
@@ -136,6 +176,7 @@ class _PixelFont(pygame.font.Font):
         return surface
 
     def size(self, text):
+        text = self._clean(text)
         font = self._full_size(text)
         if font is not None:
             return font.size(text)
@@ -155,6 +196,7 @@ class _PixelFont(pygame.font.Font):
         return super().get_descent() * self.scale
 
     def metrics(self, text):
+        text = self._clean(text)
         font = self._full_size(text)
         if font is not None:
             return font.metrics(text)

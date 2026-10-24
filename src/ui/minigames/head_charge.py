@@ -204,6 +204,12 @@ class HeadCharge:
                 return True
         return False
 
+    @staticmethod
+    def lane_y(letter, y_up, y_down):
+        """The lane a shot answering *letter* flies along: "B" (UP) the
+        upper one, "A" (DOWN) the lower."""
+        return y_up if letter == "B" else y_down
+
     def start_attack(self):
         """Start the attack animation sequence"""
         self.phase = "attack_move"
@@ -222,8 +228,10 @@ class HeadCharge:
         # Use cached flipped sprite for left attack
         left_sprite = self.left_attack_sprite_flipped
         right_sprite = self.right_attack_sprite
-        self.attack_positions.append([left_sprite, [left_x, y_up if left_dir == "A" else y_down]])
-        self.attack_positions.append([right_sprite, [right_x, y_up if right_dir == "A" else y_down]])
+        # UP answers "B" and DOWN "A" (handle_event), so "B" is the upper
+        # lane: UP used to fire along the lower one.
+        self.attack_positions.append([left_sprite, [left_x, self.lane_y(left_dir, y_up, y_down)]])
+        self.attack_positions.append([right_sprite, [right_x, self.lane_y(right_dir, y_up, y_down)]])
 
         self.is_collision = (left_dir == right_dir)
 

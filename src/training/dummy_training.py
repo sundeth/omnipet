@@ -174,16 +174,10 @@ class DummyTraining(Training):
         else:
             # Use AnimatedSprite component with predefined result animations
             if not self.animated_sprite.is_animation_playing():
-                duration = combat_constants.RESULT_SCREEN_FRAMES / constants.FRAME_RATE
-                
-                
-                # Choose which result animation to play
-                if self.strength < 10:
-                    self.animated_sprite.play_bad(duration)
-                elif self.strength < 14:
-                    self.animated_sprite.play_great(duration)
-                else:
-                    self.animated_sprite.play_excellent(duration)
+                # The banner of the grade the training pays: 10 or less is a
+                # loss (BAD), 11-12 GOOD, 13 GREAT, 14 EXCELLENT. It used to
+                # read the bar on its own bands (10-13 GREAT).
+                self.play_grade_banner(self.get_attack_count())
             
             # Draw the animated sprite
             self.animated_sprite.draw(surface)

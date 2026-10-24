@@ -56,6 +56,10 @@ class SceneTutorial:
     STEP_SET_CALL_SIGN = "set_call_sign"
     STEP_ADD_COINS = "add_coins"  # Add coins to player
 
+    #: The shop branch's way through SceneConnect: the one button of each of
+    #: these views it goes on by (the rest are disabled while it runs).
+    CONNECT_PATH_BUTTONS = {"main_menu": "shop_button", "shop": "modules_button"}
+
     def __init__(self) -> None:
         """Initialize the tutorial scene."""
         self.background = WindowBackground(True)
@@ -111,13 +115,16 @@ class SceneTutorial:
         self.tutorial_module = None
         self.tutorial_pet = None
         self.original_pet_list = None  # Store original pets
-        
+        self.original_poop_list = None  # and their poop: the tutorial makes and cleans its own
+
         # Skip confirmation
         self.skip_requested = False
 
         # Touch-only SKIP pill — gives finger users a visible way out;
-        # invisible / inert on keyboard / mouse / GPIO devices.
-        self._skip_overlay = SkipOverlay(on_skip=self._complete_after_skip)
+        # invisible / inert on keyboard / mouse / GPIO devices. It skips as
+        # START does: it used to leave the tutorial's Digimon in the party
+        # and the Tutorial module loaded.
+        self._skip_overlay = SkipOverlay(on_skip=self.skip_tutorial)
 
         # Build tutorial steps
         self._build_tutorial_steps()
@@ -663,7 +670,8 @@ class SceneTutorial:
         if self.tutorial_module:
             # Store original pet list
             self.original_pet_list = list(game_globals.pet_list) if game_globals.pet_list else []
-            
+            self.original_poop_list = list(game_globals.poop_list or [])
+
             # Get stage 0 pets (eggs) - returns a list
             eggs = self.tutorial_module.get_monsters_by_stage(0)
             if eggs:
@@ -738,34 +746,48 @@ class SceneTutorial:
         # Bottom row: 240 - 48 (icon height) - 10 (margin) = 182
         return 182
     
+    def _focus_menu_icon(self, index):
+        """Focus main-menu icon *index* where the main game draws it.
+
+        WindowMenu spreads its five icons over the screen's whole width
+        (calculate_spacing); fixed 48-px slots of the 240 square agree with
+        them only on a square screen. The icon's screen rect is turned back
+        into the overlay's base coordinates (global mode: the 240 square
+        centred on the screen)."""
+        rects = getattr(getattr(self.embedded_scene, "menu", None), "icon_rects", None) or []
+        if index < len(rects):
+            rect = rects[index]
+            scale = runtime_globals.UI_SCALE
+            offset_x = (runtime_globals.SCREEN_WIDTH - int(240 * scale)) // 2
+            offset_y = (runtime_globals.SCREEN_HEIGHT - int(240 * scale)) // 2
+            self.focus.focus_on((rect.x - offset_x) / scale, (rect.y - offset_y) / scale,
+                                rect.w / scale, rect.h / scale)
+        else:
+            y = self._get_menu_top_y() if index < 5 else self._get_menu_bottom_y()
+            self.focus.focus_on((index % 5) * 48, y, 48, 48)
+
     def _focus_call_sign(self):
         """Focus on the call sign icon (menu item 9, bottom row far right)."""
-        # Bottom row, icon 9 is at x=192 (5th icon in bottom row)
-        # Each icon is 48x48 at base resolution
-        self.focus.focus_on(192, self._get_menu_bottom_y(), 48, 48)
-    
+        self._focus_menu_icon(9)
+
     def _focus_status_menu(self):
         """Focus on the Status menu icon (menu item 0, top row first)."""
-        # Top row, icon 0 is at x=0
-        self.focus.focus_on(0, self._get_menu_top_y(), 48, 48)
+        self._focus_menu_icon(0)
         self.expected_menu_index = 0
-    
+
     def _focus_inventory_menu(self):
         """Focus on the Inventory/Feeding menu icon (menu item 1, top row second)."""
-        # Top row, icon 1 is at x=48
-        self.focus.focus_on(48, self._get_menu_top_y(), 48, 48)
+        self._focus_menu_icon(1)
         self.expected_menu_index = 1
-    
+
     def _focus_training_menu(self):
         """Focus on the Training menu icon (menu item 2, top row third)."""
-        # Top row, icon 2 is at x=96
-        self.focus.focus_on(96, self._get_menu_top_y(), 48, 48)
+        self._focus_menu_icon(2)
         self.expected_menu_index = 2
-    
+
     def _focus_poop_button(self):
         """Focus on the Poop cleaning button (menu item 4, top row last)."""
-        # Top row, icon 4 is at x=192 (last icon in top row)
-        self.focus.focus_on(192, self._get_menu_top_y(), 48, 48)
+        self._focus_menu_icon(4)
         self.expected_menu_index = 4
     
     def _focus_pet_list(self):
@@ -839,8 +861,7 @@ class SceneTutorial:
     
     def _focus_battle_menu(self):
         """Focus on the Battle menu icon (menu item 3, top row fourth)."""
-        # Top row, icon 3 is at x=144
-        self.focus.focus_on(144, self._get_menu_top_y(), 48, 48)
+        self._focus_menu_icon(3)
         self.expected_menu_index = 3
     
     def _focus_adventure_mode(self):
@@ -866,9 +887,7 @@ class SceneTutorial:
     
     def _focus_connect_menu(self):
         """Focus on the Connect menu icon (menu item 8, bottom row fourth)."""
-        # Bottom row, icon 8 is at x=144 (4th icon in bottom row)
-        # Icons 5,6,7,8,9 are at x = 0, 48, 96, 144, 192
-        self.focus.focus_on(144, self._get_menu_bottom_y(), 48, 48)
+        self._focus_menu_icon(8)
         self.expected_menu_index = 8
     
     def _focus_shop_button(self):
@@ -1421,6 +1440,12 @@ class SceneTutorial:
         y = int(2 * self.ui_scale)
         surface.blit(text, (x, y))
 
+    def plays_own_input_sounds(self):
+        """A minigame or battle running in the tutorial reads presses as play,
+        as it does outside it (dispatch_input leaves them be; UI-06)."""
+        check = getattr(self.embedded_scene, "plays_own_input_sounds", None)
+        return bool(check()) if callable(check) else False
+
     def handle_event(self, event) -> bool:
         """Handle input events."""
         # Touch-mode SKIP pill gets first crack at any tap so it can
@@ -1440,10 +1465,11 @@ class SceneTutorial:
             self.skip_tutorial()
             return True
 
-        # While locked on the module download, swallow back/cancel so the
-        # player can't leave the shop before the download finishes.  The
-        # focused Download button stays clickable; START (skip) still works.
-        if self._download_lock and event_type in ("B", "CANCEL"):
+        # The shop branch follows SceneConnect forward only (main menu, shop,
+        # its modules, the download): back/cancel would move it back or out
+        # of the tutorial with the tutorial's Digimon as the party. START
+        # (skip) still works.
+        if (self._download_lock or self.embedded_scene_name == "connect") and event_type in ("B", "CANCEL"):
             if hasattr(runtime_globals, 'game_sound') and runtime_globals.game_sound:
                 runtime_globals.game_sound.play("cancel")
             return True
@@ -1458,8 +1484,10 @@ class SceneTutorial:
             if self.dialog_top.handle_event(event):
                 return True
         
-        # Block clicks outside focused regions when focus is active
-        if event_type == "LCLICK" and self.focus.is_active():
+        # Block clicks outside focused regions while a highlight is shown (one
+        # fading out belongs to a step that is done: the battle's charge right
+        # after FIGHT takes taps anywhere)
+        if event_type == "LCLICK" and self.focus.state in (TutorialFocus.STATE_FADE_IN, TutorialFocus.STATE_ACTIVE):
             # Get mouse position
             mouse_pos = None
             if event_data and "pos" in event_data:
@@ -1471,7 +1499,9 @@ class SceneTutorial:
                 # Check if click is inside focused region
                 if not self.focus.is_click_inside_focus(mouse_pos[0], mouse_pos[1]):
                     # Click is outside focus - block it and play cancel sound
-                    if hasattr(runtime_globals, 'game_sound') and runtime_globals.game_sound:
+                    # (silent while a minigame or battle reads presses as play)
+                    if (hasattr(runtime_globals, 'game_sound') and runtime_globals.game_sound
+                            and not self.plays_own_input_sounds()):
                         runtime_globals.game_sound.play("cancel")
                     runtime_globals.game_console.log(f"[SceneTutorial] Click blocked outside focus region at {mouse_pos}")
                     return True
@@ -1481,6 +1511,10 @@ class SceneTutorial:
         if self.waiting_for_action:
             if self.embedded_scene and hasattr(self.embedded_scene, 'handle_event'):
                 self.embedded_scene.handle_event(event)
+            # SceneConnect has no hooks, so its progress is polled; poll it now
+            # too, or a second press before the next frame (A twice on SHOP)
+            # reaches the next view before the tutorial knows it got there.
+            self._update_connect_phase_progress()
             return True
         
         # Pass to embedded scene if input not blocked
@@ -1503,10 +1537,33 @@ class SceneTutorial:
             purchase_module → the player has acquired a module (purchases set)
             download_module → an owned module is now installed on disk
         """
-        action = self.waiting_for_action
-        if not action or not self.embedded_scene:
+        if self.embedded_scene_name != "connect" or not self.embedded_scene:
             return
-        if self.embedded_scene_name != "connect":
+        # The branch goes main menu -> SHOP -> MODULES -> a module: any other
+        # button of those two menus (WiFi, Arena, Items ...) and each view's
+        # own way back or out would leave the step the tutorial waits on.
+        # They are disabled every frame, as the views rebuild them on every
+        # change. In the module list everything but its Back stays: browsing
+        # it (and a detail's back-to-list) is the step.
+        current = getattr(self.embedded_scene, 'current_view', None)
+        keep = self.CONNECT_PATH_BUTTONS.get(getattr(self.embedded_scene, 'current_view_name', None))
+        for name, button in (vars(current).items() if current is not None else ()):
+            if not name.endswith('_button') or not hasattr(button, 'set_enabled'):
+                continue
+            if name in ('back_button', 'exit_button') or (keep and name != keep):
+                if button.enabled:
+                    button.set_enabled(False)
+        # Once the module is bought the step is its Download, highlighted on
+        # the detail page: the detail's back-to-list would take it away.
+        if self.waiting_for_action == "download_module" and current is not None:
+            to_list = getattr(current, '_on_detail_back', None)
+            for component in getattr(current, 'detail_components', None) or []:
+                if (to_list is not None and getattr(component, 'on_click_callback', None) == to_list
+                        and getattr(component, 'enabled', False)):
+                    component.set_enabled(False)
+
+        action = self.waiting_for_action
+        if not action:
             return
 
         view = getattr(self.embedded_scene, 'current_view_name', None)
@@ -1533,6 +1590,11 @@ class SceneTutorial:
             runtime_globals.game_console.log(f"[SceneTutorial] Action matched, advancing from step {self.current_step_index}")
             self.waiting_for_action = None
             self.expected_menu_index = None
+            # The scene behind is the player's again only at the next UNBLOCK
+            # step: a second press right after the action (a double click on
+            # Adventure, a double tap on Shop) would otherwise move it on
+            # before the tutorial has hooked the next view.
+            self.block_scene_input = True
             self._advance_step()
         else:
             runtime_globals.game_console.log(f"[SceneTutorial] Action mismatch - ignoring")
@@ -1549,7 +1611,20 @@ class SceneTutorial:
         # Restore original pet list
         if self.original_pet_list is not None:
             game_globals.pet_list = self.original_pet_list
-        
+        # ...and their poop: the tutorial's mess, left when skipped before the
+        # wash, would be saved with the party (and cost a care mistake).
+        if self.original_poop_list is not None:
+            game_globals.poop_list = list(self.original_poop_list)
+
+        # A skip during the battle, or a battle the tutorial never saw end,
+        # leaves battle_encounter.change_scene patched
+        # (TutorialBattle._patch_battle_encounter): the next real battle's
+        # return to the game would call the finished tutorial. The scene shown
+        # by then is not the battle, so put the module's own name back.
+        import battle.battle_encounter as battle_encounter_module
+        from utils import scene_utils
+        battle_encounter_module.change_scene = scene_utils.change_scene
+
         # Reset tutorial flags
         runtime_globals.pet_alert = False
     
@@ -1577,6 +1652,9 @@ class SceneTutorial:
         """Complete tutorial and transition to next scene via navigation_utils."""
         game_globals.show_tutorial = False
         self._restore_game_state()
+        # The Tutorial module goes with its Digimon: left loaded, it showed
+        # among the modules (egg selection's CUSTOM) until a restart.
+        self._cleanup_tutorial_module()
         game_globals.save()
         runtime_globals.game_console.log("[SceneTutorial] Tutorial complete")
         navigation_utils.route_to_next_scene(check_tutorial=False)

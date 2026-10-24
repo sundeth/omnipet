@@ -34,6 +34,7 @@ import json
 import os
 import sys
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -54,7 +55,7 @@ class AdventureRewards(unittest.TestCase):
 
     # ------------------------------------------------------------ helpers
     def fight(self, module_name, area, round_num, win, roll, make_pet=None, seed=1,
-              give_record=True):
+              give_record=True, drop_rng=None, skip_result=False):
         """One settled round with every random() in the encounter and the pet
         returning *roll*. *make_pet* builds the pet after the reset (default:
         the module's first Child). Returns (result, pet, before, after)."""
@@ -69,16 +70,45 @@ class AdventureRewards(unittest.TestCase):
             bf.ensure_battle_record(pet)   # BAT-F1; see test_a_fresh_pet_can_battle
         bf.set_party(env, [pet])
         before = self.state(module_name, pet)
+        # The Vital Bracelets' battle drops (Connect Points counting
+        # adventure battles, 2026-10-21; tests/unit/items/test_battle_drops.py)
+        # roll on the global random: recorded here and taken back out of
+        # the inventory, so the checks below see the round's prize alone.
+        from utils import connect_points
+        drops, real_award = [], connect_points.award
+
+        def award(p, won, rng=None, battle="connection"):
+            rng = rng or drop_rng
+            name =real_award(p, won, battle=battle) if rng is None else \
+                real_award(p, won, rng=rng, battle=battle)
+            if name:
+                drops.append(name)
+            return name
+
         with patch.object(encounter_module, "random", bf.ProxyRandom(roll, seed)), \
-                patch.object(pet_module, "random", bf.ProxyRandom(roll, seed)):
+                patch.object(pet_module, "random", bf.ProxyRandom(roll, seed)), \
+                patch.object(connect_points, "award", award):
             with quiet():
                 encounter = BattleEncounter(module_name, area, round_num, 1)
-            result = bf.run_round(env, encounter, draw_every=0, win=win, skip_battle=True)
+            result = bf.run_round(env, encounter, draw_every=0, win=win, skip_battle=True,
+                                  skip_result=skip_result)
         result["encounter"] = encounter
+        result["drops"] = drops
         self.assertEqual(result["victory"], "Victory" if win else "Defeat", result["phases"])
         self.assertNotEqual(result["outcome"], "timeout", result["phases"])
         self.assertEqual(bf.battle_errors(env), [])
-        return result, pet, before, self.state(module_name, pet)
+        after = self.state(module_name, pet)
+        if drops:
+            block = connect_points.settings(self.module(module_name))
+            self.assertTrue(win and "adventure" in connect_points.battles(block),
+                            f"{module_name} dropped {drops} without counting adventure battles")
+            from utils.inventory_utils import get_item_by_name
+            for name in drops:
+                item_id = get_item_by_name(module_name, name).id
+                after["inventory"][item_id] -= 1
+                if not after["inventory"][item_id] and item_id not in before["inventory"]:
+                    del after["inventory"][item_id]
+        return result, pet, before, after
 
     def state(self, module_name, pet):
         from utils import currency_utils
@@ -251,6 +281,26 @@ class AdventureRewards(unittest.TestCase):
         return next(m for m in self.module(module_name).get_all_monsters() if m.get("name") == name)
 
     # ------------------------------------------------------------ single cases
+    def test_the_vital_bracelets_roll_a_drop_after_each_win(self):
+        """The Vital Bracelets had no shop (owner, 2026-10-21): each won
+        adventure round draws once from the module's Connect Points (cap 1),
+        here forced onto the table's first item; a lost round draws
+        nothing."""
+        first_item = SimpleNamespace(choice=lambda seq: next(s for s in seq if s))
+        checked = 0
+        for module_name in ("VB", "VBE", "VH"):
+            if module_name not in MODULE_NAMES:
+                continue
+            first = next(r["item"] for r in self.module(module_name).load_event_extras()
+                         ["connect_points"]["rewards"] if r.get("item"))
+            for win in (True, False):
+                with self.subTest(module=module_name, win=win):
+                    result, *_ = self.fight(module_name, 1, 1, win, NEVER, drop_rng=first_item)
+                    self.assertEqual(result["drops"], [first] if win else [])
+            checked += 1
+        if not checked:
+            self.skipTest("no Vital Bracelet module installed")
+
     def test_a_prize_chance_below_certain_can_miss(self):
         """An enemy whose ``prize_chance`` is under 100 drops its prize on a
         roll under the chance and not on one over it (the first such enemy
@@ -328,6 +378,22 @@ class AdventureRewards(unittest.TestCase):
                 self.assertEqual((after["area"], after["round"]),
                                  self.expected_next(module_name, 1, 1, pet.version))
                 self.assertEqual(after["victories"], before["victories"] + 1)
+
+    def test_b_on_the_result_screen_still_records_the_win(self):
+        """B on the result screen ends its wait and nothing else: the same
+        fight with and without it leaves the same round, area, victories,
+        unlocks, inventory and pet. It used to leave the battle before any
+        of that was recorded (found by the 2026-10-22 documentation pass)."""
+        if not MODULE_NAMES:
+            self.skipTest("no adventure module installed")
+        for module_name in MODULE_NAMES[:4]:
+            with self.subTest(module=module_name):
+                plain = self.fight(module_name, 1, 1, True, NEVER)
+                skipped = self.fight(module_name, 1, 1, True, NEVER, skip_result=True)
+                self.assertIn("result", skipped[0]["phases"])
+                self.assertEqual(skipped[0]["outcome"], plain[0]["outcome"])
+                self.assertEqual(skipped[3], plain[3])
+                self.assertNotEqual(skipped[3], skipped[2], "the win changed nothing")
 
     # Fixed 2026-10-13; kept as a regression test.
     def test_a_fresh_pet_can_battle(self):

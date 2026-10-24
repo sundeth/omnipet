@@ -723,7 +723,11 @@ class MainMenuView:
             runtime_globals.game_console.log("[MainMenuView] Arena requires Progress Mode")
             return
         if not omninet_service.is_logged_in():
-            self.change_view("link_dialog", is_online_mode=True, return_view="arena")
+            # The Omninet sign-in, as Config's CONNECT does in Progress Mode:
+            # link_dialog is the Discord link (found by the 2026-10-22 doc
+            # pass: the Arena opened it).
+            runtime_globals.game_console.log("[MainMenuView] Arena needs an Omninet login")
+            change_scene("login")
             return
         self.change_view("arena")
     

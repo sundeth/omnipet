@@ -292,6 +292,8 @@ class SceneSettingsMenu:
         self._unlock_left_button = None
         self._unlock_right_button = None
         self._unlock_back_button = None
+        self._unlock_up_button = None
+        self._unlock_down_button = None
         self._unlock_instruction_labels = []
 
         # Window-size dialog state
@@ -325,6 +327,8 @@ class SceneSettingsMenu:
         self._unlock_left_button = None
         self._unlock_right_button = None
         self._unlock_back_button = None
+        self._unlock_up_button = None
+        self._unlock_down_button = None
         self._unlock_instruction_labels = []
         self._winsize_label = None
 
@@ -445,7 +449,7 @@ class SceneSettingsMenu:
 
         self._bg_instruction_labels = []
         instr_y = nav_y + 2
-        for i, txt in enumerate(["L/R: Change", "SELECT: Hi-Res", "B: Back"]):
+        for i, txt in enumerate(["LEFT/RIGHT: Change", "SELECT: Hi-Res", "B: Back"]):
             lbl = Label(6, instr_y + i * 10, txt, shadow_mode="full")
             lbl.visible = not mouse
             self._bg_instruction_labels.append(lbl)
@@ -515,9 +519,22 @@ class SceneSettingsMenu:
         self._unlock_back_button.visible = mouse
         self._add_dynamic(self._unlock_back_button)
 
+        # Scroll the list by touch or mouse too (UP/DOWN and the wheel do it
+        # from keys): past the first five names nothing else showed them.
+        aw = 26
+        ax = 6 + 2 * nw + 2 * ns
+        self._unlock_up_button = Button(ax, nav_y, aw, nh, "", lambda: self._scroll_unlockables(-1),
+                                        decorators=["ArrowUp"])
+        self._unlock_up_button.visible = mouse
+        self._add_dynamic(self._unlock_up_button)
+        self._unlock_down_button = Button(ax + aw + 2, nav_y, aw, nh, "", lambda: self._scroll_unlockables(1),
+                                          decorators=["ArrowDown"])
+        self._unlock_down_button.visible = mouse
+        self._add_dynamic(self._unlock_down_button)
+
         self._unlock_instruction_labels = []
         instr_y = nav_y + 2
-        for i, txt in enumerate(["L/R: Module", "UP/DOWN: Scroll", "B: Back"]):
+        for i, txt in enumerate(["LEFT/RIGHT: Module", "UP/DOWN: Scroll", "B: Back"]):
             lbl = Label(6, instr_y + i * 10, txt, shadow_mode="full")
             lbl.visible = not mouse
             self._unlock_instruction_labels.append(lbl)
@@ -547,6 +564,19 @@ class SceneSettingsMenu:
                 self._unlock_item_labels[i].set_text(vis_items[i].get("label", vis_items[i].get("name", "???")))
             else:
                 self._unlock_item_labels[i].set_text("")
+
+    def _scroll_unlockables(self, step):
+        """Move the Secrets list by *step* names, wrapping like UP/DOWN."""
+        n = len(self.unlockables_data)
+        if not n:
+            return False
+        unlocked = self.unlockables_data[self.current_unlock_module_index]["unlocked"]
+        if not unlocked:
+            return False
+        self.current_unlock_item_index = (self.current_unlock_item_index + step) % len(unlocked)
+        runtime_globals.game_sound.play("menu")
+        self._update_unlockables_labels()
+        return True
 
     def _unlockables_prev_module(self):
         n = len(self.unlockables_data)
@@ -628,7 +658,7 @@ class SceneSettingsMenu:
                                  self._go_back))
 
         instr_y = nav_y - 2
-        for i, txt in enumerate(["L/R: Change", "START: Apply", "B: Cancel"]):
+        for i, txt in enumerate(["LEFT/RIGHT: Change", "START: Apply", "B: Cancel"]):
             lbl = Label(6, instr_y + i * 10, txt, shadow_mode="full")
             lbl.visible = not mouse
             self._add_dynamic(lbl)
@@ -815,6 +845,10 @@ class SceneSettingsMenu:
             if event_type == "B":
                 self._go_back()
                 return
+            if event_type == "SCROLL" and event_data:
+                # The mouse wheel scrolls the list, as UP/DOWN do.
+                self._scroll_unlockables(-1 if event_data.get("direction") == "UP" else 1)
+                return
             if not self._mouse_enabled():
                 n = len(self.unlockables_data)
                 if event_type == "LEFT" and n:
@@ -832,14 +866,10 @@ class SceneSettingsMenu:
                 if n and self.unlockables_data[self.current_unlock_module_index]["unlocked"]:
                     unlocked = self.unlockables_data[self.current_unlock_module_index]["unlocked"]
                     if event_type == "UP":
-                        self.current_unlock_item_index = (self.current_unlock_item_index - 1) % len(unlocked)
-                        runtime_globals.game_sound.play("menu")
-                        self._update_unlockables_labels()
+                        self._scroll_unlockables(-1)
                         return
                     if event_type == "DOWN":
-                        self.current_unlock_item_index = (self.current_unlock_item_index + 1) % len(unlocked)
-                        runtime_globals.game_sound.play("menu")
-                        self._update_unlockables_labels()
+                        self._scroll_unlockables(1)
                         return
 
         # ---- Normal section: B goes back ----

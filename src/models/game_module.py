@@ -692,6 +692,7 @@ class GameModule:
                 reward_round=int(entry.get("reward_round", 0) or 0),
                 delay_minutes=entry.get("delay_minutes") or None,
                 item_sequence=[str(n or "") for n in entry.get("item_sequence") or []] or None,
+                item_pool=[str(n) for n in entry.get("item_pool") or [] if n] or None,
                 trigger_areas=[int(a) for a in entry.get("trigger_areas") or []] or None,
                 until_friend=bool(entry.get("until_friend", False)),
             )
@@ -705,10 +706,12 @@ class GameModule:
                             "schedule" event can fire for a pet whose
                             ``encounter_time_group`` is that group (the
                             Godzilla devices' encounter times);
-        ``connect_points``  {cap, win, loss, rewards: [{version, item,
-                            weight}]}: a pet's Connect Points and what
-                            filling them gives (utils.connect_points). A cap
-                            of 0, or no block, switches them off.
+        ``connect_points``  {cap, win, loss, battles, rewards: [{version,
+                            item}]}: a pet's Connect Points, the battles
+                            that give them (connection, adventure) and what
+                            filling them gives, an empty item a draw of
+                            nothing (utils.connect_points). A cap of 0, or
+                            no block, switches them off.
 
         Cached; {} when the file has neither."""
         if not hasattr(self, "_event_extras"):

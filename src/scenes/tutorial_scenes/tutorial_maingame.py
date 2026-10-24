@@ -61,6 +61,11 @@ class TutorialMainGame(SceneMainGame):
         # Handle A button or click - menu selection
         if event_type in ["A", "LCLICK"]:
             if self.allow_menu_selection:
+                # A click or tap selects the icon under it (only the mouse's
+                # hover sets the index, so a tap left it at -1); one off the
+                # icons selects nothing and is refused below.
+                if event_type == "LCLICK" and isinstance(event_data, dict) and "pos" in event_data:
+                    runtime_globals.main_menu_index = self.menu.get_menu_index_at(event_data["pos"])
                 # Check if correct menu is selected
                 current_index = runtime_globals.main_menu_index
                 

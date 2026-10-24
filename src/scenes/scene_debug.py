@@ -89,7 +89,8 @@ class SceneDebug:
             ("+All Items", self._add_all_items, "Add 1 of each item from all modules"),
             ("+1k Currency", self._add_currency, "Add 1000 of every module currency"),
             ("+Card Packs", self._add_card_packs, "Open one of every module's card packs"),
-            ("+Shiny Card", self._add_shiny_card, "Add a random shiny card to every module with cards"),
+            # Temporary, for testing the holo (owner, 2026-10-21); kept for later tests.
+            # ("+Shiny Card", self._add_shiny_card, "Add a random shiny card to every module with cards"),
             ("Add Pet", self._add_pet, "Pick any pet from any module and add it to the party")
         ]
 
@@ -713,26 +714,26 @@ class SceneDebug:
         runtime_globals.game_console.log(f"[SceneDebug] Opened {opened} card packs.")
         return opened > 0
 
-    def _add_shiny_card(self) -> bool:
-        """A shiny copy of one random card of each module with cards (Soul
-        Plates are never shiny), for testing the holo. Temporary: to be
-        removed (owner, 2026-10-21)."""
-        import random
-        from utils import card_utils
-
-        added = 0
-        for module_name, data in card_utils.modules_with_cards():
-            cards = [card for card in data["cards"]
-                     if card_utils.card_can_be_shiny(module_name, card.get("id"))]
-            if not cards:
-                continue
-            card = random.choice(cards)
-            if card_utils.add_card_copy(module_name, card["id"], shiny=True):
-                card_utils.announce_cards([(card, True)], module_name, wait_for_main=True)
-                added += 1
-
-        runtime_globals.game_console.log(f"[SceneDebug] Added {added} shiny cards.")
-        return added > 0
+    # Temporary, for testing the holo (owner, 2026-10-21): off for the release.
+    # def _add_shiny_card(self) -> bool:
+    #     """A shiny copy of one random card of each module with cards (Soul
+    #     Plates are never shiny), for testing the holo."""
+    #     import random
+    #     from utils import card_utils
+    #
+    #     added = 0
+    #     for module_name, data in card_utils.modules_with_cards():
+    #         cards = [card for card in data["cards"]
+    #                  if card_utils.card_can_be_shiny(module_name, card.get("id"))]
+    #         if not cards:
+    #             continue
+    #         card = random.choice(cards)
+    #         if card_utils.add_card_copy(module_name, card["id"], shiny=True):
+    #             card_utils.announce_cards([(card, True)], module_name, wait_for_main=True)
+    #             added += 1
+    #
+    #     runtime_globals.game_console.log(f"[SceneDebug] Added {added} shiny cards.")
+    #     return added > 0
 
     # Add Pet picker: module -> version -> pet
     def _add_pet(self) -> bool:

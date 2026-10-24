@@ -67,27 +67,33 @@ class DiscordModule:
         self._load_data()
         runtime_globals.game_console.log(f"[DiscordModule] Initialized with bot URL: {self.bot_url}")
     
-    #: Where the linked account is kept: beside the save, as Omninet's
-    #: device credentials are (cwd-relative). The test harness points it at
-    #: each run's temporary save folder.
-    SAVE_PATH = os.path.join("save", "discord_data.json")
+    #: Where the linked account is kept when set (the test harness points it
+    #: at each run's temporary save folder). None: discord_data.json in the
+    #: base save folder, beside Omninet's device credentials -- the app's
+    #: storage on Android, where a cwd-relative "save" is not.
+    SAVE_PATH = None
 
     def _get_save_path(self):
-        return DiscordModule.SAVE_PATH
+        if DiscordModule.SAVE_PATH:
+            return DiscordModule.SAVE_PATH
+        from core.game_globals import _get_base_save_dir
+        return os.path.join(_get_base_save_dir(), "discord_data.json")
     
     def _save_data(self):
         """Save linked account data."""
         import json
         import os
         try:
-            if not os.path.exists("save"):
-                os.makedirs("save")
+            path = self._get_save_path()
+            folder = os.path.dirname(path)
+            if folder:
+                os.makedirs(folder, exist_ok=True)
             data = {
                 "linked_account": self.linked_account,
                 "account_name": self.account_name,
                 "user_id": self.user_id
             }
-            with open(self._get_save_path(), 'w') as f:
+            with open(path, 'w') as f:
                 json.dump(data, f)
             runtime_globals.game_console.log("[DiscordModule] Saved account data")
         except Exception as e:

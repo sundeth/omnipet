@@ -141,7 +141,11 @@ class FakeOmninet:
         self.reward_keys = {}       # account id -> {key: coins}
         self.catalog = {"module": {}, "item": {}, "cosmetic": {}, "gameplay": {}, "special": {}}
         self.module_files = {}      # module id -> zip bytes
+        self.special_files = {}     # special id -> {file name: png bytes}
         self.sprites = {}           # (kind, id) -> png bytes
+        #: Downloads (cosmetic, item) carry their pictures: not on Omninet
+        #: today, which sends the file names with empty data.
+        self.download_pictures = False
         self.seasons = []           # season dicts, newest last
         self.teams = {}             # id -> team dict
         self.battles = {}           # id -> battle dict
@@ -235,11 +239,13 @@ class FakeOmninet:
 
     # ------------------------------------------------------------ accounts
     def add_account(self, nickname="Tester", email=None, password="secret1", coins=100,
-                    active=True):
+                    active=True, contribution_points=0):
         with self.lock:
             acc = {"id": str(uuid.uuid4()), "nickname": nickname,
                    "email": email or f"{nickname.lower()}@example.com", "password": password,
                    "is_active": active, "is_verified": active, "coins": int(coins),
+                   # Earned on the Digimon Database; a balance apart from the coins
+                   "contribution_points": int(contribution_points),
                    "created_at": now_utc(), "updated_at": now_utc(), "last_login_at": None}
             self.accounts[acc["id"]] = acc
             self.purchases[acc["id"]] = []
@@ -274,6 +280,7 @@ class FakeOmninet:
         return {"id": acc["id"], "nickname": acc["nickname"], "email": acc["email"],
                 "type_name": "Standard", "is_active": acc["is_active"],
                 "is_verified": acc["is_verified"], "coins": acc["coins"],
+                "contribution_points": acc.get("contribution_points", 0),
                 "created_at": iso(acc["created_at"]), "updated_at": iso(acc["updated_at"]),
                 "last_login_at": iso(acc["last_login_at"])}
 
@@ -332,16 +339,24 @@ class FakeOmninet:
             self.sprites[("module_logo", row["id"])] = logo or png_bytes(40, 44, (200, 80, 40, 255))
         return row
 
-    def add_item(self, name, price=10, description="", sprite_name="", json_data=None, sprite=None):
-        return self._add("item", {"name": name, "price": price, "description": description,
-                                  "sprite_name": sprite_name, "json_data": json_data or {}},
+    def add_item(self, name, price=10, description="", sprite_name="", json_data=None, sprite=None,
+                 item_id=None):
+        row = {"name": name, "price": price, "description": description,
+               "sprite_name": sprite_name, "json_data": json_data or {}}
+        if item_id:                         # Omninet's items.json fixes the ids
+            row["id"] = item_id
+        return self._add("item", row,
                          sprite if sprite is not None else png_bytes(16, 16, (220, 200, 60, 255)))
 
     def add_cosmetic(self, name, price=20, sprite_name="", day_night=False, high_res=False,
                      sprite=None, cosmetic_type="background"):
+        # Omninet's shop sync (services/shop_sync.py) keeps the background's
+        # name in json_data and lists the sprite as "bg_<name>".
         bg_name = sprite_name or name.lower().replace(" ", "_")
+        if bg_name.startswith("bg_"):
+            bg_name = bg_name[3:]
         return self._add("cosmetic", {"name": name, "price": price, "cosmetic_type": cosmetic_type,
-                                      "sprite_name": bg_name, "day_night": day_night,
+                                      "sprite_name": f"bg_{bg_name}", "day_night": day_night,
                                       "high_res": high_res,
                                       "json_data": {"name": bg_name, "day_night": day_night}},
                          sprite if sprite is not None else png_bytes(240, 240, (90, 30, 120, 255)))
@@ -350,9 +365,33 @@ class FakeOmninet:
         return self._add("gameplay", {"name": name, "price": price, "description": description,
                                       "json_data": json_data or {}})
 
-    def add_special(self, name, price=40, description=""):
-        return self._add("special", {"name": name, "price": price, "description": description,
-                                     "start_date": None, "end_date": None})
+    def add_special(self, name, price=40, description="", currency="coins", special_type=None,
+                    sprite_name=None, pictures=None, json_data=None):
+        """A Special (Omninet storage/specials/specials.json). A background
+        one gives *pictures*, {file name: png bytes}, as its download sends
+        them; its day picture is the preview, and day_night / high_res come
+        from the file names as Omninet reads them from disk."""
+        pictures = dict(pictures or {})
+        base = sprite_name or ""
+        day_night = f"{base}_day.png" in pictures and f"{base}_night.png" in pictures
+        high_res = any(f.endswith("_high.png") for f in pictures)
+        preview = (pictures.get(f"{base}_day.png") or pictures.get(f"{base}.png")
+                   or next(iter(pictures.values()), None))
+        row = self._add("special", {"name": name, "price": price, "description": description,
+                                    "currency": currency, "special_type": special_type,
+                                    "sprite_name": sprite_name, "day_night": day_night,
+                                    "high_res": high_res, "json_data": json_data or {},
+                                    "start_date": None, "end_date": None}, preview)
+        with self.lock:
+            self.special_files[row["id"]] = pictures
+        return row
+
+    def credit_points(self, acc, points):
+        """Contribution points the Digimon Database credited to *acc*."""
+        with self.lock:
+            acc = self.accounts[acc["id"] if isinstance(acc, dict) else acc]
+            acc["contribution_points"] = acc.get("contribution_points", 0) + int(points)
+            return acc["contribution_points"]
 
     def owned(self, acc, kind=None):
         with self.lock:
@@ -659,8 +698,10 @@ class FakeOmninet:
             elif kind == "gameplay":
                 out = [{k: r[k] for k in ("id", "name", "description", "price")} for r in rows]
             else:
-                out = [{k: r[k] for k in ("id", "name", "description", "price", "start_date",
-                                          "end_date")} for r in rows]
+                out = [{k: r.get(k) for k in ("id", "name", "description", "price", "currency",
+                                              "special_type", "sprite_name", "day_night",
+                                              "high_res", "json_data", "start_date",
+                                              "end_date")} for r in rows]
             return 200, {op: out, "total": len(out)}
         if method == "GET" and len(rest) == 3 and rest[2] == "sprite":
             data = self.sprites.get((rest[0], rest[1]))
@@ -687,14 +728,28 @@ class FakeOmninet:
             # unlocks, bought once (Omninet services/shop.py, 2026-10-17).
             if kind != "item" and self._owns(user, item_id, kind):
                 return fail(f"You already own {row['name']}")
-            if user["coins"] < price:
-                return fail(f"Not enough coins. Need {price}, have {user['coins']}")
-            user["coins"] -= price
+            # A Special may be priced in contribution points: paid from them,
+            # never from the coins (Omninet services/shop.py purchase_item).
+            currency = (row.get("currency") or "coins") if kind == "special" else "coins"
+            if currency == "contribution_points":
+                have = user.get("contribution_points", 0)
+                if have < price:
+                    return fail(f"Not enough contribution points. Need {price}, have {have}")
+                user["contribution_points"] = have - price
+            else:
+                if user["coins"] < price:
+                    return fail(f"Not enough coins. Need {price}, have {user['coins']}")
+                user["coins"] -= price
             purchase = {"id": str(uuid.uuid4()), "item_id": item_id, "purchase_type": kind,
-                        "price_paid": price, "purchased_at": iso(now_utc())}
+                        "price_paid": price, "currency": currency,
+                        "purchased_at": iso(now_utc())}
             self.purchases[user["id"]].append(purchase)
             return 200, {"success": True, "message": f"Successfully purchased {row['name']}",
-                         "purchase_id": purchase["id"], "coins_remaining": user["coins"]}
+                         "purchase_id": purchase["id"], "coins_remaining": user["coins"],
+                         "currency": currency,
+                         "contribution_points_remaining": (user.get("contribution_points", 0)
+                                                           if currency == "contribution_points"
+                                                           else None)}
         if op == "purchases" and method == "GET":
             user = self._user(headers)
             rows = list(reversed(self.purchases[user["id"]]))
@@ -709,17 +764,30 @@ class FakeOmninet:
                 return 200, {"id": row["id"], "name": row["name"], "version": row["version"],
                              "file_data": base64.b64encode(self.module_files[item_id]).decode()}
             out = {"id": row["id"], "name": row["name"], "json_data": row.get("json_data")}
+            # Omninet names the files of a cosmetic or item download but
+            # leaves their pictures empty (services/shop.py, "TODO: Load
+            # actual sprite files"); download_pictures=True is a server
+            # that sends them.
+            def picture(kind_):
+                if not self.download_pictures:
+                    return ""
+                return base64.b64encode(self.sprites.get((kind_, item_id), b"")).decode()
             if kind == "cosmetic":
                 out["cosmetic_type"] = row["cosmetic_type"]
                 jd = row.get("json_data") or {}
-                sprite = self.sprites.get(("cosmetic", item_id), b"")
                 files = [f"bg_{jd.get('name', row['sprite_name'])}.png"]
                 if jd.get("day_night"):
                     files.append(f"bg_{jd.get('name', row['sprite_name'])}_night.png")
-                out["sprites"] = {f: base64.b64encode(sprite).decode() for f in files}
+                out["sprites"] = {f: picture("cosmetic") for f in files}
             elif kind == "item":
-                out["sprites"] = ({f"{row['sprite_name']}.png": base64.b64encode(
-                    self.sprites.get(("item", item_id), b"")).decode()} if row.get("sprite_name") else {})
+                out["sprites"] = ({f"{row['sprite_name']}.png": picture("item")}
+                                  if row.get("sprite_name") else {})
+            elif kind == "special":
+                # Omninet's download_special: every picture the background has
+                out.update({k: row.get(k) for k in ("special_type", "currency", "sprite_name",
+                                                    "day_night", "high_res")})
+                out["sprites"] = {f: base64.b64encode(data).decode()
+                                  for f, data in self.special_files.get(item_id, {}).items()}
             return 200, out
         if op == "claim-free-module" and method == "POST":
             self._user(headers)

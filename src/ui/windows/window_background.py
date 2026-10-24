@@ -94,20 +94,35 @@ class WindowBackground:
         return out
 
     def _shop_paths(self, name):
-        """A background bought in the Omninet shop: the files its download
-        wrote (`bg_<name>.png`, and `bg_<name>_night.png` for a day/night one).
+        """A background bought in the Omninet shop (a cosmetic, or a Special
+        bought with contribution points): the files its download wrote.
         Settings lists these under the module name "shop"."""
         for bg in (getattr(game_globals, "shop_backgrounds", None) or {}).values():
             if (bg.get("name") or bg.get("id", "")) != name:
                 continue
             paths = bg.get("sprite_paths") or {}
-            base = f"bg_{bg.get('sprite_name') or ''}"
+            # Omninet's listing names the sprite with its prefix ("bg_ocean")
+            base = bg.get("sprite_name") or ""
+            if not base.startswith("bg_"):
+                base = f"bg_{base}"
+            # The pictures a download may hold, as module backgrounds have
+            # them: `<base>_<day|dusk|night>[_high].png` (the premium
+            # Specials have all six) or one fixed `<base>[_high].png`. This
+            # time of day first, the _high one first when High-Res is on;
+            # then the fixed picture, then the other times of day.
+            times = [self.time_of_day] if self.time_of_day else []
+            times += [t for t in ("day", "dusk", "night") if t not in times]
+            stems = [f"{base}_{times[0]}"] if times else []
+            stems += [base] + [f"{base}_{t}" for t in times[1:]]
             preferred = []
-            if bg.get("day_night") and self.time_of_day:
-                preferred.append(f"{base}_{self.time_of_day}.png")
-            preferred.append(f"{base}.png")
+            for stem in stems:
+                if game_globals.background_high_res:
+                    preferred.append(f"{stem}_high.png")
+                preferred.append(f"{stem}.png")
             out = [paths[f] for f in preferred if f in paths]
-            out += [path for _f, path in sorted(paths.items()) if path not in out]
+            # Anything else it wrote, the normal resolution first.
+            out += [path for f, path in sorted(paths.items(), key=lambda kv: ("_high" in kv[0], kv[0]))
+                    if path not in out]
             return out
         return []
 

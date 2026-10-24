@@ -93,7 +93,7 @@ function Build-Windows {
     if (Check-ReleaseExists -PlatformName "Windows" -Version $Version) { return $true }
     Write-Status "Building Windows EXE..."
     try {
-        powershell.exe -File ".\build_windows.ps1" -Version $Version
+        powershell.exe -File ".\build_windows.ps1" -Version $Version | Out-Host
         if ($LASTEXITCODE -eq 0) {
             Write-Success "Windows build completed"
             return $true
@@ -112,7 +112,7 @@ function Build-PythonDesktop {
     if (Check-ReleaseExists -PlatformName "Python_Desktop" -Version $Version) { return $true }
     Write-Status "Building Python Desktop version..."
     try {
-        powershell.exe -File ".\build_python_desktop.ps1" -Version $Version
+        powershell.exe -File ".\build_python_desktop.ps1" -Version $Version | Out-Host
         if ($LASTEXITCODE -eq 0) {
             Write-Success "Python Desktop build completed"
             return $true
@@ -131,7 +131,7 @@ function Build-GamePi {
     if (Check-ReleaseExists -PlatformName "GamePi" -Version $Version) { return $true }
     Write-Status "Building GamePi version..."
     try {
-        powershell.exe -File ".\build_gamepi.ps1" -Version $Version
+        powershell.exe -File ".\build_gamepi.ps1" -Version $Version | Out-Host
         if ($LASTEXITCODE -eq 0) {
             Write-Success "GamePi build completed"
             return $true
@@ -150,7 +150,7 @@ function Build-GamePiNuitka {
     if (Check-ReleaseExists -PlatformName "GamePi_Nuitka_ARM" -Version $Version) { return $true }
     Write-Status "Building GamePi Nuitka ARM version..."
     try {
-        powershell.exe -File ".\build_gamepi_nuitka.ps1" -Version $Version
+        powershell.exe -File ".\build_gamepi_nuitka.ps1" -Version $Version | Out-Host
         if ($LASTEXITCODE -eq 0) {
             Write-Success "GamePi Nuitka ARM build completed"
             return $true
@@ -169,7 +169,7 @@ function Build-NuitkaWindows {
     if (Check-ReleaseExists -PlatformName "Nuitka_Windows" -Version $Version) { return $true }
     Write-Status "Building Windows Nuitka version..."
     try {
-        powershell.exe -File ".\build_nuitka_windows.ps1" -Version $Version
+        powershell.exe -File ".\build_nuitka_windows.ps1" -Version $Version | Out-Host
         if ($LASTEXITCODE -eq 0) {
             Write-Success "Windows Nuitka build completed"
             return $true
@@ -188,7 +188,7 @@ function Build-Batocera {
     if (Check-ReleaseExists -PlatformName "Batocera" -Version $Version) { return $true }
     Write-Status "Building Batocera version..."
     try {
-        powershell.exe -File ".\build_batocera.ps1" -Version $Version
+        powershell.exe -File ".\build_batocera.ps1" -Version $Version | Out-Host
         if ($LASTEXITCODE -eq 0) {
             Write-Success "Batocera build completed"
             return $true
@@ -207,18 +207,21 @@ function Build-Android {
     if (Check-ReleaseExists -PlatformName "Android" -Version $Version -Extension "apk") { return $true }
     Write-Status "Building Android version..."
     try {
-        powershell.exe -File ".\build_android.ps1" -Version $Version
+        powershell.exe -File ".\build_android.ps1" -Version $Version | Out-Host
         if ($LASTEXITCODE -eq 0) {
             Write-Success "Android build completed"
             return $true
         } else {
             Write-Error-Message "Android build failed"
-            # Ignoring Android build errors as requested
+            # Ignoring Android build errors as requested (the other
+            # platforms go on), but the summary says so
+            $script:androidFailed = $true
             return $true
         }
     } catch {
         Write-Error-Message "Failed to run Android build script: $_"
         # Ignoring Android build errors as requested
+        $script:androidFailed = $true
         return $true
     }
 }
@@ -251,6 +254,7 @@ function Clean-Up {
 
 # Main build logic
 $success = $true
+$script:androidFailed = $false
 $platformsToBuild = @()
 
 if ($Platform -eq "all") {
@@ -281,7 +285,9 @@ foreach ($p in $platformsToBuild) {
 }
 
 Write-Host "==========================================" -ForegroundColor Cyan
-if ($success) {
+if ($success -and $script:androidFailed) {
+    Write-Error-Message "The Android build FAILED (ignored; no APK in Release). The other builds completed."
+} elseif ($success) {
     Write-Success "All builds completed successfully!"
 } else {
     Write-Error-Message "One or more builds failed."

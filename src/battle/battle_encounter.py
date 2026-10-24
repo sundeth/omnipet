@@ -257,6 +257,8 @@ class BattleEncounter:
         self.bonus_experience = 0
         self.frame_counter = 0
         self.result_timer = 0
+        #: The result has nothing to list: its banner plays, no panel follows.
+        self._result_banner_only = False
         self.enemies = []
         #: The device line this battle is fought on, for a DCom/WiFiCom
         #: battle -- set by the scene once the exchange data is in. An
@@ -1439,7 +1441,7 @@ class BattleEncounter:
             from utils.xros_utils import get_available_temp_evolutions
             candidates = []
             for pet in self.battle_player.team1:
-                options = get_available_temp_evolutions(pet)
+                options = get_available_temp_evolutions(pet, self._xros_area(pet))
                 if options:
                     candidates.append((pet, options))
             if not candidates:
@@ -1455,6 +1457,17 @@ class BattleEncounter:
         except Exception as exc:
             runtime_globals.game_console.log(f"[Xros] selection setup failed: {exc}")
             return False
+
+    def _xros_area(self, pet) -> int:
+        """The area a temporary evolution's `battle_area` reads for *pet*:
+        this adventure area when it is the pet's own module's (DMXW's
+        "during World 20"), 0 for a special encounter or event, or another
+        module's areas."""
+        if self.pvp_mode or self.is_special_encounter:
+            return 0
+        if getattr(pet, "module", None) != getattr(self.module, "name", None):
+            return 0
+        return int(self.area or 0)
 
     def _on_xros_confirm(self):
         """Apply the chosen temporary evolutions and play the animation."""
@@ -2124,7 +2137,9 @@ class BattleEncounter:
             self._battle_end_frames += 1
             if self._battle_end_ready():
                 self._battle_end_frames = None
-                self.phase = "result" if not self.boss else "clear"
+                # Only a boss that was beaten gets the WIN/CLEAR; a lost boss
+                # fight used to play WIN before its LOSE.
+                self.phase = "clear" if (self.boss and self.victory_status == "Victory") else "result"
                 self.frame_counter = 0
 
     def setup_pet_attack(self, pet):
@@ -2720,19 +2735,25 @@ class BattleEncounter:
         """
         Update logic for the result phase, handles victory or defeat actions.
         """
-        # Skip the result screen entirely if there are no rewards to show
-        if self.result_timer == 0 and not self._has_result_rewards():
-            runtime_globals.game_console.log("[BattleEncounter] No rewards to display, skipping result screen")
-            # Still need to run the post-result logic (progression, unlocks, etc.)
-            # Jump the timer past the wait threshold to fall through immediately
-            self.result_timer = int(120 * (constants.FRAME_RATE / 30))
+        wait = int(120 * (constants.FRAME_RATE / 30))
+        # Nothing to list: the empty reward panel is skipped, but the WIN or
+        # LOSE banner still plays first. Skipping the whole screen meant a
+        # loss (no Exp, no prize) never showed its LOSE. A draw, which has no
+        # banner, keeps the panel that says DRAW.
+        if (self.result_timer == 0 and self.victory_status in ("Victory", "Defeat")
+                and not self._has_result_rewards()):
+            runtime_globals.game_console.log("[BattleEncounter] No rewards to display: banner only")
+            self._result_banner_only = True
 
         # Result timer, frame-rate independent
         self.result_timer += 1
 
-        if self.result_timer < int(120 * ( constants.FRAME_RATE / 30)):
-            # pisca aviso clear
-            return
+        if self.result_timer < wait:
+            if not getattr(self, "_result_banner_only", False):
+                return
+            # Banner only: go on once it has played.
+            if not self.result_animation_started or self.animated_sprite.is_animation_playing():
+                return
 
         # For PvP battles, update per-pet PvP counters, run unlock checks, then
         # return to game after showing results. We maintain per-pet counters so
@@ -2848,17 +2869,25 @@ class BattleEncounter:
             self.return_to_main_scene()
             return
 
-        # The module's "adventure" events (utils.event_utils), won or lost.
+        # Connect Points that count adventure battles (the Vital Bracelets'
+        # battle drops) and the module's "adventure" events
+        # (utils.event_utils), won or lost.
         try:
-            from utils.event_utils import after_battle
-            after_battle("adventure", self.module.name, self.battle_player.team1,
-                         self.victory_status == "Victory", area=self.area)
+            from utils.event_utils import after_adventure
+            after_adventure(self.module.name, self.battle_player.team1,
+                            self.victory_status == "Victory", area=self.area)
         except Exception as exc:
             runtime_globals.game_console.log(f"[Events] adventure trigger failed: {exc}")
 
         area_advanced = False
         cleared_area = self.area
         pets = get_battle_continue_targets()
+        # The saved round is the round of the furthest area reached
+        # (battle_area): a battle in an older area, replayed from the area
+        # selection, must not move it. Winning one used to write its round
+        # there, clearing one reset it to 1, and so did losing one.
+        progress_area = game_globals.battle_area.get(self.module.name, 1)
+        on_progress_area = self.area >= progress_area
         if self.victory_status == "Victory":
             if not self.boss:
                 # The win is recorded first, even when it spent the last of
@@ -2876,11 +2905,12 @@ class BattleEncounter:
                     target = self._next_open_area(self.area)
                     if target is not None:
                         self.area = target
-                        game_globals.battle_round[self.module.name] = self.round
+                        if self.area > progress_area:
+                            game_globals.battle_round[self.module.name] = self.round
                         game_globals.battle_area[self.module.name] = max(self.area, game_globals.battle_area.get(self.module.name, 0))
                     # Fall through to total victories, unlocks, and return_to_main_scene
                 else:
-                    if self.round > game_globals.battle_round[self.module.name]:
+                    if on_progress_area and self.round > game_globals.battle_round[self.module.name]:
                         game_globals.battle_round[self.module.name] = self.round
                     if len(pets) == 0 and self.module.battle_sequential_rounds:
                         # Won, but no pet can pay for the next round: the run
@@ -2943,7 +2973,8 @@ class BattleEncounter:
                 target = self._next_open_area(self.area)
                 if target is not None:
                     self.area = target
-                    game_globals.battle_round[self.module.name] = self.round
+                    if self.area > progress_area:
+                        game_globals.battle_round[self.module.name] = self.round
                     game_globals.battle_area[self.module.name] = max(self.area, game_globals.battle_area[self.module.name])
             
             # Increment total victories for this module
@@ -2970,8 +3001,10 @@ class BattleEncounter:
                 runtime_globals.game_console.log(f"[Battle] Error processing battle unlocks: {e}")
         else:
             runtime_globals.game_sound.play("fail")
-            # perdeu
-            game_globals.battle_round[self.module.name] = 1
+            # Lost: back to round 1 of the furthest area, when it was fought
+            # there.
+            if on_progress_area:
+                game_globals.battle_round[self.module.name] = 1
 
         if area_advanced:
             # The module's "area_clear" events: DMXW promises a Friend
@@ -3219,6 +3252,7 @@ class BattleEncounter:
         """
         self.phase = "level"
         self.result_timer  = 0
+        self._result_banner_only = False
         # A finished battle's hold must not carry into the next round.
         self._battle_end_frames = None
         self._log_overrun_frames = 0
@@ -3431,7 +3465,7 @@ class BattleEncounter:
         Draws the clear of the battle, showing clear sprites using AnimatedSprite component.
         This phase is only reached for boss battles - show win animation here.
         """
-        if self.boss:
+        if self.boss and self.victory_status == "Victory":
             # Use AnimatedSprite component for win animation during clear phase
             if not self.animated_sprite.is_animation_playing():
                 duration = 1.0  # 1 second win animation (will be followed by clear in result phase)
@@ -3473,6 +3507,9 @@ class BattleEncounter:
         if self.animated_sprite.is_playing:
             # Draw the animated sprite
             self.animated_sprite.draw(surface)
+        elif getattr(self, "_result_banner_only", False):
+            # Nothing to list (update_result): no panel after the banner.
+            pass
         else:
             # Build UI components once (labels for title, pet rewards, and prize)
             if self.result_surface_cache is None:
@@ -3603,7 +3640,10 @@ class BattleEncounter:
                         current_y += int(28 * height_scale)  # More spacing for larger font
                         
                         # Show experience gained
-                        exp_gained = self.battle_player.xp if self.victory_status == "Victory" else 0
+                        # What each pet was given: the experience and the
+                        # +10% all-alive bonus (it showed the first alone).
+                        exp_gained = (self.battle_player.xp + self.battle_player.bonus
+                                      if self.victory_status == "Victory" else 0)
                         
                         # Check if at max level
                         if i < len(self.battle_player.team1):
@@ -4294,6 +4334,17 @@ class BattleEncounter:
                 runtime_globals.game_sound.play("cancel")
                 self.phase = "result"
                 self.frame_counter = 0
+        elif event_type == "B" and self.phase in ("clear", "result"):
+            # B only ends the result screen's wait: what the result records
+            # (the round and area won, unlocks, prizes, Connect Points, the
+            # PvP counts) runs in update_result on the next frame. Leaving the
+            # battle here skipped all of it (found by the 2026-10-22 doc pass).
+            # A boss's CLEAR goes the same way (it used to quit the battle).
+            if self.phase == "clear":
+                self.phase = "result"
+                self.frame_counter = 0
+            self.result_timer = max(self.result_timer, int(120 * (constants.FRAME_RATE / 30)) - 1)
+            return
         elif event_type == "B":
             if self.phase in ("feeding", "battle_items", "retire_check", "retire_animation"):
                 # Handled by the view / blocked during the retire animation

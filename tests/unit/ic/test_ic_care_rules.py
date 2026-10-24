@@ -15,8 +15,9 @@ by models.game_pet / battle.game_battle):
     battle_cost_type Hunger, 1          a battle costs a heart of hunger; none, no battle
     training_uses_battle_cost           a training costs the same heart; none, no training
     battle_weight_loss 4                a battle sheds 4G down to the minimum weight
-    death_save_by B Press, 60, 30 s, 5% a dying pet needs 60 B presses within 30 seconds,
-                                        and then lives 1 time in 20
+    death_save_by B Press, 60, 30 s, 50% a dying pet needs 60 B presses within 30 seconds,
+                                        and then lives 1 time in 2 (owner, 2026-10-23; it
+                                        was the playbook's 1 in 20)
     death_max_injuries 30 / death_max_sicknesses 30 / death_sick_timer and
     death_injury_timer 360   what makes it dying (each kind counted apart)
     injury_chance_step 1                a lost battle's injury chance (the form's own, 5-25%)
@@ -42,7 +43,7 @@ class ModuleDataTests(unittest.TestCase):
     def test_the_ic_declares_its_rules(self):
         data = json.load(open(os.path.join(MODULES, "IC", "module.json"), encoding="utf-8"))
         expected = dict(
-            death_save_by="B Press", death_save_amount=60, death_save_seconds=30, death_save_chance=5,
+            death_save_by="B Press", death_save_amount=60, death_save_seconds=30, death_save_chance=50,
             injury_chance_step=1, death_max_injuries=30, death_sick_timer=360,
             care_meat_care_mistake_time=3, care_sleep_care_mistake_timer=3,
             care_poop_sickness_count=6, care_poop_sickness_effect="Dots",
@@ -65,7 +66,7 @@ class LoaderTests(ICCase):
              ic.care_disturbance_sickness_count, ic.care_disturbance_sickness_effect,
              ic.care_99g_effect, ic.care_flush_disturbance_sleep, ic.battle_global_hit_points,
              ic.battle_cost_type, ic.battle_cost_amount, ic.back_to_sleep_time),
-            (("B Press", 60, 30, 5), 1, 3, 3, 6, "Dots", 10, "Dots", "Dots", True, 16, "Hunger", 1.0, 10))
+            (("B Press", 60, 30, 50), 1, 3, 3, 6, "Dots", 10, "Dots", "Dots", True, 16, "Hunger", 1.0, 10))
         self.assertIn("Reliability", ic.visible_stats)
         self.assertNotIn("Strength", ic.visible_stats)
         self.assertTrue(ic.training_uses_battle_cost)
@@ -225,7 +226,7 @@ class DeathSaveTests(ICCase):
         return pet
 
     def roll(self, value):
-        """The survival roll's draw (random.random(); under 0.05 lives)."""
+        """The survival roll's draw (random.random(); under 0.5 lives)."""
         return patch("models.game_pet.random.random", return_value=value)
 
     def test_thirty_injuries_call_for_60_presses(self):
@@ -239,11 +240,11 @@ class DeathSaveTests(ICCase):
         self.tick(pet)
         self.assertFalse(pet.dying, "29 and 29: neither count reached")
 
-    def test_sixty_presses_in_time_and_the_one_in_twenty_save_it(self):
+    def test_sixty_presses_in_time_and_the_one_in_two_save_it(self):
         pet = self.dying(injury_total=30)
         self.seconds(pet, 20)
         pet.death_save_b_counter -= 60               # the main scene's B handler
-        with self.roll(0.049):
+        with self.roll(0.49):
             self.seconds(pet, 1)
         self.assertFalse(pet.dying)
         self.assertEqual((pet.state, pet.injury_total, pet.death_save_immunity), ("happy2", 29, 60))
@@ -254,7 +255,7 @@ class DeathSaveTests(ICCase):
     def test_the_presses_made_it_can_still_die(self):
         pet = self.dying(injury_total=30)
         pet.death_save_b_counter -= 60
-        with self.roll(0.05):
+        with self.roll(0.5):
             self.seconds(pet, 1)
         self.assertEqual(pet.state, "dead")
         self.sound.play.assert_any_call("fail")

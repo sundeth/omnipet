@@ -55,6 +55,8 @@ class OmninetService:
         self._player_id: Optional[str] = None  # Cached player UUID from server
         self._user_info: Optional[Dict[str, Any]] = None
         self.last_purchase_id: Optional[str] = None  # the row purchase_item made
+        self.last_coins_remaining: Optional[int] = None  # the balance it left
+        self.last_points_remaining: Optional[int] = None  # contribution points it left
         self._timeout = 5  # seconds
         
         # Path for storing device credentials
@@ -635,6 +637,8 @@ class OmninetService:
             return False, "Not logged in"
 
         self.last_purchase_id = None
+        self.last_coins_remaining = None
+        self.last_points_remaining = None
         success, data = self._make_request('POST', '/api/v1/shop/purchase', {
             'purchase_type': item_type,  # Server expects 'purchase_type', not 'item_type'
             'item_id': item_id
@@ -649,6 +653,16 @@ class OmninetService:
             # The row an item purchase made, so the account sync does not
             # count that item a second time (GamePurchases.apply_item_purchase)
             self.last_purchase_id = data.get('purchase_id')
+            # The account's balance after it: what the server charged, which
+            # a listing loaded earlier may not show (the free first module)
+            remaining = data.get('coins_remaining')
+            self.last_coins_remaining = remaining if isinstance(remaining, int) else None
+            # A Special priced in contribution points leaves the coins alone
+            # and answers with what is left of the points.
+            points = data.get('contribution_points_remaining')
+            self.last_points_remaining = points if isinstance(points, int) else None
+            if self.last_points_remaining is not None and self._user_info is not None:
+                self._user_info['contribution_points'] = self.last_points_remaining
             return True, data.get('message', 'Purchase successful')
         return False, data if isinstance(data, str) else 'Purchase failed'
     
@@ -745,14 +759,28 @@ class OmninetService:
         """
         import io
         import pygame
+        data = self.get_shop_sprite_bytes(kind, item_id)
+        if not data:
+            return None
+        try:
+            return pygame.image.load(io.BytesIO(data)).convert_alpha()
+        except Exception as e:
+            runtime_globals.game_console.log(
+                f"[OmninetService] Shop sprite fetch error ({kind}/{item_id}): {e}")
+        return None
+
+    def get_shop_sprite_bytes(self, kind: str, item_id: str) -> Optional[bytes]:
+        """The image file of a shop entry's sprite (``get_shop_sprite``), as
+        the server sends it, for the game to keep: a bought item's icon, a
+        background whose download carried no picture. None on any failure."""
         if not item_id:
             return None
         try:
             base_url = self._get_base_url()
             url = urljoin(base_url, f'/api/v1/shop/{kind}/{item_id}/sprite')
             response = requests.get(url, timeout=self._timeout)
-            if response.status_code == 200:
-                return pygame.image.load(io.BytesIO(response.content)).convert_alpha()
+            if response.status_code == 200 and response.content:
+                return response.content
         except Exception as e:
             runtime_globals.game_console.log(
                 f"[OmninetService] Shop sprite fetch error ({kind}/{item_id}): {e}")
@@ -775,6 +803,59 @@ class OmninetService:
         if not self._device_key:
             return False, "Not logged in"
         return self._make_request('GET', f'/api/v1/shop/download/item/{item_id}')
+
+    # ------------------------------------------------------------------
+    # Specials and contribution points
+    # ------------------------------------------------------------------
+
+    def get_contribution_points(self) -> Optional[int]:
+        """The account's contribution points as last read from the server
+        (earned on the Digimon Database; a balance apart from the coins)."""
+        if not self._user_info:
+            return None
+        value = self._user_info.get('contribution_points')
+        return int(value) if isinstance(value, int) else None
+
+    def refresh_user_info(self) -> Tuple[bool, Any]:
+        """Read the account again (balances included): contribution points
+        are earned outside the game, so the Specials page asks each time it
+        opens. Unlike validate_device, a refusal here keeps the credentials."""
+        if not self._device_key:
+            return False, "Not logged in"
+        success, data = self._make_request('POST', '/api/v1/auth/validate-device')
+        if success and isinstance(data, dict) and data.get('id'):
+            self._user_info = data
+            return True, data
+        return False, data
+
+    def get_special_preview(self, item_id: str, small: bool = True):
+        """A Special's preview picture as a Surface, or None. *small* asks
+        for a background's 96x96 day picture (the server's default is the
+        1024x1024 one, a few MB each)."""
+        import io
+        import pygame
+        if not item_id:
+            return None
+        try:
+            base_url = self._get_base_url()
+            url = urljoin(base_url, f'/api/v1/shop/special/{item_id}/sprite')
+            response = requests.get(url, params={'size': 'small'} if small else None,
+                                    timeout=self._timeout)
+            if response.status_code == 200 and response.content:
+                return pygame.image.load(io.BytesIO(response.content)).convert_alpha()
+        except Exception as e:
+            runtime_globals.game_console.log(
+                f"[OmninetService] Special preview error ({item_id}): {e}")
+        return None
+
+    def download_special(self, special_id: str) -> Tuple[bool, Any]:
+        """Download a bought Special: for a background, every picture it has
+        as base64 (day/dusk/night, normal and _high: up to ~10 MB), hence the
+        long timeout."""
+        if not self._device_key:
+            return False, "Not logged in"
+        return self._make_request('GET', f'/api/v1/shop/download/special/{special_id}',
+                                  timeout=120)
 
     # ------------------------------------------------------------------
     # Arena / Teams / Battles / Seasons

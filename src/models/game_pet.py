@@ -112,6 +112,9 @@ class GamePet:
         self.poop_mistake_timers = []
         self.virus = 0
         self._reliability_sleep_call_resolved = False
+        # Minutes left on the call an evolution raised (answer_call
+        # "evolution"); 0 when none stands.
+        self.evolution_call = 0
         self.reset_variables()
         self.load_sprite()
         self.begin_position()
@@ -1091,6 +1094,8 @@ class GamePet:
         if module.death_save_by == "Nothing":
             self._die()
         elif self.death_save_b_counter <= 0 and self.death_save_shake_counter <= 0:
+            # The presses answered the dying call (answer_call "dying").
+            self.answer_call("dying")
             if random.random() * 100 < module.death_save_chance:
                 self._death_saved()
             else:
@@ -1287,6 +1292,12 @@ class GamePet:
                 self.set_state("nope")
 
         self.update_99g_effect()
+        if accepted:
+            # Feeding quests count every meal a pet takes (they never moved:
+            # nothing reported them; 2026-10-22 doc pass).
+            from utils.quest_event_utils import update_quest_progress
+            from models.game_quest import QuestType
+            update_quest_progress(QuestType.FEEDING, 1, self.module)
         return accepted
 
     def add_ailment(self, kind):
@@ -1409,10 +1420,13 @@ class GamePet:
     def update_evolution(self):
         # A defeat-count route (`defeat_tag`) evolves the pet as soon as its
         # count is reached, whatever the timer says.
+        before = (getattr(self, "name", None), getattr(self, "version", None),
+                  int(getattr(self, "stage", 0) or 0))
         if any(evolution_rules.is_immediate_route(e) for e in (self.evolve or [])):
             match = self.find_evolution(kind="immediate")
             if match is not None:
                 self._apply_evolution(match[0])
+                self._raise_evolution_call(before)
                 return
 
         if self._evol_minutes < self.time or self.need_care():
@@ -1435,6 +1449,25 @@ class GamePet:
                 runtime_globals.game_console.log(f"{self.name} failed to evolve.")
             return
         self._apply_evolution(match[0])
+        self._raise_evolution_call(before)
+
+    def _raise_evolution_call(self, before):
+        """A Digimon that evolved on its own calls its tamer, on a module
+        that pays for an answered call (the iC: "answer a call +1",
+        playbook p.043). *before*: (name, version, stage) before the try.
+        The call stands as long as the module's hunger call does (its
+        care_meat_care_mistake_time, three minutes on the iC) and any press
+        on the main screen answers it (answer_call "evolution"). A hatch,
+        and an evolution the player made (item, jogress, armor), call
+        nothing. INFERENCE: no source says how the evolution call is
+        answered or how long it lasts."""
+        name, version, stage = before
+        if (getattr(self, "name", None), getattr(self, "version", None)) == (name, version) or stage == 0:
+            return
+        module = get_module(self.module)
+        if not module or not getattr(module, 'reliability_answering_call', 0):
+            return
+        self.evolution_call = max(0, int(getattr(module, 'meat_care_mistake_time', 0) or 0))
 
     def _apply_evolution(self, evo):
         """Evolve along a route that has been taken: its unlocks, then the form."""
@@ -1741,8 +1774,12 @@ class GamePet:
             # The window closed: the next bedtime is a new call.
             self.care_sleep_mistake_timer = 0
             self._reliability_sleep_call_resolved = False
-                
-        
+
+        # An evolution's call runs out unanswered (_raise_evolution_call).
+        # No source gives it a penalty, so it just ends.
+        if getattr(self, 'evolution_call', 0) > 0:
+            self.evolution_call -= 1
+
         if sound_alert:
             runtime_globals.game_sound.play("alarm")
 
@@ -1814,6 +1851,8 @@ class GamePet:
             return True
         elif self.should_sleep() and self.care_sleep_mistake_timer < get_module(self.module).sleep_care_mistake_timer:
             return True
+        elif getattr(self, 'evolution_call', 0) > 0:
+            return True
         return False
 
     def answer_call(self, call_type):
@@ -1822,6 +1861,11 @@ class GamePet:
         A call pays once. Hunger is pending only before its care-mistake
         deadline; bedtime additionally has an episode guard because the
         existing sleep-penalty counter may fire more than once overnight.
+        The evolution call (_raise_evolution_call) is answered by a press
+        while it stands. The dying call is the death save's: near death
+        the call sounds for about a minute while Confirm is mashed (Master
+        Book p.048), so the presses made in time answer it, before the
+        save's roll (update_death_save).
         """
         module = get_module(self.module)
         if not module:
@@ -1844,6 +1888,16 @@ class GamePet:
             if pending:
                 self._reliability_sleep_call_resolved = True
                 self.care_sleep_mistake_timer = 0
+        elif call_type == "evolution":
+            pending = getattr(self, 'evolution_call', 0) > 0 and self.state != "dead"
+            self.evolution_call = 0
+        elif call_type == "dying":
+            pending = (
+                bool(getattr(self, 'dying', False)) and
+                module.death_save_by != "Nothing" and
+                self.death_save_b_counter <= 0 and
+                self.death_save_shake_counter <= 0
+            )
         else:
             return False
 
@@ -2656,6 +2710,8 @@ class GamePet:
             self.virus = 0
         if not hasattr(self, "_reliability_sleep_call_resolved"):
             self._reliability_sleep_call_resolved = False
+        if not hasattr(self, "evolution_call"):
+            self.evolution_call = 0
         if not hasattr(self, "trophies"):
             self.trophies = 0
         if not hasattr(self, "vital_values"):

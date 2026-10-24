@@ -205,7 +205,9 @@ class ICDataTests(unittest.TestCase):
                                 "DigiShop 2": [("iD Plate 02", 2000)],
                                 "DigiShop 3": [("iD Plate 03", 2000)],
                                 "DigiShop 4": [("Digimon iD Plate Limited", 5000)],
-                                # The 20X's (owner, 2026-10-17; 8 2026-10-21): no pack.
+                                # The 20X's (owner, 2026-10-17; 8 2026-10-21; 6 and 7
+                                # 2026-10-23): no pack.
+                                "DigiShop 6": [], "DigiShop 7": [],
                                 "DigiShop 8": [], "DigiShop 9": [], "DigiShop 10": [], "DigiShop 13": [],
                                 "DigiShop 14": [], "DigiShop 15": [], "DigiShop 16": []})
 

@@ -50,7 +50,10 @@ class XrosView:
 
         candidates = []
         for pet in self.selected_pets:
-            options = get_available_temp_evolutions(pet)
+            # A connection battle is fought in no adventure area (0): a form
+            # with a `battle_area` that leaves 0 out is not offered here.
+            # Taking a form spends its DP (`xros_cost`, make_xros_pet).
+            options = get_available_temp_evolutions(pet, area=0)
             if options:
                 candidates.append((pet, options))
 
@@ -140,7 +143,8 @@ class XrosView:
         if event_type == "B":
             # Nothing has been applied yet, so backing out needs no revert.
             runtime_globals.game_sound.play("cancel")
-            self.change_view("pet_selection", is_dcom_mode=True)
+            mode = "is_wificom_mode" if self.next_view == "wificom" else "is_dcom_mode"
+            self.change_view("pet_selection", **{mode: True})
             return True
 
         if self.selector.handle_event(event) == "confirm":

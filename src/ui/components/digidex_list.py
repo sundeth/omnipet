@@ -484,7 +484,7 @@ class DigidexList(UIComponent):
             name_text = font.render(pet.name[:15], True, colors["fg"])
             blit_with_shadow(surface, name_text, (list_x + left_padding + icon_size + int(5 * ui_scale), y_pos + int(8 * ui_scale)))
             
-            info_text = small_font.render(f"{pet.attribute if pet.attribute != '' else 'Free'} | Stage {constants.STAGES[pet.stage]}", True, (200, 200, 200))
+            info_text = small_font.render(f"{pet.attribute if pet.attribute != '' else 'Free'} | Stage {constants.stage_name(pet.stage)}", True, (200, 200, 200))
             blit_with_shadow(surface, info_text, (list_x + left_padding + icon_size + int(5 * ui_scale), y_pos + int(28 * ui_scale)))
 
             # Friend pets carry a small tag in the top-right of the row

@@ -12,6 +12,8 @@ The automated half of utilities/claude/docs/release-checklist.md:
     editor    Module Editor load + report, headless          (editor_report.ps1)
     scenes    every scene x 10 resolutions                   (scene_sweep.py)
     crawl     every screen reachable by keyboard and by touch (menu_crawl.py)
+    tutorial  the tutorial played by keyboard, mouse and touch; fumbled,
+              skipped at every step                         (tutorial_crawl.py)
     validators  per-device module validators, for review     (device_validators.py)
     builds    versions, endpoints, gates, documentation      (build_checks.py)
     production  the production Omninet, read-only: season, arena runtime,
@@ -36,7 +38,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "support"))
 from paths import ROOT, temp_dir, REPORTS  # noqa: E402
 STAGES = ["tests", "modules", "evolutions", "collection", "care", "editor", "validators", "scenes", "crawl",
-          "builds", "production"]
+          "tutorial", "builds", "production"]
 sys.stdout.reconfigure(encoding="utf-8")
 
 
@@ -168,6 +170,28 @@ def main():
         sections.append("## Menu crawl\n\nDetail: [crawl.md](crawl.md)\n\n" +
                         (f"Touch dead ends: {', '.join(dead)}\n" if dead else "No touch dead ends.\n"))
 
+    if "tutorial" in stages:
+        code, secs = run(py + [os.path.join(HERE, "tutorial_crawl.py"), "--quiet", "--out", out],
+                         os.path.join(out, "tutorial.log"))
+        res = json.load(open(os.path.join(out, "tutorial_crawl.json"), encoding="utf-8"))
+        fail_kinds = ("crash", "stuck", "escape", "end")
+        kinds = collections.Counter(f["kind"] for r in res for f in r["findings"])
+        played = [r for r in res if r["run"] == "play"]
+        clean = sum(r["ended"] == "complete" and not r["assisted"] for r in played)
+        rows.append(("Tutorial crawl", "FAIL" if any(kinds[k] for k in fail_kinds) else "pass",
+                     f"{clean} of {len(played)} playthroughs unhelped; "
+                     + ", ".join(f"{k} {v}" for k, v in sorted(kinds.items())), secs))
+        where = collections.defaultdict(list)          # (kind, step) -> the runs it happened in
+        for r in res:
+            for f in r["findings"]:
+                if f["kind"] in fail_kinds:
+                    where[(f["kind"], f["step"])].append(f"{r['run']} {f['family']} {f['res']} {f['fixture']}")
+        fails = [f"- {kind} at {step}: {', '.join(dict.fromkeys(runs))}" for (kind, step), runs in where.items()]
+        sections.append("## Tutorial crawl (UI-11)\n\nDetail: [tutorial_crawl.md](tutorial_crawl.md)\n\n" +
+                        ("\n".join(fails[:30]) + (f"\n- ... and {len(fails) - 30} more" if len(fails) > 30 else "")
+                         if fails else "Every input family plays the tutorial through; fumbles and skips leave "
+                         "the game as it was.") + "\n")
+
     if "validators" in stages:
         code, secs = run(py + [os.path.join(HERE, "device_validators.py"), "--out", os.path.join(out, "validators"),
                                "--json", os.path.join(out, "validators.json")], os.path.join(out, "validators.log"))
@@ -210,7 +234,8 @@ def main():
     names = {"Automated tests": "tests", "Module data audit": "modules", "Evolution crawl": "evolutions",
              "Items and cards": "collection", "Care crawl": "care",
              "Module Editor load + report": "editor", "Device validators (review)": "validators",
-             "Scene sweep": "scenes", "Menu crawl": "crawl", "Builds, endpoints, gates, docs": "builds",
+             "Scene sweep": "scenes", "Menu crawl": "crawl", "Tutorial crawl": "tutorial",
+             "Builds, endpoints, gates, docs": "builds",
              "Production server (read-only)": "production"}
     for row, section in zip(rows, sections):
         with open(os.path.join(out, f"stage_{names[row[0]]}.json"), "w", encoding="utf-8") as fh:

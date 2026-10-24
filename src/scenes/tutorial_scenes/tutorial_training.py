@@ -168,10 +168,13 @@ class TutorialTraining(SceneTraining):
                 return super().handle_event(event)
             
             if self.allow_button_selection:
+                was_dummy = self.phase == "dummy"
                 # Let the parent handle it
                 result = super().handle_event(event)
-                # Notify tutorial
-                if self.on_training_selected_callback:
+                # Notify the tutorial only when this press started the Dummy
+                # (on_dummy_training sets the phase): an A on the pet row or a
+                # click beside the button starts nothing.
+                if not was_dummy and self.phase == "dummy" and self.on_training_selected_callback:
                     self.on_training_selected_callback()
                 return result
             else:

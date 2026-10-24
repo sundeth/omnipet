@@ -480,6 +480,22 @@ class Audit:
                     self.add("MOD-03", "error", label, f"route to {to} needs area {evo['area']}; the last adventure area is {max_area}")
                 if evo.get("item") and evo["item"] not in mod.item_names:
                     self.add("MOD-15", "error", label, f"route to {to} needs item '{evo['item']}', not in item.json")
+            # A temporary evolution is offered only in a battle its `battle_area`
+            # admits (0: outside the adventure areas) and to a pet holding its
+            # `xros_cost` in DP (xros_utils).
+            for t in m.get("temporary-evolution") or []:
+                rng = t.get("battle_area")
+                if rng:
+                    lo = rng[0] if len(rng) > 0 and rng[0] not in (-1, None) else 0
+                    hi = rng[1] if len(rng) > 1 and rng[1] not in (-1, None) else 999999
+                    if not any(lo <= a <= hi for a in [0] + list(mod.adventure_areas)):
+                        self.add("MOD-03", "error", label,
+                                 f"temporary evolution to {t.get('to')} needs battle area {lo}-{hi}; "
+                                 f"no battle is fought there (areas {mod.adventure_areas or 'none'}, 0 outside them)")
+                cost = t.get("xros_cost") or 0
+                if cost and cost > (m.get("energy") or 0):
+                    self.add("MOD-03", "error", label,
+                             f"temporary evolution to {t.get('to')} costs {cost} DP; the form holds {m.get('energy') or 0}")
             # first match wins: an unconditional timer route hides every later timer route
             if m.get("stage", 0) == 0:
                 continue
@@ -827,6 +843,9 @@ class Audit:
         for e in mod.events:
             if e.get("item") and e["item"] not in items:
                 self.add("MOD-15", "error", f"event {e.get('name')}", f"item '{e['item']}' not in item.json")
+            for name in e.get("item_pool") or []:
+                if name not in items:
+                    self.add("MOD-15", "error", f"event {e.get('name')}", f"pool item '{name}' not in item.json")
             if e.get("shop") and e["shop"] not in {s.get("name") for s in mod.shops}:
                 self.add("MOD-15", "error", f"event {e.get('name')}", f"shop '{e['shop']}' not in shop.json")
         for r in (mod.connect_points or {}).get("rewards", []) if isinstance(mod.connect_points, dict) else []:

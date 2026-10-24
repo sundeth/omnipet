@@ -24,10 +24,17 @@ from utils.sprite_utils import right_facing
 from utils.scene_utils import change_scene
 from utils.inventory_utils import add_to_inventory, get_item_by_name
 from utils.module_utils import get_module
-from utils.quest_event_utils import generate_daily_quests, get_hourly_random_event
+from utils.quest_event_utils import ensure_daily_quests, get_hourly_random_event, roll_over_day
 from utils.inventory_utils import add_to_inventory
 from utils.asset_utils import image_load
 from utils import accessory_utils
+from core import pet_stats
+
+#: The evolution cutscene (scenes.scene_evolution) was an experimental 0.9.x
+#: preview and is not wired in: an evolution plays its jingle and swaps the
+#: sprite in place, and nothing sets runtime_globals.evolution_pet. Kept off
+#: so start_evolution_sequence's hard-coded demo can never run.
+EVOLUTION_CUTSCENE = False
 
 #=====================================================================
 # SceneMainGame
@@ -36,6 +43,9 @@ class SceneMainGame:
     """
     Handles the main game scene, including pets, menu navigation, and interactions.
     """
+
+    #: Input that is no press: it answers no call (handle_event).
+    PASSIVE_INPUTS = frozenset(("MOUSE_MOTION", "DRAG_START", "DRAG_MOTION", "DRAG_END", "SCROLL"))
 
     def __init__(self) -> None:
         """
@@ -65,13 +75,9 @@ class SceneMainGame:
         self._hearts_cache = {}
         self._fade_overlay_cache = None  # Cache fade overlay surface
 
-        today = datetime.date.today()
-        if game_globals.xai_date < today:
-            game_globals.xai = random.randint(1, 7)
-            game_globals.xai_date = today
-            # Reset daily quests when day changes
-            game_globals.quests = []
-            runtime_globals.game_console.log(f"[SceneMainGame] New day detected, XAI set to {game_globals.xai}, quests reset")
+        # A new day draws the XAI number again and drops yesterday's quests;
+        # also checked once a second in update().
+        roll_over_day()
 
         self.food_anims = {}  # {pet_index: [frames]} for animated food sprites
         self.load()
@@ -130,8 +136,7 @@ class SceneMainGame:
             'gift': None
         }
 
-        if game_globals.quests is None or len(game_globals.quests) == 0:
-            game_globals.quests = generate_daily_quests()
+        ensure_daily_quests()
 
         # Initialize event timer if not set
         if game_globals.event_time is None:
@@ -147,6 +152,10 @@ class SceneMainGame:
 
         # Increment the frame counter
         self.frame_counter += 1
+        # A game left on this screen past midnight starts the new day here,
+        # not only when the scene is next rebuilt (once a second).
+        if self.frame_counter % constants.FRAME_RATE == 0 and roll_over_day():
+            ensure_daily_quests()
         # Ensure last_input_frame exists (use frames to avoid frequent time.time() calls)
         if not hasattr(runtime_globals, 'last_input_frame'):
             runtime_globals.last_input_frame = self.frame_counter
@@ -192,8 +201,9 @@ class SceneMainGame:
         runtime_globals.game_message.update()
 
     def check_evolution_start(self):
-        """Begins evolution sequence when a pet is ready to evolve."""
-        if runtime_globals.evolution_pet:
+        """Begins evolution sequence when a pet is ready to evolve (never:
+        see EVOLUTION_CUTSCENE)."""
+        if EVOLUTION_CUTSCENE and runtime_globals.evolution_pet:
             # Update last input frame so screensaver will dismiss at next draw
             runtime_globals.last_input_frame = self.frame_counter
             self.start_evolution_sequence()
@@ -769,7 +779,10 @@ class SceneMainGame:
             hearts_x = pet.x + runtime_globals.PET_WIDTH // 2 - hearts_width // 2
             hearts_y = pet.y + runtime_globals.PET_HEIGHT
             self.draw_hearts(surface, hearts_x, hearts_y, pet.hunger, total_hearts, factor)
-            self.draw_hearts(surface, hearts_x, hearts_y + int(6 * runtime_globals.UI_SCALE), pet.strength, total_hearts, factor)
+            # The Strength row only on a device that has the meter (not the
+            # iC or Digimon World, whose Strength is never filled).
+            if pet_stats.tracks_strength(getattr(module, "visible_stats", []) if module else ["Strength"]):
+                self.draw_hearts(surface, hearts_x, hearts_y + int(6 * runtime_globals.UI_SCALE), pet.strength, total_hearts, factor)
 
     def draw_cleaning(self, surface: pygame.Surface) -> None:
         """
@@ -949,13 +962,29 @@ class SceneMainGame:
         Handles keyboard and GPIO button inputs in the main game scene.
         """
         event_type, event_data = event
-        
+
+        # The screensaver is up: this input only wakes the screen, as the
+        # devices do ("press any button to turn the screen back on"). The
+        # press used to act as well, opening the icon still under the cursor.
+        waking = getattr(self, "_ss_active", False) and event_type not in self.PASSIVE_INPUTS
+
         # Reset timers on any input
         self.fade_out_timer = 60 * constants.FRAME_RATE
         runtime_globals.last_input_frame = getattr(self, 'frame_counter', 0)
 
+        if waking:
+            self._ss_active = False
+            return
+
         if self.lock_inputs:
             return
+
+        # A press answers each pet's standing evolution call
+        # (GamePet.answer_call); a pointer that only moves does not.
+        if event_type not in self.PASSIVE_INPUTS:
+            for pet in game_globals.pet_list:
+                if getattr(pet, "evolution_call", 0) > 0:
+                    pet.answer_call("evolution")
 
         # Any input ends a C'mon Switch close-up, and does nothing else.
         if accessory_utils.closeup_active():
@@ -1077,14 +1106,16 @@ class SceneMainGame:
 
     def handle_debug_keys(self, event_type) -> None:
         """
-        Debugging shortcuts (F11, F12).
+        Debugging shortcut (F12).
         """
-        if event_type == "F11":
-            # Open test scene
-            runtime_globals.game_sound.play("menu")
-            change_scene("test")
-            runtime_globals.game_console.log("[DEBUG] Opening test scene")
-        elif event_type == "F12" and game_globals.configuration.debug_mode:
+        # F11 opened a test scene that no longer exists (no "test" in the
+        # scene map); off for the release.
+        # if event_type == "F11":
+        #     # Open test scene
+        #     runtime_globals.game_sound.play("menu")
+        #     change_scene("test")
+        #     runtime_globals.game_console.log("[DEBUG] Opening test scene")
+        if event_type == "F12" and game_globals.configuration.debug_mode:
             # Open debug scene
             runtime_globals.game_sound.play("menu")
             change_scene("debug")

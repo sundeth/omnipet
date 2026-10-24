@@ -213,6 +213,23 @@ class FontLoadTests(unittest.TestCase):
                 self.assertEqual(font.size(word)[0], 5 * len(word))
 
 
+class MissingGlyphTests(unittest.TestCase):
+    """The title font (DigimonBasic) has no ' ` [ ] |: they drew as a box, so
+    a team named "Tamer's Team" read "TAMER[box]S TEAM" (2026-10-22 doc
+    pass). Such characters are substituted; fonts that have them keep them."""
+
+    def test_the_title_font_drops_what_it_cannot_draw(self):
+        font = font_load(TITLE_FONT, 22)
+        self.assertEqual(font.size("TAMER'S TEAM"), font.size("TAMERS TEAM"))
+        self.assertEqual(font.size("[A|B]"), font.size("(A/B)"))
+
+    def test_fonts_that_have_them_keep_them(self):
+        for path in (TEXT_FONT, constants.FONT_TTF_PATH):
+            with self.subTest(font=os.path.basename(path)):
+                font = font_load(path, 16)
+                self.assertNotEqual(font.size("A'B"), font.size("AB"))
+
+
 class ShadowTests(unittest.TestCase):
     """Pixel-font text is an 8-bit surface whose background is a colour key.
     Its drop shadow was a solid box in the text's colour (owner, 2026-10-21:

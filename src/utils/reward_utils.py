@@ -17,7 +17,7 @@ Server reward values (configured server-side):
     reward_coins_evolution  = 2
     reward_coins_new_pet    = 3
     reward_coins_adventure  = 10   (whole-module adventure completion)
-    reward_coins_area_clear = 1    (per-area boss clear — add this server-side)
+    reward_coins_area_clear = 1    (per-area boss clear)
 """
 
 import uuid

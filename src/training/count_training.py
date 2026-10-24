@@ -79,7 +79,9 @@ class CountMatchTraining(Training):
             if self.count_match and self.count_match.handle_event(event):
                 self.press_counter = self.count_match.get_press_counter()
                 self.rotation_index = self.count_match.get_rotation_index()
-                
+        elif self.phase == "charge" and event_type == "B":
+            # B (and the EXIT button, which sends it) leaves, as in Dummy.
+            self.quit_charge()
         elif self.phase in ["wait_attack", "attack_move", "impact"] and event_type in ["B", "START"]:
             # Skip to result phase
             runtime_globals.game_sound.play("cancel")
@@ -258,16 +260,10 @@ class CountMatchTraining(Training):
         
         # Set up result animation based on hit count
         if not self.animated_sprite.is_animation_playing():
-            duration = combat_constants.RESULT_SCREEN_FRAMES / constants.FRAME_RATE
-            
-            if hits == 5:
-                self.animated_sprite.play_megahit(duration)
-            elif hits < 2:
-                self.animated_sprite.play_bad(duration)
-            elif hits < 4:
-                self.animated_sprite.play_good(duration)
-            else:
-                self.animated_sprite.play_great(duration)
+            # The banner of the grade paid, the Megahit on top: on the
+            # Pendulum Color 3 super hits pay Great (they read GOOD), and the
+            # PENGZ's single super hit is a win (it read BAD).
+            self.play_grade_banner(self.get_attack_count(), top="megahit")
         
         # Draw the animated sprite
         self.animated_sprite.draw(screen)

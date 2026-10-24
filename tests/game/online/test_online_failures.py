@@ -376,7 +376,8 @@ class OnlineFailureTests(unittest.TestCase):
         with isolate_client(env, FakeOmninet.dead_url(), timeout=0.5) as svc:
             svc._device_key, svc._user_info = "dk_offline", {"nickname": "x"}
             game, hub = self._arena()
-            self.assertEqual(hub.time_label.text, "No active season")
+            # A failed fetch is not "No active season" (2026-10-22 doc pass, 25).
+            self.assertEqual(hub.time_label.text, "Cannot reach Omninet")
             self.assertFalse(hub.create_team_button.enabled)
             self.assertFalse(hub.find_button.enabled)
             self.assertFalse(hub.history_button.enabled)

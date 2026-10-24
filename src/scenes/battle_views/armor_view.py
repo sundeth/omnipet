@@ -244,6 +244,11 @@ class ArmorView:
         # counted use without the evolution yet still spends the item.
         runtime_globals.game_sound.play("evolution" if evolved else "menu")
         remove_from_inventory(armor_item.id)
+        if evolved:
+            # Armor Evolution quests (they never moved: nothing reported
+            # them; 2026-10-22 doc pass).
+            from utils.quest_event_utils import update_evolution_quest_progress
+            update_evolution_quest_progress("armor", pet.module)
         runtime_globals.game_console.log(
             f"[ArmorView] {armor_item.name}: {pet.name} {'evolved' if evolved else 'counted a use'}")
         

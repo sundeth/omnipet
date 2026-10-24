@@ -54,6 +54,19 @@ DEFAULT_KEEP_ALIVE = 15
 CONNECT_TIMEOUT = 10
 
 
+def _ca_bundle():
+    """certifi's CA bundle when it is installed, else None (the system's).
+
+    Android builds have no system CA path Python can read, so TLS to the
+    broker fails there without one; the APK ships certifi for `requests`.
+    """
+    try:
+        import certifi
+        return certifi.where()
+    except ImportError:
+        return None
+
+
 class MqttClient:
     """An `adafruit_minimqtt`-shaped client backed by paho-mqtt.
 
@@ -85,6 +98,8 @@ class MqttClient:
         self._pending_subscribes: Dict[int, str] = {}
         self._pending_unsubscribes: Dict[int, str] = {}
         self._connected = False
+        #: The broker's CONNACK code when it refused the login, else None.
+        self.refused_code = None
 
         self._client = self._build_client()
 
@@ -99,7 +114,8 @@ class MqttClient:
 
         client.username_pw_set(self.username, self.password)
         if self.use_tls:
-            client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT)
+            client.tls_set(ca_certs=_ca_bundle(), cert_reqs=ssl.CERT_REQUIRED,
+                           tls_version=ssl.PROTOCOL_TLS_CLIENT)
 
         client.on_connect = self._paho_on_connect
         client.on_disconnect = self._paho_on_disconnect
@@ -112,6 +128,7 @@ class MqttClient:
 
     def _paho_on_connect(self, client, userdata, flags, r_c, *_):
         self._connected = (r_c == 0)
+        self.refused_code = None if r_c == 0 else r_c
         if self.on_connect is not None:
             self.on_connect(self, userdata, flags, r_c)
 
@@ -163,9 +180,16 @@ class MqttClient:
         `mqtt.connect_to_mqtt` subscribes on the next line, so returning
         before CONNACK would lose that subscription.
         """
+        self.refused_code = None
         self._client.connect(self.broker, self.port, self.keep_alive)
         deadline = time.monotonic() + timeout
         while not self._connected:
+            # A refused login is answered at once (CONNACK with a code); it
+            # is not worth the rest of the timeout, nor reporting as an
+            # unreachable broker.
+            if self.refused_code is not None:
+                raise ConnectionRefusedError(
+                    f"{self.broker} refused the login (CONNACK {self.refused_code})")
             if time.monotonic() > deadline:
                 raise TimeoutError(f"No CONNACK from {self.broker} within {timeout}s")
             self._client.loop(timeout=0.1)

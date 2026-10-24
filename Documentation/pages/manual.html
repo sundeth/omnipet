@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+    <meta charset="UTF-8">
     <title>Manual - Omnipet Documentation</title>
     <link rel="stylesheet" href="../assets/main.css">
 </head>
@@ -9,1098 +10,1273 @@
 <body>
     <div class="page-content">
         <div class="page-header">
-            <h1 class="page-title">User Manual</h1>
-        </div>
-
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)">Getting Started<span class="arrow">▼</span></h2>
-            <div class="section-content" style="display:none;">
-                <p>If you haven't booted the game yet, go to the Installation section first. Otherwise, congratulations
-                    and welcome aboard!
-                    Once you have the game running, you will be prompted to pick your first egg.</p>
-                <img src="../assets/EggSelection.png" width="240" height="240" alt="" />
-                <h3>First Steps</h3>
-                <ul style="list-style: none; padding: 0;">
-                    <li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
-                        <span style="position: absolute; left: 0; color: #667eea;">1.</span>
-                        Navigate around the menu, if you have more than one installed module, move the cursor beyond the
-                        avaliable pets to the LEFT or RIGHT to switch module. Choose an egg by pressing A.
-                    </li>
-                    <li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
-                        <span style="position: absolute; left: 0; color: #667eea;">2.</span>
-                        Hatching an egg takes around a minute, during this phase, some modules can grant you a permanent
-                        status boost by SHAKING the egg a certain amount of times.
-                    </li>
-                    <li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
-                        <span style="position: absolute; left: 0; color: #667eea;">3.</span>
-                        Once your first egg hatches, you will hear a sound alert, you will hear it every time a pet
-                        needs your attention. Navigate around the menus using UP, DOWN, LEFT, RIGHT buttons and select
-                        with A.
-                    </li>
-                    <li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
-                        <span style="position: absolute; left: 0; color: #667eea;">4.</span>
-                        Take good care of your pet by feeding, training, and keeping it healthy. The way you care for
-                        your pet will influence its evolution path directly, so keep up with its needs!
-                    </li>
-                    <li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
-                        <span style="position: absolute; left: 0; color: #667eea;">5.</span>
-                        The journey is in your hands! Add more eggs, explore, train, and battle with your pet to unlock
-                        its full potential.
-                    </li>
-                </ul>
+            <div class="page-header-text">
+                <h1 class="page-title">User Manual</h1>
+                <p class="page-subtitle">Every screen of the game and the care rules behind them. Click a section to open it.</p>
             </div>
         </div>
 
+        <nav class="page-toc">
+            <a href="#getting-started">Getting Started</a>
+            <a href="#controls">Controls</a>
+            <a href="#main-screen">Main Screen</a>
+            <a href="#status">Status</a>
+            <a href="#inventory">Inventory</a>
+            <a href="#training">Training</a>
+            <a href="#battle">Battle</a>
+            <a href="#clean">Poop and Cleaning</a>
+            <a href="#sleep">Sleep</a>
+            <a href="#heal">Sickness and Injury</a>
+            <a href="#evolution">Evolution</a>
+            <a href="#death">Care Mistakes and Death</a>
+            <a href="#library">Library</a>
+            <a href="#freezer">Freezer</a>
+            <a href="#digidex">Digidex</a>
+            <a href="#cards">Cards</a>
+            <a href="#connect">Connect</a>
+            <a href="#settings">Settings</a>
+            <a href="#modules">Modules</a>
+        </nav>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)">Controls<span class="arrow">▼</span></h2>
+        <!-- ============================================================ GETTING STARTED -->
+        <div class="content-section" id="getting-started">
+            <h2 class="section-title" onclick="toggleSection(this)">Getting Started<span class="arrow">&#9660;</span></h2>
             <div class="section-content" style="display:none;">
-                <p>These are default controls for the game, each device can have its own mapping for these buttons. You
-                    can change the mapping in game: Settings &gt; Input &gt; Remap Input (keyboard, gamepad and GamePi buttons).</p>
-                <br>
-                <ul style="list-style: none; padding: 0;">
-                    <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-                        <strong> UP | DOWN | LEFT | RIGHT:</strong> Navigate menus
-                    </li>
-                    <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-                        <strong>A:</strong> Select options and confirm actions
-                    </li>
-                    <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-                        <strong>B:</strong> Go back or cancel actions
-                    </li>
-                    <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-                        <strong>X:</strong> Toggle the "Needs HUD", this will show the current hunger and strength
-                        levels of a pet, only works in the main game screen<br>
-                        <img src="../assets/ShowHearts.PNG" width="172" height="76" alt="" />
-                    </li>
-                    <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-                        <strong>Y:</strong> Shake, this is a function intended for devices without support for an
-                        accelerometer, it replaces the shake function<br>
-                        <img src="../assets/CountManual.png" width="192" height="48" alt="" />
-                    </li>
-                    <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-                        <strong>START:</strong> In the main game screen, it will open the Settings menu, in some areas
-                        of the Battle Menu, it is used to confirm an operation<br>
-                        <img src="../assets/SettingsMenu.PNG" width="200" height="200" alt="" />
-                    </li>
-                    <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-                        <strong>SELECT:</strong> In the main game, it switches between menu and pet mode, while in other
-                        menus it servers to switch the pet selection type<br>
+                <p>If the game is not installed yet, see the <a href="installation-guide.html">Installation</a> page first.
+                    This section covers the first start and how to choose an egg.</p>
 
-                        <div class="feature-card">
-                            <img src="../assets/MenuMode.PNG" width="240" height="58" alt="" /><img
-                                src="../assets/PetSelection.PNG" width="240" height="58" alt="" />
-                            <h3 class="feature-title">Selecion Modes - Main Game</h3>
-                            <p class="feature-description">In <strong>"Menu Mode"</strong> it's possible to navigate the
-                                menu options. In <strong>"Pet Mode"</strong> it's possible to select pets, the selection
-                                is used inside other menus for various functions (for example to feed only a few pets).
-                                A blue outline means the pet is currently selected.</p>
-                            <hr>
-                            <img src="../assets/SelectedPets.PNG" width="240" height="240" alt="" /><img
-                                src="../assets/PetsInNeed.PNG" width="240" height="240" alt="" />
-                            <h3 class="feature-title">Selecion Modes - Menus</h3>
-                            <p class="feature-description">Inside the menus it's possible to change the "Selection Type"
-                                between all pets capable to use the function or only the pets who need that function.
-                                (for example a pet that has not filled it's hunger meter or hasn't reached max effort)
-                            </p>
-                        </div>
-                    </li>
-                    <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-                        <strong>L:</strong> In the main game, it will flip the screen. This function is meant for
-                        devices with support for physical prisms like the GamePi.<br>
-                        <img src="../assets/Prism1.png" width="200" height="200" alt="" /><img
-                            src="../assets/Prism2.png" width="200" height="200" alt="" />
-                    </li>
-                    <li style="margin-bottom: 15px; padding-left: 20px; position: relative;">
-                        <strong>R:</strong> In the main game, it will distribute the pets evenly, helpful for looking at
-                        all pets at once.<br>
-                    </li>
-                </ul>
-            </div>
-        </div>
+                <h3>First start</h3>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/setup_mode.png" alt="Mode choice: Progress Mode and Free Mode">
+                    <div>
+                        <p>The first start runs a short setup. START or B skips it and goes to the mode choice.</p>
+                        <ol class="steps">
+                            <li><strong>Input setup</strong> (skipped on Android and touch screens): press any button on the device you
+                                want to use, then each button the game asks for (UP, DOWN, LEFT, RIGHT, A, B, X, Y, L, R, START, SELECT).
+                                A button not pressed within 15 seconds keeps its default.</li>
+                            <li><strong>Graphics test</strong>: the game measures what the system can draw and recommends a resolution
+                                or frame rate. A or START accepts it, B rejects it.</li>
+                            <li><strong>Mode choice</strong>: Progress Mode (shown as Progression Mode) or Free Mode. UP/DOWN switch, A or START confirms.</li>
+                        </ol>
+                        <table class="data-table">
+                            <thead><tr><th>Mode</th><th>What it allows</th></tr></thead>
+                            <tbody>
+                                <tr><td>Progress Mode</td><td>Needs an Omninet account. Modules and training modes are owned or bought with Coins earned in play; the Arena and the whole Shop are open.</td></tr>
+                                <tr><td>Free Mode</td><td>Every installed module and every feature is open from the start. No Arena; the Shop offers modules only.</td></tr>
+                            </tbody>
+                        </table>
+                        <p>The mode can be changed later in Settings &gt; Gameplay &gt; Change Mode. Each mode keeps its own save.
+                            Accounts, Progress Mode and the Arena are covered in <a href="online-play.html">Online Play</a>.</p>
+                    </div>
+                </div>
+                <p>After the mode choice the game opens the login (Progress Mode without an account), then the tutorial,
+                    then egg selection. The tutorial walks through Status, Inventory, Training and Battle with a Tutorial
+                    Digimon; START skips it, and Settings &gt; Gameplay &gt; Replay Tutorial plays it again.</p>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)">Main Menu Options<span class="arrow">▼</span></h2>
-            <div class="section-content" style="display:none;">
-                <p>From the main game screen in "Menu Mode", you have access to two primary menu options:</p>
-                
-                <div class="feature-card">
-                    <h3 class="feature-title">Status Menu</h3>
-                    <p class="feature-description">Access detailed information about your pets including age, weight, level, battle statistics, care information, and evolution status. Navigate through multiple pages to see all pet data.</p>
+                <h3>Choosing an egg</h3>
+                <p>Egg selection opens when the party is empty, or from an empty party slot in the Freezer. It has up to four steps.</p>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/egg_categories.png" alt="Egg selection: categories">
+                    <div>
+                        <p><strong>1. Category.</strong> CLASSICS, MODERN, CONVERSIONS or CUSTOM (the list of modules per category is in
+                            <a href="#modules" onclick="openSection('modules')">Modules</a>). A category with no usable module is greyed out;
+                            in Progress Mode only owned modules count. RANDOM picks a category, module, device and egg for you and
+                            highlights the egg; you still confirm it.</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/egg_modules.png" alt="Egg selection: module page">
+                    <div>
+                        <p><strong>2. Module.</strong> Shows the module's logo, version, number of eggs and your progress in it:
+                            Digidex, Backgrounds, Secrets and Adventure, in percent. LEFT/RIGHT (or L/R, or the &lt; &gt; buttons)
+                            change module; SELECT (or START) chooses it.</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/egg_devices.png" alt="Egg selection: Pendulum Color devices">
+                        <img class="shot" src="../assets/manual/egg_dim.png" alt="Egg selection: Vital Bracelet DIM cards">
+                    </div>
+                    <div>
+                        <p><strong>3. Device.</strong> Modules that model several physical devices show them here. A device with a single
+                            egg hatches it at once. The Vital Bracelet modules show their DIM and BEM cards instead of devices
+                            (second picture): VB and VH cards hold one egg each; the VBE Starter cards hold several, unlocked by
+                            clearing areas.</p>
+                        <p>Devices whose eggs are all held back for a later release are hidden (the Digimon Mini Ver.3.0 and the
+                            Digivice Burst in 1.0).</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/egg_grid.png" alt="Egg selection: eggs of a device">
+                    <div>
+                        <p><strong>4. Egg.</strong> Four eggs per page. Move to an egg and press SELECT (or START). L/R turn pages.</p>
+                        <p>Special eggs appear in the list once their unlock is earned and stay there. Examples: the Digital Monster X's
+                            Version SP (area 45), Digimon World's Punimon, Poyomon and Yuramon eggs (5, 10 and 15 Digidex entries), the
+                            Pendulum Color Godzilla's Ghidorah Digitama (area 10). Each module's documentation lists its own
+                            (<a href="module-guide.html">Module Guide</a>, Unlocks page).</p>
+                    </div>
                 </div>
 
-                <div class="feature-card">
-                    <h3 class="feature-title">Settings Menu</h3>
-                    <p class="feature-description">Access game configuration, the Digidex, Freezer Box, unlockables, and background selection. This is your central hub for managing the game and your pet collection.</p>
+                <h3>Hatching and shaking</h3>
+                <p>Every egg hatches at the first game minute after it is chosen; its hatch frames show from 5 seconds before.
+                    Shake the device (accelerometer) or press Y to shake the egg. On the Pendulum Color and the original Pendulum,
+                    an egg shaken 99 times or more before it hatches gives a <strong>Shaken</strong> Digimon (a flag on the Status
+                    screen; on the Pendulum Color it adds 10 Power).</p>
+
+                <h3>Traited Eggs</h3>
+                <p>Some devices give a Traited Egg. It has no separate entry: the next egg of the same module and version you
+                    hatch uses it, and the Digimon starts with the Traited flag (and, on most devices, a higher starting level).</p>
+                <table class="data-table">
+                    <thead><tr><th>How it is earned</th><th>Modules</th></tr></thead>
+                    <tbody>
+                        <tr><td>30% chance when a Digimon reaches Perfect</td><td>DMC, DMGZ, DMH</td></tr>
+                        <tr><td>Reaching Perfect with 100 or more battles</td><td>DMM</td></tr>
+                        <tr><td>48 hours after the last evolution</td><td>DM20, DMRV, PEN20, PENZ</td></tr>
+                        <tr><td>48 hours after the last evolution, with area 45 cleared</td><td>DMX</td></tr>
+                        <tr><td>Win ratio at Adult (60%)</td><td>DMXW</td></tr>
+                        <tr><td>Win ratio at Perfect</td><td>D-3</td></tr>
+                        <tr><td>Win ratio of a Digimon that failed to evolve or aged out</td><td>PENC, PENGZ (PENGZ: lifetime ratio)</td></tr>
+                        <tr><td>Outliving the lifespan</td><td>PENOG</td></tr>
+                        <tr><td>Generation: a Digimon that dies at Perfect or later leaves its Digitama</td><td>IC</td></tr>
+                        <tr><td>None</td><td>DMOG, DW1, VB, VBE, VH</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ============================================================ CONTROLS -->
+        <div class="content-section" id="controls">
+            <h2 class="section-title" onclick="toggleSection(this)">Controls<span class="arrow">&#9660;</span></h2>
+            <div class="section-content" style="display:none;">
+                <p>The game uses twelve buttons. Each can be remapped in Settings &gt; Input &gt; Remap Input, for the keyboard,
+                    a gamepad and the GamePi's GPIO buttons. Mouse and touch work on every screen.</p>
+                <table class="data-table">
+                    <thead><tr><th>Button</th><th>Keyboard</th><th>GPIO pin</th><th>Gamepad</th><th>General use</th></tr></thead>
+                    <tbody>
+                        <tr><td>UP / DOWN / LEFT / RIGHT</td><td>Arrow keys</td><td>5 / 6 / 16 / 13</td><td>D-pad</td><td>Move</td></tr>
+                        <tr><td>A</td><td>Enter</td><td>21</td><td>0</td><td>Select, confirm</td></tr>
+                        <tr><td>B</td><td>Esc</td><td>20</td><td>1</td><td>Back, cancel, skip an animation</td></tr>
+                        <tr><td>X</td><td>Left Ctrl</td><td>15</td><td>3</td><td>Main screen: show or hide the needs hearts</td></tr>
+                        <tr><td>Y</td><td>Space</td><td>12</td><td>2</td><td>Shake (for devices without an accelerometer)</td></tr>
+                        <tr><td>L</td><td>none</td><td>23</td><td>9</td><td>Main screen: turn the screen upside down (for prism screens)</td></tr>
+                        <tr><td>R</td><td>Left Shift</td><td>14</td><td>10</td><td>Main screen: spread the Digimon evenly</td></tr>
+                        <tr><td>START</td><td>Backspace</td><td>26</td><td>6</td><td>Main screen: Settings. Elsewhere: confirm or start</td></tr>
+                        <tr><td>SELECT</td><td>Tab</td><td>19</td><td>4</td><td>Main screen: menu mode / Digimon mode. Elsewhere: switch view</td></tr>
+                    </tbody>
+                </table>
+                <ul>
+                    <li><strong>Shake</strong> comes from an accelerometer (the GamePi's I2C sensor, or the phone on Android) or the Y button.</li>
+                    <li><strong>Mouse and touch</strong>: tap or click a button to press it; drag or the mouse wheel scroll lists. In touch mode no
+                        focus highlight is drawn and extra on-screen buttons (BACK, arrows) appear where a screen needs them.</li>
+                    <li>Every press answers with a sound: "menu" when something happens, "cancel" when nothing does.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ============================================================ MAIN SCREEN -->
+        <div class="content-section" id="main-screen">
+            <h2 class="section-title" onclick="toggleSection(this)">Main Screen<span class="arrow">&#9660;</span></h2>
+            <div class="section-content" style="display:none;">
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/main_game.png" alt="Main screen">
+                    <div>
+                        <p>The party lives on the main screen, between two rows of menu icons. The icons have no labels;
+                            the selected one lights up in colour.</p>
+                        <table class="data-table">
+                            <thead><tr><th>Icon</th><th>Opens</th></tr></thead>
+                            <tbody>
+                                <tr><td><img class="pixel" src="../assets/manual/icons/menu_status.png" width="24" height="24" alt=""> Status</td><td><a href="#status" onclick="openSection('status')">Status</a></td></tr>
+                                <tr><td><img class="pixel" src="../assets/manual/icons/menu_feeding.png" width="24" height="24" alt=""> Food</td><td><a href="#inventory" onclick="openSection('inventory')">Inventory</a></td></tr>
+                                <tr><td><img class="pixel" src="../assets/manual/icons/menu_training.png" width="24" height="24" alt=""> Training</td><td><a href="#training" onclick="openSection('training')">Training</a>, when a selected Digimon can train</td></tr>
+                                <tr><td><img class="pixel" src="../assets/manual/icons/menu_battle.png" width="24" height="24" alt=""> Battle</td><td><a href="#battle" onclick="openSection('battle')">Battle</a>, when a selected Digimon can battle</td></tr>
+                                <tr><td><img class="pixel" src="../assets/manual/icons/menu_clean.png" width="24" height="24" alt=""> Clean</td><td>Flushes the poop (<a href="#clean" onclick="openSection('clean')">Poop and Cleaning</a>)</td></tr>
+                                <tr><td><img class="pixel" src="../assets/manual/icons/menu_sleep.png" width="24" height="24" alt=""> Light</td><td><a href="#sleep" onclick="openSection('sleep')">Sleep</a></td></tr>
+                                <tr><td><img class="pixel" src="../assets/manual/icons/menu_heal.png" width="24" height="24" alt=""> Heal</td><td>Treats sickness or injury (<a href="#heal" onclick="openSection('heal')">Sickness and Injury</a>)</td></tr>
+                                <tr><td><img class="pixel" src="../assets/manual/icons/menu_library.png" width="24" height="24" alt=""> Library</td><td><a href="#library" onclick="openSection('library')">Library</a>: quests, Freezer, Digidex, Settings, Cards</td></tr>
+                                <tr><td><img class="pixel" src="../assets/manual/icons/menu_connect.png" width="24" height="24" alt=""> Connect</td><td><a href="#connect" onclick="openSection('connect')">Connect</a>: Arena, local battles, Shop</td></tr>
+                                <tr><td><img class="pixel" src="../assets/manual/icons/menu_call.png" width="24" height="24" alt=""> Call sign</td><td>Not selectable. Lights while a Digimon calls for care</td></tr>
+                            </tbody>
+                        </table>
+                        <p>While a Digimon is dying or dead only the Library opens.</p>
+                    </div>
                 </div>
 
-                <p>Use the directional keys to navigate between these options, and press A to enter your selected menu.</p>
+                <h3>Menu mode and Digimon mode</h3>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/main_menu_cursor.png" alt="Menu mode with the Training icon selected">
+                        <img class="shot" src="../assets/manual/main_pet_mode.png" alt="Digimon mode: yellow cursor and blue selection">
+                    </div>
+                    <div>
+                        <p>SELECT switches between the two modes.</p>
+                        <ul>
+                            <li><strong>Menu mode</strong> (the default): the arrows move over the icons, A opens one. The first arrow press
+                                selects the Status icon.</li>
+                            <li><strong>Digimon mode</strong>: LEFT/RIGHT move a yellow outline over the Digimon, A selects or deselects
+                                the one under it (blue outline).</li>
+                        </ul>
+                        <p>Selected Digimon are the ones fed, trained, put to sleep or taken to battle. With none selected, the whole
+                            party is. After 60 seconds without input the cursor and the selection clear.</p>
+                        <p>With a mouse, pointing at an icon selects it and a click opens it; clicking a Digimon selects it.
+                            On a touch screen a tap opens the icon at once.</p>
+                    </div>
+                </div>
+
+                <h3>Needs hearts, clock and other keys</h3>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/main_hearts.png" alt="Needs hearts under each Digimon">
+                        <img class="shot" src="../assets/manual/main_clock.png" alt="Clock and battery bar">
+                    </div>
+                    <div>
+                        <table class="data-table">
+                            <thead><tr><th>Input</th><th>Effect</th></tr></thead>
+                            <tbody>
+                                <tr><td>X, or a click on empty ground</td><td>Shows or hides the needs hearts under each Digimon: Hunger on top, Strength below.
+                                    The Digivice iC and Digimon World have no Strength meter, so that row stays empty for their Digimon.</td></tr>
+                                <tr><td>START, or a right click</td><td>Opens <a href="#settings" onclick="openSection('settings')">Settings</a></td></tr>
+                                <tr><td>Y, or a shake</td><td>Shakes eggs; counts toward a shake death save</td></tr>
+                                <tr><td>L</td><td>Turns the screen upside down (for screens seen through a prism)</td></tr>
+                                <tr><td>R</td><td>Spreads the Digimon evenly across the screen</td></tr>
+                            </tbody>
+                        </table>
+                        <p>Settings &gt; Display &gt; Show Clock adds a bar with the time and a battery icon (from the GamePi's UPS board,
+                            the phone, or the PC's battery).</p>
+                    </div>
+                </div>
+
+                <h3>Call sign, poop and ailments</h3>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/main_care.png" alt="Poop, an injured Digimon (skull), a sick one (dots) and the call sign">
+                    <div>
+                        <ul>
+                            <li>The <strong>call sign</strong> (bottom right) lights, with an alarm, while a Digimon has an empty Hunger or
+                                Strength meter, or is tired at bedtime with the light on. See <a href="#death" onclick="openSection('death')">Care Mistakes and Death</a>.</li>
+                            <li><strong>Poop</strong> sits on the ground until it is flushed with the Clean icon.</li>
+                            <li>A <strong>skull</strong> over a Digimon means it is injured; a <strong>speech bubble with dots</strong> means it is sick.
+                                See <a href="#heal" onclick="openSection('heal')">Sickness and Injury</a>.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <h3>Screensaver and events</h3>
+                <p>After the time set in Settings &gt; Display &gt; Timeout (60 seconds by default) the main screen turns into a
+                    black screen with a large clock. Icons under the clock show poop, an ailing Digimon and an active call.
+                    Any input wakes the screen.</p>
+                <p>Each game hour there may be an event: a yellow triangle blinks at the top left with a sound for 60 seconds.
+                    A or a click accepts it. Events can bring an item, open a module's shop, or start a battle.</p>
             </div>
         </div>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/Status.png" width="48" height="48" alt="" /> Status Menu</span><span
-                    class="arrow">▼</span></h2>
+        <!-- ============================================================ STATUS -->
+        <div class="content-section" id="status" data-theme="status">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/manual/icons/menu_status.png" alt=""> Status</span><span class="arrow">&#9660;</span></h2>
             <div class="section-content" style="display:none;">
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/Status0.png" width="240" height="240" alt="" /></strong>
-                        </td>
-                        <td>
-                            <p class="feature-description">Select a pet to view it's status. This view show
-                                the pet's name, stage and attribute</p>
-                            <p class="feature-description item"><strong>* Stage:</strong> Stage represents
-                                the pet's current growth stage. The possible values are: 0-Egg, I-Fresh,
-                                II-In-Training, III-Rookie, IV-Champion, V-Ultimate, VI-Mega, VII-Super
-                                Ultimate</p>
-                            <p class="feature-description item"><strong>* Attribute:</strong> Pet's can
-                                belong to 4 possible attributes: Free, Data, Virus, and Vaccine. They
-                                operate in a Rock-Paper-Scissors format granting advantage in battles.
-                                Vaccine is strong against Virus. Virus is strong against Data. Data is
-                                strong against Vaccine. Free has no strength or weakness.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Status1.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description"><strong>Page 1</strong> This page show's the
-                                pet's main status information</p>
-                            <p class="feature-description item"><strong><img src="../assets/Age.png"></img>Age:</strong>
-                                Age represents the pet's
-                                current age in days.</p>
-                            <p class="feature-description item"><strong><img
-                                        src="../assets/Scale.png"></img>Weight:</strong> Weight represents
-                                the pet's current weight. Weight is gained by eating food items (like
-                                Protein) and lost through training; modules define the amount. If a pet
-                                reaches 99g, it becames sick.</p>
-                            <p class="feature-description item"><strong><img
-                                        src="../assets/Module.png"></img>Module:</strong> The name of the
-                                module the pet belongs to. The module defines the pet's behaviours and
-                                characteristics.</p>
-                            <p class="feature-description item"><strong><img
-                                        src="../assets/Version.png"></img>Version:</strong> The pet's
-                                version as set in the module. Versions are used to define evolution lines.
-                            </p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Status2.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description"><strong>Page 2</strong> Care information, level
-                                and mistakes</p>
+                <p>The Status screen shows one Digimon at a time. Each module decides which values it shows, so the screen looks
+                    different from device to device; the examples below are four Child Digimon of four devices.</p>
 
-                            <p class="feature-description item">
-                                <strong><img src="../assets/Heart Full.png"></img>Hunger:</strong>
-                                It's a representation of how full a pet is. Every pet will lose "hunger"
-                                over time; eat protein to fill it. Basic protein fills 1 heart. Each pet has
-                                a "stomach" — a limit to how much protein it can eat. Feeding a pet over its
-                                limit counts as an overfeed. A pet can die if not fed for a long time.
-                            </p>
+                <h3>Layout</h3>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/status_dmc.png" alt="Status of a Digital Monster Color Agumon">
+                    <div>
+                        <ol>
+                            <li><strong>Party row</strong>: the party, with each Digimon's module flag. LEFT/RIGHT or a tap shows another
+                                Digimon; EXIT (or B) leaves.</li>
+                            <li><strong>Name, Stage, Age, Weight</strong>. Age is in days. Weight is the volume of data in the Digimon;
+                                food raises it, training lowers it.</li>
+                            <li><strong>Flags</strong> (right): the Attribute icon, then Edited, Special, Shiny, Shaken, Traited and
+                                G-Cell Fragment when they apply.</li>
+                            <li><strong>Meters</strong> (left): Hunger, Strength and Effort hearts on most devices.</li>
+                            <li><strong>Battle values</strong> (right): DP, Power, Battles, Win Rate and Total win rate.</li>
+                            <li><strong>Boxes</strong> (bottom): counts the device keeps, such as care mistakes or injuries. With more
+                                than three boxes the strip scrolls by itself.</li>
+                        </ol>
+                        <p>UP/DOWN move between the values; A (or a tap) shows a value's tooltip. The values are a snapshot taken when
+                            the Digimon is shown.</p>
+                    </div>
+                </div>
 
-                            <p class="feature-description item">
-                                <strong><img src="../assets/Heart Full.png"></img>Strength:</strong>
-                                It's another basic need of a pet, filled with vitamins. Some modules allow
-                                strength to be replenished by training. Unlike protein, pets can consume
-                                vitamins without a hard limit. Every 4 vitamins replenish 1 DP. Each vitamin
-                                increases the pet's weight as defined by the module.
-                            </p>
+                <h3>Values</h3>
+                <table class="data-table">
+                    <thead><tr><th>Value</th><th>Meaning</th></tr></thead>
+                    <tbody>
+                        <tr><td>Stage</td><td>The Evolution Stage. The screen uses the dub names: I-Fresh = Baby I, II-In-Training = Baby II,
+                            III-Rookie = Child, IV-Champion = Adult, V-Ultimate = Perfect, VI-Mega = Ultimate, VII-Super Ultimate = Super Ultimate.</td></tr>
+                        <tr><td>Attribute</td><td>Vaccine, Data, Virus, or Free when the Digimon has none. In battle Vaccine beats Virus,
+                            Virus beats Data and Data beats Vaccine; Free has no advantage.</td></tr>
+                        <tr><td>Hunger</td><td>Fed with Food. Drains over time while awake. On some devices (D-3, DMX, PENC, PENGZ, PENZ) the
+                            number of hearts follows the species' stomach, at 2 points per heart.</td></tr>
+                        <tr><td>Strength</td><td>Fed with Vitamin and, on some devices, raised by training. On the Digimon Mini it is a 0-15
+                            meter shown as 4 hearts.</td></tr>
+                        <tr><td>Effort</td><td>Raised by training: 4 trainings fill a heart, 16 fill the meter. Reset on evolution.</td></tr>
+                        <tr><td>DP</td><td>Spent to battle on devices that use it. Refilled by sleeping 8 hours or more, and on some devices
+                            by Vitamin.</td></tr>
+                        <tr><td>Power</td><td>The species' power plus item bonuses. A higher Power gives a higher chance to hit. Bonuses from
+                            full Strength, the stage tables, Traited, Shaken and stars are added in battle. Vital Bracelet stars show as
+                            <code>(1&#9733;)</code>.</td></tr>
+                        <tr><td>Battles, Win Rate</td><td>Battles fought and won in this form, adventure and connection battles alike (Versus, DCom,
+                            WiFi, Discord). Reset on evolution.</td></tr>
+                        <tr><td>Total</td><td>Win rate over the Digimon's whole life.</td></tr>
+                        <tr><td>Level, Experience</td><td>Shown on the D-3, Digital Monster X and Pendulum Z. Experience comes from adventure wins.
+                            The level cap is 3 at Baby II, 4 at Child, 6 at Adult, 8 at Perfect and 10 from Ultimate. Reset on evolution.</td></tr>
+                    </tbody>
+                </table>
 
-                            <p class="feature-description item">
-                                <strong><img src="../assets/Level.png"></img>Level and Experience:</strong>
-                                An important stat for battles. Pets gain experience by defeating enemies in
-                                adventure mode. When a pet evolves, its level resets to 1. The maximum level
-                                a pet can reach depends on its stage:
-                                <br>
-                                • In-Training: Lv. 3<br>
-                                • Rookie: Lv. 4<br>
-                                • Champion: Lv. 6<br>
-                                • Ultimate: Lv. 8<br>
-                                • Mega and beyond: Lv. 10
-                                <br>
-                                Experience required per level increases significantly, reaching 5000 EXP at
-                                Level 10.
-                            </p>
+                <h3>Device variations</h3>
+                <div class="screen-gallery">
+                    <figure><img class="shot" src="../assets/manual/status_penc.png" alt="Pendulum Color status"><figcaption class="shot-caption">Pendulum Color</figcaption></figure>
+                    <figure><img class="shot" src="../assets/manual/status_ic.png" alt="Digivice iC status"><figcaption class="shot-caption">Digivice iC</figcaption></figure>
+                    <figure><img class="shot" src="../assets/manual/status_vb.png" alt="Vital Bracelet status"><figcaption class="shot-caption">Vital Bracelet</figcaption></figure>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>Device</th><th>What its Status adds or leaves out</th></tr></thead>
+                    <tbody>
+                        <tr><td>Digital Monster Color (DMC), DM20, DMOG, DMXW, PEN20, DMH, DMRV</td><td>Hunger, Strength and Effort hearts; DP; no boxes.
+                            DMH shows no Weight, DMRV no DP.</td></tr>
+                        <tr><td>Pendulum Color (PENC)</td><td><strong>Condition hearts</strong> in place of the level row: a care mistake takes a heart.
+                            Hunger and Strength hearts follow the stomach. Boxes: Sleep Disturbances, Overfeed, Injuries, Sicknesses.</td></tr>
+                        <tr><td>Digivice iC (IC)</td><td><strong>REL</strong>: Reliability, 0-31, a marker on a gauge where Strength would be.
+                            <strong>CP</strong>: Connect Points, 0-15, filled by battles against other devices or Digimon; a full meter gives an item.
+                            The icon under the flags is the Field the species belongs to (the DigiSoul family). Hunger's tooltip gives the
+                            stomach's fill behind the 4 hearts. No DP, Strength or Effort. Boxes: <strong>Evolution Timer</strong> and
+                            <strong>Next Evolution</strong>, the silhouette of the form the Digimon is heading for, or a ? while it meets none.</td></tr>
+                        <tr><td>Vital Bracelet, BE, Vital Hero (VB, VBE, VH)</td><td><strong>Trophies</strong> and <strong>Vital Values</strong> in the
+                            level row. Vital Values grow each hour while the Digimon is healthy and fed and fall while it is ailing or
+                            starving. Box: Injuries.</td></tr>
+                        <tr><td>Pendulum Color Godzilla (PENGZ)</td><td>The <strong>G-Cell</strong> bar in place of Effort. Boxes: Mistakes, Injuries, Sicknesses.</td></tr>
+                        <tr><td>Digital Monster X (DMX), Pendulum Z (PENZ)</td><td>Level and Experience bar. No DP.</td></tr>
+                        <tr><td>D-3</td><td>Level and Experience, DP, and eight boxes: Mistakes, Injuries, Sicknesses, Evolution Timer, Sleeps,
+                            Wakes, Poop Time and Feed Time.</td></tr>
+                        <tr><td>Digimon Mini (DMM)</td><td>Hunger and the 0-15 Strength meter; Battles and win rates. No Age, Weight, Power or DP.</td></tr>
+                        <tr><td>Digimon World (DW1)</td><td>Reliability (REL), Connect Points (CP, 0-10), Effort, Power coloured by its effort tier.
+                            Boxes: Mistakes, Virus, Evolution Timer. No DP.</td></tr>
+                        <tr><td>PENOG</td><td>As the Digital Monster Color, with the boxes Mistakes and Evolution Timer.</td></tr>
+                    </tbody>
+                </table>
+                <div class="screen-gallery">
+                    <figure><img class="shot small" src="../assets/manual/status_pengz.png" alt="Pendulum Color Godzilla status"><figcaption class="shot-caption">Pendulum Color Godzilla</figcaption></figure>
+                    <figure><img class="shot small" src="../assets/manual/status_dmx.png" alt="Digital Monster X status"><figcaption class="shot-caption">Digital Monster X</figcaption></figure>
+                    <figure><img class="shot small" src="../assets/manual/status_dmm.png" alt="Digimon Mini status"><figcaption class="shot-caption">Digimon Mini</figcaption></figure>
+                    <figure><img class="shot small" src="../assets/manual/status_dw1.png" alt="Digimon World status"><figcaption class="shot-caption">Digimon World</figcaption></figure>
+                </div>
 
-                            <p class="feature-description item">
-                                <strong><img src="../assets/Mistakes.png"></img>Condition Hearts /
-                                    Mistakes:</strong>
-                                Mistakes represent care failures. These include ignoring calls for food,
-                                sleep, or bathroom needs. Accumulating too many mistakes can affect a pet's
-                                evolution path and may prevent it from reaching higher stages.
-                            </p>
-
-                            <p class="feature-description item">
-                                <strong><img src="../assets/SleepDisturbances.png"></img>Sleep
-                                    Disturbances:</strong>
-                                Waking up a sleeping pet counts as a
-                                disturbance. It can influence the pet's evolution path.
-                            </p>
-
-                            <p class="feature-description item">
-                                <strong><img src="../assets/Overfeed.png"></img>Overfeed:</strong>
-                                Feeding a pet beyond its stomach limit is considered an overfeed.
-                                Overfeeding is a requirement for some evolutions. When overfed, a pet skips it's next
-                                "hunger" decrease counter
-                            </p>
-
-                            <p class="feature-description item">
-                                <strong><img src="../assets/Sick1.png"></img>Injuries:</strong>
-                                Pets can get injured in battles, and on some devices from poop or reaching 99g.
-                                Accumulating too many injuries in one form will kill the pet. Sicknesses are counted
-                                apart where the device does.
-                            </p>
-
-                            <p class="feature-description item">
-                                <strong>* Battle:</strong>
-                                Show if the pet can battle. These are defined by the module, but usually a pet requires
-                                to be at least at stage 2 and have power status higher than 0.
-                            </p>
-
-                            <p class="feature-description item">
-                                <strong>* Jogress:</strong>
-                                Show if a pet is avaliable for Jogress. This is a special evolution that requires two
-                                pets to merge into a new one.
-                            </p>
-
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Status3.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description"><strong>Page 3</strong> Shows status related to battles</p>
-                            <p class="feature-description item"><strong>* Effort:</strong> Indicates how much training
-                                your pet has completed. Higher effort can unlock evolutions and improve battle
-                                performance.</p>
-                            <p class="feature-description item"><strong>* Power:</strong> Represents your pet's attack
-                                strength. A pet gains bonus power if at max effort and if born from a traited or shaken
-                                eggs (in some modules only). When a pet has bonus power avaliable, the value will be
-                                displayed in green.</p>
-                            <p class="feature-description item"><strong>* DP:</strong> DP is consumed during battles and
-                                replenished by sleeping for over 8 hours or eating vitamins.</p>
-                            <p class="feature-description item"><strong>* Battles (Current/Total):</strong> Shows the
-                                number of battles your pet has fought in its current stage and the total across all
-                                stages.</p>
-                            <p class="feature-description item"><strong>* Win Rate:</strong> The percentage of battles
-                                won in the current stage. Many evolutions require a minimum of 80% to evolve.</p>
-                            <p class="feature-description item"><strong>* Win Rate Total:</strong> The overall
-                                percentage of battles won throughout your pet's life.</p>
-                            <p class="feature-description item"><strong>* PvP Wins:</strong> Number of Player vs Player battles won. Some evolutions require specific PvP victory counts.</p>
-                            <p class="feature-description item"><strong>* Enemy Kills by Stage:</strong> Tracks enemies defeated at different stages (Stage V-IX). Higher stage enemy kills unlock special evolutions.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Status4.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description"><strong>Page 4</strong> Shows the pet's timers and flag
-                                information</p>
-                            <p class="feature-description item"><strong>* Evolution:</strong> Indicates when your pet is
-                                ready to evolve. Evolution is based on age, care, and other requirements.</p>
-                            <p class="feature-description item"><strong>* Sleeps:</strong> The time your pet naturally
-                                sleeps. It can be overridden in the settings menu, a pet that is kept awake for too long
-                                will cause a care mistake.</p>
-                            <p class="feature-description item"><strong>* Wakes:</strong> The time your pet naturally
-                                wakes up. It can be overridden in the settings menu. A pet can be awaken by feeding,
-                                training or battling, doing so will count as a Sleep Disturbances.</p>
-                            <p class="feature-description item"><strong>* Poop Time:</strong> Tracks the amount of time
-                                between poops. Popping stack and if reaches 8 per pet in game, it will make all pets
-                                sick.</p>
-                            <p class="feature-description item"><strong>* Feed Time:</strong> Tracks the amount of time
-                                between the hunger/strength values decrease. Not feeding a pet, it will count as a care
-                                mistake. It can lead to death after a certain amount of time.</p>
-                            <p class="feature-description item"><strong>* Flags:</strong> Special status indicators for
-                                your pet, such as traited, shaken and special (secret evolutions)</p>
-                            <p class="feature-description item"><strong>* Quests Completed:</strong> Number of quests completed by this pet. Some evolutions require completing specific numbers of quests.</p>
-                            <p class="feature-description item"><strong>* Trophies:</strong> Number of trophies earned by this pet through various achievements.</p>
-                            <p class="feature-description item"><strong>* Vital Values:</strong> Special evolution parameter that tracks important life events and achievements.</p>
-                        </td>
-                    </tr>
+                <h3>Boxes</h3>
+                <table class="data-table">
+                    <thead><tr><th>Box</th><th>Value</th></tr></thead>
+                    <tbody>
+                        <tr><td>Mistakes</td><td>Care mistakes in this form</td></tr>
+                        <tr><td>Sleep Disturbances</td><td>Times the Digimon was woken in this form</td></tr>
+                        <tr><td>Overfeed</td><td>Times it refused food because it was full</td></tr>
+                        <tr><td>Injuries / Sicknesses</td><td>Injuries (skull) and sicknesses (dots) in this form</td></tr>
+                        <tr><td>Virus</td><td>Digimon World: poop left too long</td></tr>
+                        <tr><td>Evolution Timer</td><td>Hours and minutes left in the form; 00:00 when the time is up</td></tr>
+                        <tr><td>Next Evolution</td><td>Digivice iC: the form the Digimon would evolve into if it evolved now, as a silhouette</td></tr>
+                        <tr><td>Sleeps / Wakes</td><td>The species' bedtime and wake time</td></tr>
+                        <tr><td>Poop Time / Feed Time</td><td>Minutes between poops / between Hunger drains</td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/Food.png" width="48" height="48" alt="" /> Feeding Menu</span><span
-                    class="arrow">▼</span></h2>
+        <!-- ============================================================ INVENTORY -->
+        <div class="content-section" id="inventory" data-theme="feeding">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/manual/icons/menu_feeding.png" alt=""> Inventory</span><span class="arrow">&#9660;</span></h2>
             <div class="section-content" style="display:none;">
-                <p>Feeding is an essential part of caring for your pet. It directly affects their status and can grant
-                    temporary bonuses in battles. Modules can add items to the game with a variety of effects, only the
-                    basic Protein and Vitamin are available by default, they also have unlimited use.</p>
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/FeedingMenu.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong><img src="../assets/Protein.png" width="48"
-                                        height="48" alt="" /> Protein:</strong> Increases the "hunger" meter by 1 and
-                                the weight by an amount defined in the pet's module. All pets have a limit of how much
-                                Protein they accept to eat, reaching the maximum value counts as an Overfeed and the
-                                next time the "hunger" meter would decrease is skipped. When the selection strategy is
-                                defined as "Pets in Need" it will select all pets who have 3 or less "hunger" points.
-                            </p>
-                            <p class="feature-description item"><strong><img src="../assets/Vitamin.png" width="48"
-                                        height="48" alt="" /> Vitamin:</strong> Increases the "strength" meter by 1 and
-                                the weight by an amount defined in the pet's module, also may increase a pet's DP.
-                                There's no limit on how many vitamins a pet can eat, but reaching 99g of weight will
-                                make a pet sick or injured, as its module says. When
-                                the selection strategy is defined as "Pets in Need" it will select all pets who have 3
-                                or less "vitamin" points.</p>
-                        </td>
-                    </tr>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/inventory.png" alt="Inventory">
+                    <div>
+                        <p>The Inventory feeds the party and uses items. The list holds Food and Vitamin (unlimited, marked &infin;), then the
+                            module items you hold, then items bought in the Omninet Shop.</p>
+                        <table class="data-table">
+                            <thead><tr><th>Input</th><th>Action</th></tr></thead>
+                            <tbody>
+                                <tr><td>UP / DOWN</td><td>Move in the list; the panel describes the item</td></tr>
+                                <tr><td>A on an item, or USE</td><td>Use it</td></tr>
+                                <tr><td>DISCARD</td><td>Throw one away (not Food or Vitamin). No confirmation.</td></tr>
+                                <tr><td>SEL-ALL / SEL-NEED (or SELECT)</td><td>Who gets the item: the selection (or the whole party), or only those who need it</td></tr>
+                                <tr><td>B or EXIT</td><td>Back to the main screen</td></tr>
+                            </tbody>
+                        </table>
+                        <p>With a mouse or touch screen, the first tap selects an item and the second uses it. The strip at the bottom lights
+                            the Digimon that can take the selected item. After USE the game returns to the main screen, where they eat.</p>
+                    </div>
+                </div>
+                <h3>Food and Vitamin</h3>
+                <table class="data-table">
+                    <thead><tr><th>Item</th><th>Effect</th></tr></thead>
+                    <tbody>
+                        <tr><td>Food</td><td>Hunger +1 heart, Weight +1 (from Baby II on; none on DMH). A full Digimon refuses it: that counts
+                            one Overfeed and starts the overfeed timer, during which every meal is refused and Hunger does not drain
+                            (60 minutes on DMM, DMOG, DMXW, DW1, PENC, PENGZ; 120 on most others; 180 on PENOG).</td></tr>
+                        <tr><td>Vitamin</td><td>Strength +1 heart, Weight +1 to +3 by device (+2 on most; none on DMH, DW1 and IC). There is no
+                            refusal: past the full meter it is still eaten and still adds Weight. Every 4th Vitamin adds 1 DP on DM20, DMC,
+                            DMH, DMOG, PEN20, PENC, PENGZ, PENOG and VBE (8 DP on DMXW), and a protein overdose point that raises the
+                            injury chance of the next lost battle. The iC and Digimon World have no Strength meter; their Digimon refuse it.</td></tr>
+                    </tbody>
+                </table>
+                <p>SEL-NEED gives Food to Digimon with Hunger below 4 and Vitamin to those with Strength below 4.</p>
+
+                <h3>Module items</h3>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/inventory_choose.png" alt="Choosing which iC Digimon gets the Large Meat">
+                    <div>
+                        <p>An item that belongs to a module goes to one Digimon of that module. When several could take it, the panel reads
+                            "Choose a Digimon for ..." and the strip at the bottom becomes a picker (LEFT/RIGHT and A, or a tap). B cancels and
+                            keeps the item.</p>
+                        <p>An item nobody can take is kept, with the cancel sound. Typical reasons: a full stomach, the wrong Evolution
+                            Stage, a family weapon for a Digimon of another Field, or a Digimon asleep on the DM20, DMRV and DMX (which
+                            cannot be fed during their sleep).</p>
+                    </div>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>Kind of item</th><th>What it does</th><th>Examples</th></tr></thead>
+                    <tbody>
+                        <tr><td>Meals</td><td>Hunger or Strength</td><td>iC Meat, Cake; Digimon World meats</td></tr>
+                        <tr><td>Stat items</td><td>HP, attack, Power, DP, Vital Values, Reliability, time</td><td>Vital Bracelet HP+, Reliability Max</td></tr>
+                        <tr><td>Battle items</td><td>Not used here: offered before an adventure battle ("Use it before a battle")</td><td>iC weapons, DMX chips, Digimon World disks</td></tr>
+                        <tr><td>DigiSoul</td><td>Feeds DigiSoul to an iC Digimon</td><td>DigiSoul (Dragon)</td></tr>
+                        <tr><td>Medicine</td><td>Cures sickness or injury outright</td><td>iC Cold Medicine, Injury Medicine</td></tr>
+                        <tr><td>Digi Bedding</td><td>The Digimon sleeps 10 minutes; cures sickness and injury and removes a care mistake</td><td>iC</td></tr>
+                        <tr><td>Accessories</td><td>Worn on the head, the face or as an aura; one at a time</td><td>iC Afro, Sunglasses, Aura</td></tr>
+                        <tr><td>Level Reverse</td><td>Back to the previous form</td><td>iC</td></tr>
+                        <tr><td>Evolution items</td><td>Used from Battle &gt; Armor (see <a href="#battle" onclick="openSection('battle')">Battle</a>)</td><td>DigiMentals, Ouryujin, Black Wing</td></tr>
+                        <tr><td>Tickets</td><td>Start a special battle</td><td>iC D-1 Ticket</td></tr>
+                        <tr><td>Multipliers</td><td>Multiply trophies or Vital Values for a time</td><td>Vital Bracelet BE items</td></tr>
+                    </tbody>
+                </table>
+                <p>The inventory holds up to 99 of each module item. iC meals and medicines, the Call Switch and accessories are never used up.</p>
+            </div>
+        </div>
+
+        <!-- ============================================================ TRAINING -->
+        <div class="content-section" id="training" data-theme="training">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/manual/icons/menu_training.png" alt=""> Training</span><span class="arrow">&#9660;</span></h2>
+            <div class="section-content" style="display:none;">
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/training_menu.png" alt="Training menu">
+                    <div>
+                        <p>Training plays a short minigame with the selected Digimon. The result raises Effort and Strength and lowers Weight,
+                            as each module sets. Training costs no DP, except on the Digivice iC, where each play costs a Hunger heart.</p>
+                        <p>The menu shows six minigames per page. The modes of the selected Digimon's modules come first. MORE shows the next
+                            page, RANDOM starts a random mode, EXIT leaves. In Free Mode every mode is available; in Progress Mode Dummy is
+                            free and the others are bought in the Omninet Shop (Gameplay).</p>
+                        <p>A Digimon cannot train while sick or injured. A sleeping one is woken, which counts as a sleep disturbance (the DM20,
+                            DMRV and DMX Digimon cannot train asleep at all).</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/training_dummy.png" alt="Dummy: the bar fills with each press">
+                        <img class="shot" src="../assets/manual/training_result.png" alt="Training result: Excellent">
+                    </div>
+                    <div>
+                        <p>Every play shows READY, the minigame, the attack, then the result: <strong>Bad</strong>, <strong>Good</strong>,
+                            <strong>Great</strong> or <strong>Excellent</strong> (some modes show MEGA HIT for the top grade). Good or better is a
+                            win. A win also removes 2 disturbance penalty points and counts for training quests.</p>
+                        <p>B quits during most minigames; nothing is applied. When the result is shown the game returns to the main screen.</p>
+                        <p>Trophies are given only to the Vital Bracelet Digimon (VB, VBE, VH), the devices that show them.</p>
+                    </div>
+                </div>
+
+                <h3>Minigames</h3>
+                <table class="data-table">
+                    <thead><tr><th>Mode</th><th>How to play</th><th>Grades</th></tr></thead>
+                    <tbody>
+                        <tr><td>Dummy</td><td>Press A (or tap) to fill a 14-segment bar in 2.5 s</td><td>Excellent at 14, Great 13, Good 11-12</td></tr>
+                        <tr><td>Count Match (Color)</td><td>Shake for 3 s. The colour lands on Blue at 2 shakes, Yellow at 7, Red at 12. Each Attribute has a best colour:
+                            Vaccine and Free Red, Data Yellow, Virus Blue</td><td>By super hits: 5 Excellent (Mega Hit), 3-4 Great, 2 Good</td></tr>
+                        <tr><td>Count Match Classic</td><td>Shake for 5 s, counted 0-40</td><td>40 Excellent, 35-39 Great, 29-34 Good</td></tr>
+                        <tr><td>Count Match Z</td><td>Shake for 3 s to fill the arrows the Attribute asks for</td><td>Exact count Excellent, one away Great, further Good</td></tr>
+                        <tr><td>Count Bar</td><td>Mash A for 5 s</td><td>18 or more Excellent, 12 Great, 6 Good</td></tr>
+                        <tr><td>RPM</td><td>Press A at a steady rhythm for 6 s, close to the species' target</td><td>As Count Bar</td></tr>
+                        <tr><td>Excite</td><td>A stops a sweeping arrow. The speed follows the day's XAI roll (1-7)</td><td>Red Excellent, Yellow Great, Blue Good</td></tr>
+                        <tr><td>Head to Head</td><td>Needs 2 Digimon. 5 strikes: UP or DOWN; a strike wins when it takes the other lane</td><td>5 wins Excellent, 4 Great, 3 Good</td></tr>
+                        <tr><td>Punch</td><td>Shake up to 20 times in 18 s</td><td>20 Excellent, 15-19 Great, 10-14 Good</td></tr>
+                        <tr><td>Mogera</td><td>Counter 5 Anti-G shots with UP or DOWN, then fill a Dummy bar with A</td><td>Strength 7 or more Excellent</td></tr>
+                    </tbody>
+                </table>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/training_count.png" alt="Count Match: COUNT! shake now">
+                    <div>
+                        <p>Count Match shows READY! with a colour, then COUNT!: shake, and stop on your Attribute's colour.
+                            The Pendulum Color Godzilla variant lands at 3, 7 and 11 shakes and brings Anguirus every 5th play.</p>
+                        <p>Shake modes take Y or an accelerometer. Count Match Color and Z also count a mouse or finger shaken over the screen;
+                            Count Match Classic does not.</p>
+                    </div>
+                </div>
+
+                <h3>Effects by module</h3>
+                <p>Effort, Strength and Weight change per result (Bad / Good / Great / Excellent). Every module gives 1 Effort per play,
+                    except the Digivice iC, which gives none.</p>
+                <table class="data-table">
+                    <thead><tr><th>Modules</th><th>Battle minigame</th><th>Strength</th><th>Weight lost</th></tr></thead>
+                    <tbody>
+                        <tr><td>DMC, DMGZ</td><td>none</td><td>0 / 1 / 1 / 1</td><td>1 / 1 / 1 / 1</td></tr>
+                        <tr><td>DMH</td><td>none</td><td>0 / 0 / 0 / 1</td><td>0</td></tr>
+                        <tr><td>DMOG</td><td>none</td><td>0 / 1 / 2 / 3</td><td>1 / 2 / 2 / 2</td></tr>
+                        <tr><td>DM20, DMRV</td><td>Dummy</td><td>0 / 1 / 1 / 2</td><td>1 / 2 / 3 / 4</td></tr>
+                        <tr><td>DMM</td><td>Count Bar</td><td>0 / 2 / 3 / 4 (of 15)</td><td>1 / 2 / 2 / 3</td></tr>
+                        <tr><td>DMX</td><td>Excite (XAI roll and bar)</td><td>0 / 1 / 2 / 4</td><td>1 / 2 / 6 / 8</td></tr>
+                        <tr><td>DMXW</td><td>Excite (XAI bar)</td><td>0 / 1 / 2 / 4</td><td>1 / 2 / 4 / 8</td></tr>
+                        <tr><td>D-3, PENC</td><td>Count Match</td><td>0 / 1 / 2 / 4</td><td>2 / 4 / 10 / 20</td></tr>
+                        <tr><td>PENGZ</td><td>Count Match</td><td>0 / 0 / 1 / 2</td><td>2 / 2 / 5 / 10</td></tr>
+                        <tr><td>PEN20</td><td>Count Match Classic</td><td>0 / 1 / 1 / full</td><td>1 / 1 / 1 / 8</td></tr>
+                        <tr><td>PENOG</td><td>Count Match Classic</td><td>0 / 1 / 2 / 4</td><td>1 / 2 / 4 / 8</td></tr>
+                        <tr><td>PENZ</td><td>Count Match Z</td><td>0 / 1 / 2 / 4</td><td>2 / 4 / 10 / 16</td></tr>
+                        <tr><td>VB, VBE, VH</td><td>none</td><td>1 / 1 / 2 / 3</td><td>1 / 4 / 4 / 4</td></tr>
+                        <tr><td>DW1</td><td>Dummy</td><td>none</td><td>1 / 2 / 2 / 2; Reliability +1 on a win</td></tr>
+                        <tr><td>IC</td><td>RPM</td><td>none</td><td>1; Reliability +1 and Fight Money 0 / 10 / 20 / 50 on a win</td></tr>
+                    </tbody>
+                </table>
+                <p>The Digital Monster Color Godzilla 70th counts G-Cells in its Mogera training: +4 for a full success, +2 for a failure
+                    in the second phase, -2 for a failure in the first.</p>
+
+                <h3>iC Bonus minigames</h3>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/training_bonus.png" alt="BONUS list of iC minigames">
+                    <div>
+                        <p>The BONUS button (top right of the Training menu, shown when an iC Digimon is selected) and Battle &gt; Specials &gt;
+                            IC &gt; Minigames open the iC's money minigames. Only iC Digimon play. Each costs a Hunger heart; a success gives
+                            Reliability +1 and pays Fight Money ("<em>n</em>P GET!"). They give no Effort, Strength or Weight change.</p>
+                    </div>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>Game</th><th>Device</th><th>How to play</th><th>Fight Money</th></tr></thead>
+                    <tbody>
+                        <tr><td>Building Smash</td><td>10X</td><td>A stops a moving cursor over the building; 3 hits clear a stage, a miss ends the game</td><td>10 / 20 / 50 for 1-3 stages</td></tr>
+                        <tr><td>Poop Dodge</td><td>10X</td><td>UP/DOWN across 4 lanes, 3 stages; a poop hit ends the game</td><td>10 / 20 / 50</td></tr>
+                        <tr><td>Shuffle</td><td>10X</td><td>LEFT/RIGHT and A to find Chuumon; ends on the first miss or at 10 finds</td><td>5, doubling with each find</td></tr>
+                        <tr><td>Digi Whack</td><td>20X</td><td>Move between 3 holes and whack with A; 3, 5 and 7 hits per stage</td><td>10 / 30 / 50</td></tr>
+                        <tr><td>Digi Mash</td><td>20X</td><td>Mash A for 4.4 s; 31 presses or more to succeed</td><td>up to 50</td></tr>
+                        <tr><td>Gotcha!</td><td>20X</td><td>A drops the trap on Chuumon; 3, 5 and 7 catches per stage</td><td>10 / 30 / 50</td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/Training.png" width="48" height="48" alt="" /> Training Menu</span><span
-                    class="arrow">▼</span></h2>
+        <!-- ============================================================ BATTLE -->
+        <div class="content-section" id="battle" data-theme="battle">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/manual/icons/menu_battle.png" alt=""> Battle</span><span class="arrow">&#9660;</span></h2>
             <div class="section-content" style="display:none;">
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/battle_menu.png" alt="Battle menu">
+                    <div>
+                        <p>The Battle menu holds Jogress, Versus, Armor and Adventure, and SPECIALS when a module in the party offers shops,
+                            passwords or minigames. B or EXIT returns to the main screen.</p>
+                        <p>A Digimon can battle when it is past Baby I, alive, has Power, can pay the battle cost (DP, or a Hunger heart on
+                            devices such as the iC and Digimon World) and is not blocked by its ailment or by sleep. Sick Digimon may battle on
+                            DMM, PENC, PENGZ and PENOG; injured ones only on PENGZ.</p>
+                    </div>
+                </div>
 
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/TrainingMenu.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item">Training is an important aspect of pet care. It helps
-                                improve a pet's Effort stat, each training
-                                session grants 1 effort. 4 Effort points are necessary to fill 1 Effort Heart. At
-                                maximum effort,
-                                pet's get a bonus to their power stat, making attacks have increased chance of hitting
-                                the target.
-                                Also some evolution paths may require a certain amount of training sessions to be
-                                completed. You can skip the training animations by pressing the B button. If you make a
-                                sleeping pet train, it will count as a Sleep Disturbance.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/DummyTraining.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong><img src="../assets/BagIcon.png" width="48"
-                                        height="48" alt="" /> Dummy Training:</strong> Press the A button repeatedly to
-                                charge the training meter. Fill the bar for an Excellent result. Training will fail if
-                                the player fails to press at least 10 times</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/HeadOn.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"></p>
-                            <strong><img src="../assets/HeadTrainingIcon.png" width="48" height="48" alt="" /> Head
-                                On:</strong>
-                            This training mode requires the player to have at least 2 pets. Use UP and DOWN keys to
-                            launch attacks. Training succeeds if there are more hits than misses. There are 5 rounds in
-                            total. The attacks follow a pattern.
-                            </p>
-                            <table class="sub-table">
-                                <thead>
-                                    <tr>
-                                        <th>Round</th>
-                                        <th>Buttons to Press (U=UP, D=DOWN)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>1</td>
-                                        <td>UDUDD</td>
-                                    </tr>
-                                    <tr>
-                                        <td>2</td>
-                                        <td>DDUUD</td>
-                                    </tr>
-                                    <tr>
-                                        <td>3</td>
-                                        <td>DUUDD</td>
-                                    </tr>
-                                    <tr>
-                                        <td>4</td>
-                                        <td>UDDUU</td>
-                                    </tr>
-                                    <tr>
-                                        <td>5</td>
-                                        <td>DUDUD</td>
-                                    </tr>
-                                    <tr>
-                                        <td>6</td>
-                                        <td>UDUDU</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                <h3>Adventure</h3>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/adventure_modules.png" alt="Adventure: module selection">
+                        <img class="shot" src="../assets/manual/adventure_areas.png" alt="Adventure: area selection">
+                    </div>
+                    <div>
+                        <p>Adventure fights each module's enemies area by area. It is the main source of experience, items and unlocks.</p>
+                        <ol class="steps">
+                            <li><strong>Module</strong>: LEFT/RIGHT choose among the modules with an adventure (the party's modules first);
+                                the panel shows the cleared areas. MORE shows the next four, RANDOM picks one. GO opens the areas.</li>
+                            <li><strong>Area</strong>: the timeline shows cleared areas in green, the current one in yellow and locked ones in red.
+                                UP and LEFT/RIGHT choose an area already reached; FIGHT starts it at round 1. An area with an entry fee shows
+                                it in yellow (for example 100P on the iC); without the money the battle is refused ("No Money").</li>
+                        </ol>
+                        <p>The DM20, DMRV, DMOG and PEN20 use NEXT and RESET instead of an area timeline: NEXT fights the next battle,
+                            RESET starts again from area 1.</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/battle_items.png" alt="Battle items list before an iC battle">
+                    <div>
+                        <p><strong>Battle items.</strong> When you hold battle items of that module that fit the Digimon, a list opens before
+                            the battle: choose an item to use it, or Fight. iC weapons need a Digimon of the right Field. On most modules the
+                            items last until the area's boss; on the iC the list opens before every round and an item lasts that round.</p>
+                        <p>Examples: Digital Monster X HP Rom (+2 HP), AP Chip (+2 attack), Jumper Gate (straight to the boss), EXP Coat
+                            (double experience); iC weapons (+1 or +2 attack); Digimon World disks; Vital Bracelet HP, ATK and POWER Temp items.</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/battle_charge.png" alt="Charge: the Dummy bar">
+                        <img class="shot" src="../assets/manual/battle_fight.png" alt="Battle in progress with the HP bar">
+                    </div>
+                    <div>
+                        <p><strong>A round</strong> shows the area and the enemy, the enemies arriving, READY, then the module's charge minigame
+                            (the same games as Training; the table in <a href="#training" onclick="openSection('training')">Training</a> gives
+                            each module's). Only the first Digimon plays it; the team shares the result. Modules with no minigame use a fixed charge.</p>
+                        <p>The battle itself lasts at most 12 turns. The bar at the top shows the enemies' HP (left, red) and the team's (right,
+                            blue). Each Digimon faces its own enemy. A boss, at the end of an area, is a single enemy with HP multiplied by the
+                            team size that attacks every Digimon each turn. The side that knocks out the other wins; after 12 turns the side with
+                            more HP wins.</p>
+                        <ul>
+                            <li><strong>Hit chance</strong>: Power / (Power + enemy Power), plus the Attribute advantage (Vaccine &gt; Virus &gt;
+                                Data &gt; Vaccine), minus the enemy's handicap.</li>
+                            <li><strong>HP</strong>: the module's fixed HP, or the species' HP plus 2 at levels 2, 5, 6, 8 and 10. Vital Bracelet
+                                Digimon get up to 6 more from Vital Values.</li>
+                        </ul>
+                        <p>B skips the entry animations and the battle animation.</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/battle_win.png" alt="WIN animation">
+                        <img class="shot" src="../assets/manual/battle_result.png" alt="Result panel">
+                    </div>
+                    <div>
+                        <p><strong>Result.</strong> After the animation a panel shows WIN, LOSE or DRAW, and per Digimon its level and experience
+                            gained (where the module shows levels) or G-Cells (Godzilla modules). The bottom line shows the prize item and the
+                            currency earned, such as Fight Money on the iC or Bits in Digimon World.</p>
+                        <ul>
+                            <li>Every round, won or lost, counts a battle, pays the battle cost and, on some modules, takes off Weight.</li>
+                            <li>A win counts a win, adds Reliability (iC, Digimon World), advances the round or area, and the area's last win grants
+                                its unlocks. A loss sends the module back to round 1 of the area.</li>
+                            <li>Experience goes to every Digimon of the team, +10% when all of them survive; a loss gives none. At most one level a
+                                battle. Levels need 50, 150, 500, 800, 1000, 1500, 2000, 3000 and 5000 experience (levels 2 to 10).</li>
+                            <li>Every battle can injure: after a loss at the Digimon's injury chance plus the module's, the protein overdose and
+                                the disturbance penalty; after a win at the module's win chance. Battles never make a Digimon sick.</li>
+                            <li>Connect Points: on the Vital Bracelets each won adventure or connection battle has a 44% chance to drop an item
+                                ("Found ...!"). The iC and Digimon World fill their meter only in battles against other devices.</li>
+                        </ul>
+                        <div class="warning">Let the result screen finish. B on the result screen leaves before the area progress, unlocks and
+                            Connect Points are counted.</div>
+                        <p>On the Digital Monster X and Pendulum Z, a Food / Next menu after round 3 of 5 (or round 4 of 6 or more) lets you
+                            feed the team. When a Digimon can no longer pay the battle cost, Retire / Continue is asked.</p>
+                    </div>
+                </div>
 
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/ExciteTraining.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong><img src="../assets/ExciteTrainingIcon.png"
-                                        width="48" height="48" alt="" /> Excite Training:</strong> This training uses
-                                the daily XAI Roll. The XAI (X-Antibody Indicator) System is a 7 sided dice, every day a
-                                value is rolled and it defines the speed of of the Attack Gauge Meter. Press A to stop
-                                the arrow. Training will succed if the arrow stops over any of the areas
-                                (red/orangge/yellow). </p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/CountTraining.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item">
-                                <strong><img src="../assets/CountTrainingIcon.png" width="48" height="48" alt="" />
-                                    Count Training:</strong>
-                                When Count Training is selected, the word <strong>READY!</strong> will appear with a
-                                specific background color (Blue, Yellow, or Red).
-                                When the screen changes to <strong>COUNT!</strong>, shake the device (using the
-                                accelerometer or the Y button) to cycle through the background colors in the order:
-                                <strong>Blue → Yellow → Red</strong>.
-                                Your goal is to stop shaking when the background matches the original READY! color.
-                                If the correct color is displayed when the 3-second timer ends, your pet will fire 5
-                                Super Hits (a Mega Hit).
-                                The number of Super Hits you achieve depends on your pet's attribute, the color you land
-                                on, and the number of shakes performed.
-                                If you shake fewer than two times, you will only get 0 or 1 Super Hits.
-                            </p>
-                            <p class="feature-description item">
-                                The table below shows, for each attribute, which color and shake count results in a Mega
-                                Hit, 3-4 Super Hits, or 2 Super Hits:
-                            </p>
-                            <table class="sub-table">
-                                <thead>
-                                    <tr>
-                                        <th>Attribute</th>
-                                        <th>Mega Hit<br>(5 Super Hits)</th>
-                                        <th>3-4 Super Hits</th>
-                                        <th>2 Super Hits</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Baby</td>
-                                        <td>Red / 12 Shakes</td>
-                                        <td>Yellow / 7 Shakes</td>
-                                        <td>Blue / 2 Shakes</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Vaccine</td>
-                                        <td>Red / 12 Shakes</td>
-                                        <td>Yellow / 7 Shakes</td>
-                                        <td>Blue / 2 Shakes</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Data</td>
-                                        <td>Yellow / 6 Shakes</td>
-                                        <td>Red / 11 Shakes</td>
-                                        <td>Blue / 2 Shakes</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Virus</td>
-                                        <td>Blue / 2 Shakes</td>
-                                        <td>Yellow / 7 Shakes</td>
-                                        <td>Red / 12 Shakes</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Free</td>
-                                        <td>Red / 11 Shakes</td>
-                                        <td>Yellow / 7 Shakes</td>
-                                        <td>Blue / 2 Shakes</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            <p class="feature-description item">
-                                <em>Tip: Try to time your shakes so you land on the correct color and shake count for
-                                    your pet's attribute to maximize your training results!</em>
-                            </p>
-                        </td>
-                    </tr>
-                </table>
+                <h3>Versus</h3>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/versus.png" alt="Versus: two Digimon chosen">
+                        <img class="shot" src="../assets/manual/protocol_grid.png" alt="Versus: device line grid">
+                    </div>
+                    <div>
+                        <p>Versus makes two of your own Digimon battle each other by a real device's rules. Choose exactly two Digimon in the
+                            strip (the first goes on the right, the second on the left), press CONFIRM, then pick the device line in the grid.
+                            The battle has no charge minigame and counts as a connection battle for both.</p>
+                        <table class="data-table">
+                            <thead><tr><th>Line</th><th>HP</th><th>Turns</th></tr></thead>
+                            <tbody>
+                                <tr><td>DMOG (Original)</td><td>5</td><td>4</td></tr>
+                                <tr><td>PENOG (Pendulum)</td><td>3</td><td>5</td></tr>
+                                <tr><td>DMM (Digimon Mini)</td><td>6</td><td>up to 10</td></tr>
+                                <tr><td>IC (Digivice iC)</td><td>16</td><td>5</td></tr>
+                                <tr><td>DM20 (20th Anniversary), PEN20 (Pendulum 20th)</td><td>10</td><td>until one falls</td></tr>
+                                <tr><td>DMX (Digimon X), PENZ (Pendulum Z)</td><td>the Digimon's own</td><td>5</td></tr>
+                                <tr><td>DMC (Color)</td><td>5</td><td>4</td></tr>
+                                <tr><td>PENC (Pendulum Color), DMXW (Color Xros Wars)</td><td>3</td><td>6</td></tr>
+                            </tbody>
+                        </table>
+                        <p>Greyed lines in the grid are not available yet. The same grid is used for DCom battles (<a href="#connect" onclick="openSection('connect')">Connect</a>).</p>
+                    </div>
+                </div>
+
+                <h3>Jogress</h3>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/jogress.png" alt="Jogress: two Digimon chosen">
+                    <div>
+                        <p>Jogress joins two Digimon. Choose two Digimon in the strip; when the pair is compatible, the top shows "?"
+                            ("??" when both evolve) and CONFIRM starts the Jogress. Digimon that can never jogress are greyed out.</p>
+                        <ul>
+                            <li><strong>Single</strong>: the partner is absorbed and the first Digimon evolves.</li>
+                            <li><strong>Dual</strong>: both stay and each evolves (the Pendulum Color's attribute Jogress, for example).</li>
+                        </ul>
+                        <p>Partners are matched by name, by name prefix (the Ancient Digimon), or by Attribute and Evolution Stage, as each
+                            module's routes say; a route's own level and area requirements also apply. Two Digimon of modules on the same
+                            connection line can jogress, each by its own module's route: DMC with DMGZ and DMH, PENC with PENGZ, DM20 with DMRV,
+                            DMX with Digimon World.</p>
+                        <p>Cost: a full DP meter on both (DMC, DMGZ, DMH, DMXW, PEN20, PENOG and the Vital Bracelets), a full Strength meter
+                            (D-3, PENZ), or nothing (the others). "Both pets need full DP!" means one of them is short.</p>
+                        <p>With a DCom adapter, a Pendulum Color or Pendulum Z Digimon can also jogress with a real device: slot 2 then shows
+                            "Serial" and the game waits 60 seconds for the device.</p>
+                    </div>
+                </div>
+
+                <h3>Armor and item evolution</h3>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/armor.png" alt="Armor: evolution items">
+                    <div>
+                        <p>Armor lists the evolution items you hold: the D-3's DigiMentals, the iC's evolution items (Ouryujin, Platinum,
+                            Leo Cap, Chaos-G, Marine Extract, Professor Hat, Giga Lance, Mame Chip) and R-Shinka (a random next stage),
+                            Digimon World's Black Wing and others. Choose an item with UP/DOWN and a Digimon in the strip; CONFIRM is enabled
+                            when the item evolves that Digimon. The item is used up only when the Digimon evolves; routes that need several
+                            uses count each one.</p>
+                    </div>
+                </div>
+
+                <h3>Specials</h3>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/specials.png" alt="Specials: iC tiles">
+                        <img class="shot" src="../assets/manual/module_shop.png" alt="iC Weapon Shop">
+                    </div>
+                    <div>
+                        <p>SPECIALS lists what each module of the party offers. Choose the module at the top, then a tile, and OPEN.</p>
+                        <table class="data-table">
+                            <thead><tr><th>Module</th><th>Tiles</th></tr></thead>
+                            <tbody>
+                                <tr><td>Digivice iC</td><td>Item Shop, Weapon Shop, Rare Shop, the DigiShops opened by connection wins, Minigames</td></tr>
+                                <tr><td>Digimon World</td><td>Item Shop, Recycled Goods, Card Shop, Secret Item Shop, Merit Shop, Restaurant (each once unlocked)</td></tr>
+                                <tr><td>D-3</td><td>Password</td></tr>
+                                <tr><td>Pendulum Ver.20th</td><td>Copymon (codes)</td></tr>
+                            </tbody>
+                        </table>
+                        <p>A shop lists items with their price and your balance; BUY (or A on a row) buys one. Items can be bought again.
+                            Messages: "Not enough!" (money), "You have 99!" (the limit). Card packs open at once.</p>
+                        <p>The Vital Bracelet modules have no shop: their items drop through Connect Points.</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/password.png" alt="Copymon code entry">
+                    <div>
+                        <p><strong>Password and Copymon</strong>: enter a code with LEFT/RIGHT (box) and UP/DOWN or A (character), or type it;
+                            START confirms. A valid code adds its Digimon to the party, or to the Freezer when the party is full. Each code
+                            works once.</p>
+                    </div>
+                </div>
+
+                <h3>DigiXros and Mode Change</h3>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/xros.png" alt="DigiXros selector: Shoutmon X2, DP 1">
+                        <img class="shot" src="../assets/manual/mode_change.png" alt="Mode Change selector: Erlangmon Blast Mode">
+                    </div>
+                    <div>
+                        <p>Some Digimon can take a temporary form for a battle. Before the round, a selector shows each eligible Digimon with
+                            its options: LEFT/RIGHT change the form, CONFIRM fights. Leaving every box on the normal form fights as usual.</p>
+                        <table class="data-table">
+                            <thead><tr><th>Module</th><th>Forms</th><th>Requirement</th></tr></thead>
+                            <tbody>
+                                <tr><td>Digital Monster Color Xros Wars</td><td>32 DigiXros (Shoutmon X2, X3, ...) and 6 Mode Changes</td><td>The Friends the DigiXros names, and its DP cost (1-7 DP, spent); Mode Changes need Strength 14 or more</td></tr>
+                                <tr><td>Pendulum Color</td><td>Erlangmon Blast Mode, Nezhamon Crimson Mode, Takutoumon Wrath Mode, Ravemon Burst Mode</td><td>Strength 8 or more</td></tr>
+                                <tr><td>Pendulum Color Godzilla</td><td>Super Mechagodzilla</td><td>Strength 8 or more</td></tr>
+                            </tbody>
+                        </table>
+                        <p>The form fights; the Digimon in the party is unchanged and returns to its form on the result screen. Each form
+                            reached is registered in the Digidex. The selector also appears before DCom battles; never in Versus.</p>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/Battle.png" width="48" height="48" alt="" /> Battle Menu</span><span
-                    class="arrow">▼</span></h2>
+        <!-- ============================================================ CLEAN -->
+        <div class="content-section" id="clean" data-theme="care">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/manual/icons/menu_clean.png" alt=""> Poop and Cleaning</span><span class="arrow">&#9660;</span></h2>
             <div class="section-content" style="display:none;">
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/BattleMenu.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item">The Battle Menu is where the action happens! Here you
-                                can fight on the Adventure Modes of multiple modules, the primary source of items and
-                                experience. You can also perform Jogress and Armor evolutions, with many more features
-                                to come! </p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/AdventureMode.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Adventure:</strong> Enter the adventure mode
-                                of the selected module. Here you can fight enemies, gain experience, and collect items.
-                                The adventure mode is defined by the module, so each module may have different
-                                charge mechanics, enemies and item drops. Use buttons LEFT and RIGHT to navigate between
-                                module's
-                                adventures and use keys UP and DOWN to change the round or area, so you can revisit
-                                already defeated enemies. Animations can be skipped with B button.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Bt.PNG" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>In Battle:</strong> Before a battle begins, a
-                                mini-game like the training modes will play out. Completing it successfully will give
-                                you an advantage in the upcoming battle. A battle can last for up to 12 turns in
-                                Adventure Mode and up to 6 turns in Versus. At each turn all combatants will try to
-                                attack each other. At the top of the screen the total hp is shown. Each combatant has
-                                it's own hp value and will be knocked out when it reaches 0, making it unable to attack.
-                                The game ends when all combatants on one side are knocked out or when the turn limit is
-                                reached, in this case the team with the most remaining hp wins. Draws give advantage to
-                                the enemies in Adventure Mode.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Bt3.PNG" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Boss Battles:</strong> Boss battles are special
-                                encounters that occur at the end of an area. In this mode, the enemy boss will attack
-                                all pets at once, prepare your pets for a challenge!</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Bt2.PNG" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>End of Battle:</strong> At the end of the battle
-                                , the results will be displayed, they show the victory status and the pets involved in
-                                the battle. Each pet will get the same amount of experience. When a pet levels up, it's
-                                level will show in yellow with a "+". If a pet is already at the maximum level, it will
-                                not receive experience and it will show in red. If at the end of a battle in Adventure
-                                Mode, all pets survive, then they will receive a 10% experience bonus. Some enemies can
-                                also drop items.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Versus.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Versus:</strong> Engange your pets in a battles against
-                                one another. Battles in this mode follow protocols from actual vpet devices. You can
-                                find more information of each protocol by following guides on <a
-                                    href="https://humulos.com/digimon/">Humulos</a>. To start a battle, press A on 2
-                                pets to select them, then press START and a menu will show up so you can pick a
-                                protocol. Animations can be skipped with B button.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/JogressScreen.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Jogress:</strong> Jogress is a special evolution
-                                that requires two pets to merge into a new one. To perform a Jogress, select two pets
-                                of the same module using the A button and if they are compatible, the screen will show
-                                as the picture. Press START to execute the Jogress. The resulting pet will inherit
-                                traits from both including flags like Shaken or Traited. There are 3 types of jogress
-                                evolutions:
-                            <ul>
-                                <li><strong>Standard:</strong> The traditional Jogress where 2 pets will merge into 1.
-                                    It will always require 2 specific pets to happen.</li>
-                                <li><strong>Prefix or Ancient:</strong> This jogress will, like the standard, merge 2
-                                    pets into 1. Pet compatibility will be dependent on the pet's name, for example
-                                    AncientSphinxmon and AncientVolcanomon or even 2 AncientSphinxmon.</li>
-                                <li><strong>Attribute:</strong> In this type of jogress, both pets will exchange data
-                                    and evolve without merging, the resulting pets will be dependent of the attribute of
-                                    the original pets.</li>
-                            </ul>
-                            </p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/ArmorEvo.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Armor:</strong> Some modules allow
-                                Armor Evolutions. To perform an Armor Evolution, select a pet using the A button and use
-                                keys UP and DOWN to move between evolution items. If the screen shows as the picture,
-                                the pet is compatible and can evolve. Press START to execute the evolution. Armor
-                                evolution consumes the item used.
-                        </td>
-                    </tr>
+                <p>Each species poops every few minutes while awake (its Poop Time; 60 minutes by default). Each poop takes 1 Weight
+                    off, never below the species' Minimum Weight. Poop comes twice as fast for an Ultimate after 48 hours in its form,
+                    after a failed evolution on some devices (see <a href="#evolution" onclick="openSection('evolution')">Evolution</a>),
+                    and on the Xros Wars Color from 5 days of age.</p>
+                <p>Some devices drop a <strong>Jumbo</strong> poop (20% on D-3, PENC, PENGZ, DMX and PENZ), drawn larger but counted as one.
+                    The DMX and PENZ also drop doubles and triples.</p>
+                <p>The <strong>Clean</strong> icon flushes every poop. On most devices the flush wakes sleeping Digimon, which counts as a
+                    sleep disturbance; it does not on DM20, DMC, DMM, DMOG, DMRV and Digimon World.</p>
+                <h3>When poop makes Digimon sick</h3>
+                <p>When the poop on screen reaches the count below times the party size minus one (at least once the count), every
+                    Digimon from Baby II up gets the device's ailment.</p>
+                <table class="data-table">
+                    <thead><tr><th>Poops</th><th>Ailment</th><th>Modules</th></tr></thead>
+                    <tbody>
+                        <tr><td>4</td><td>Injury (skull)</td><td>DM20, DMRV</td></tr>
+                        <tr><td>4</td><td>Sickness (dots)</td><td>PEN20</td></tr>
+                        <tr><td>6</td><td>Sickness</td><td>DMM, IC</td></tr>
+                        <tr><td>8</td><td>Injury</td><td>DMC, DMGZ, DMH, DMOG, DMXW, DW1, VB, VBE, VH</td></tr>
+                        <tr><td>8</td><td>Sickness</td><td>D-3, DMX, PENC, PENGZ, PENOG, PENZ</td></tr>
+                    </tbody>
                 </table>
+                <p>In Digimon World each poop left 42 minutes also costs a care mistake and adds a Virus point.</p>
             </div>
         </div>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/Poop.png" width="48" height="48" alt="" /> Poops</span><span
-                    class="arrow">▼</span></h2>
+        <!-- ============================================================ SLEEP -->
+        <div class="content-section" id="sleep" data-theme="sleep">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/manual/icons/menu_sleep.png" alt=""> Sleep</span><span class="arrow">&#9660;</span></h2>
             <div class="section-content" style="display:none;">
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/Cleaning.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item">Pooping is a classical mechanic in pet simulation games.
-                                Poops can accumulate and
-                                if there are over 8 poops for each living pet, it will cause them to get sick. The game
-                                will play a
-                                sound when a pet poops, but won't alert you if the pets get sick. Leaving pets
-                                unattended for many
-                                hours can lead to death. All pets have a 10% to make a "Jumbo" poop, they are larger,
-                                but still
-                                function the same way as regular poops.</p>
-                        </td>
-                    </tr>
-                </table>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/sleep_menu.png" alt="Sleep menu">
+                    <div>
+                        <p>The light icon opens SLEEP. <strong>Sleep</strong> turns the light off for the selected Digimon (or every Digimon
+                            that can sleep); <strong>Wake</strong> turns it on. Tap the strip at the bottom to pick Digimon; with none picked,
+                            every eligible one is affected.</p>
+                        <ul>
+                            <li>At its bedtime (the Sleeps value) an awake Digimon gets tired and calls. It does not fall asleep by itself:
+                                use Sleep. Ignoring the call costs one care mistake per night, after 60 minutes on most devices (30 on DMX,
+                                PEN20, PENOG, PENZ; 10 on DM20, DMM, DMRV; 3 on the iC).</li>
+                            <li>A Digimon can be put to sleep at any hour without penalty. It wakes by itself at its wake time.</li>
+                            <li>Waking after 8 hours or more of sleep refills DP.</li>
+                            <li>Baby I Digimon (except on the Vital Bracelets) and a few others have no sleep times and cannot sleep.</li>
+                            <li>On DM20, DMRV and DMX a sleeping Digimon cannot be woken, fed or trained during its sleep time.</li>
+                        </ul>
+                    </div>
+                </div>
+                <h3>While asleep</h3>
+                <p>Hunger and Strength do not drain, no poop comes, no call sounds and the ailment timers stop. The time in form keeps
+                    running, so a sleeping Digimon can evolve, except on DM20, DMOG and VB, whose evolution timer stops during sleep.</p>
+                <h3>Sleep disturbances</h3>
+                <p>Feeding, training, battling or (on most devices) cleaning wakes a sleeping Digimon and counts a sleep disturbance.
+                    It falls back asleep after 10 minutes (15 on DMXW, PENC, PENGZ) if it is still its sleep time. Disturbances are an
+                    evolution requirement on some devices (DMC, DMOG). Each one also adds disturbance penalty points that raise the injury
+                    chance of a lost battle on DMXW, PENOG, PENC and PENGZ; a won training removes 2. On DMM, IC and PENOG every 10th
+                    disturbance in a form makes the Digimon sick.</p>
+                <p>Settings &gt; Gameplay &gt; Wake and Sleep set one schedule for every Digimon; it is used only when both are set.</p>
             </div>
         </div>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/LightSleep.png" width="48" height="48" alt="" /> Sleep Menu</span><span
-                    class="arrow">▼</span></h2>
+        <!-- ============================================================ HEAL -->
+        <div class="content-section" id="heal" data-theme="freezer">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/manual/icons/menu_heal.png" alt=""> Sickness and Injury</span><span class="arrow">&#9660;</span></h2>
             <div class="section-content" style="display:none;">
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/SleepMenu.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item">Allows to put pets to sleep or force them to wake up.
-                                Each pet has a natural sleeping time and will sound an alert when it's time to sleep,
-                                keeping a pet awakened past a certain amount of time (defined by the module) will count
-                                as a Care Mistake. Pets can be put to sleep out of their natural time without any
-                                penalties. Pets will not decrease their "hunger" and "vitamin" values while asleep,
-                                but also won't evolve (their evolution timers will keep running). All pets will wake up
-                                naturally on their wake up time without the need for intervention. If a pet is put to
-                                sleep manually they will still wake up on their own standard wake up time. It is
-                                possible to override a pet's sleeping schedule in the Settings Menu. It is possible to
-                                wake up a pet by trying to feed them or on training and battling, this will not count as
-                                a Care Mistake, but will count as a Sleep Disturbance which is a requirement for
-                                certain evolutions. If a pet has it's sleep disturbed, they will fall back asleep after
-                                a few minutes. Eggs and recently hatched pets cannot sleep.</p>
-                        </td>
-                    </tr>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/healing.png" alt="Healing: Dots or Skull">
+                    <div>
+                        <p>A Digimon can be <strong>sick</strong> (dots) or <strong>injured</strong> (skull), one ailment at a time. The Heal icon
+                            gives one dose to every ailing Digimon. When the party has both kinds, HEALING opens and you choose: Dots treats
+                            the sick, Skull the injured. Most forms need one dose; some Adult and Perfect forms need 2 or 3. Forms whose doses
+                            are 0 (most Baby I) never fall ill.</p>
+                        <p>Evolution clears both ailments and their counts.</p>
+                    </div>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>Cause</th><th>Result</th></tr></thead>
+                    <tbody>
+                        <tr><td>Battles</td><td>Injury only, on every device. Arena battles never injure.</td></tr>
+                        <tr><td>Poop piling up</td><td>The device's ailment (table in <a href="#clean" onclick="openSection('clean')">Poop and Cleaning</a>)</td></tr>
+                        <tr><td>Reaching 99G</td><td>Sickness on D-3, DMM, DMX, IC, PEN20, PENC, PENGZ, PENOG, PENZ; injury on VB, VBE, VH; nothing elsewhere</td></tr>
+                        <tr><td>Every 10th sleep disturbance</td><td>Sickness on DMM, IC, PENOG</td></tr>
+                    </tbody>
                 </table>
+                <h3>Limits</h3>
+                <p>Too many sicknesses or injuries in one form, or one left untreated for 6 hours of awake time (5 on DMOG, 12 in
+                    Digimon World), brings the Digimon near death (see <a href="#death" onclick="openSection('death')">Care Mistakes and Death</a>).</p>
+                <table class="data-table">
+                    <thead><tr><th>Sicknesses / Injuries per form</th><th>Modules</th></tr></thead>
+                    <tbody>
+                        <tr><td>20 / 20</td><td>DMX, PEN20, PENOG, PENZ</td></tr>
+                        <tr><td>12 / 12</td><td>D-3, PENC, PENGZ</td></tr>
+                        <tr><td>30 / 30</td><td>IC, DMM</td></tr>
+                        <tr><td>injuries only: 20</td><td>DM20, DMRV</td></tr>
+                        <tr><td>injuries only: 15</td><td>DMC, DMGZ, DMH, DMOG, DW1, VB, VBE, VH</td></tr>
+                        <tr><td>injuries only: 12</td><td>DMXW</td></tr>
+                    </tbody>
+                </table>
+                <p>A sick or injured Digimon cannot train. iC Cold Medicine and Injury Medicine cure their own kind at once; Digi Bedding
+                    cures both. D-3, the Pendulum Color and the Pendulum Color Godzilla show Sicknesses and Injuries boxes on the Status screen.</p>
             </div>
         </div>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/Heal.png" width="48" height="48" alt="" /> Injuries and Healing</span><span
-                    class="arrow">▼</span></h2>
+        <!-- ============================================================ EVOLUTION -->
+        <div class="content-section" id="evolution" data-theme="digidex">
+            <h2 class="section-title" onclick="toggleSection(this)">Evolution<span class="arrow">&#9660;</span></h2>
             <div class="section-content" style="display:none;">
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/SickPets.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"> A pet can fall sick or be injured. A sick pet
-                            shows dots on the main screen, an injured one a skull:
-                            <ul>
-                                <li>Battles injure - every battle has a chance to injure a pet, usually higher when
-                                    losing. A battle never makes a pet sick.</li>
-                                <li>Poop piling up (8 poops for each living pet on most devices), reaching 99g of weight
-                                    and, on some devices, being woken up too often make a pet sick or injured: each
-                                    module says which.</li>
-                            </ul>
-                            A pet has one ailment at a time. Pets can be healed with the Healing option in the menu;
-                            when the party has both a sick and an injured pet, you choose which to treat. Some pets
-                            need more than one dose. The sicknesses and the injuries a pet has in one form are counted
-                            apart, and reaching the module's limit for either triggers a death condition, as does
-                            leaving a pet sick or injured for many hours.
-                            In some modules, there's the use of "Disturbance Penalty", this increases
-                            the chance of an injury after battle and is applied when a pet is disturbed from sleep.
-                            Training successfully decreases the "Disturbance Penalty".</p>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-        </div>
+                <p>Each form has an evolution time and a list of routes. The routes and their requirements are in each module's
+                    documentation (<a href="module-guide.html">Module Guide</a>, Charts page).</p>
+                <ol class="steps">
+                    <li><strong>The timer</strong> counts minutes in the form. It runs during sleep too, except on DM20, DMOG and VB.</li>
+                    <li><strong>When the time is up</strong>, the Digimon evolves as soon as it needs no care: no empty meter, no ailment,
+                        not tired at bedtime. A sleeping Digimon can evolve.</li>
+                    <li><strong>The first route met wins.</strong> Routes are checked in the module's order; the first whose requirements are
+                        all met is taken. A route with a chance (the Pendulum Color Godzilla's win-ratio roll) rolls last.</li>
+                </ol>
+                <p>Requirements a route can ask for include care mistakes, trainings or Effort, battles and the win ratio, Weight,
+                    overfeeds, sleep disturbances, an area cleared, an item used, a time of day, and device values such as DigiSoul
+                    (iC), Vital Values and trophies (Vital Bracelets), G-Cells (Godzilla modules) or condition hearts (Pendulum Color).
+                    Routes that count defeated enemies or virus evolve the Digimon the moment they are met.</p>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/Alert.png" width="48" height="48" alt="" /> Call Sign</span><span
-                    class="arrow">▼</span></h2>
-            <div class="section-content" style="display:none;">
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/AlertPet.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"> The Call Sign will alert you when a pet needs
-                                attention. It can be triggered by various events such as having its "hunger" or
-                                "vitamin" counters empty, or when the pet wants to sleep. Leaving the pet unatended
-                                will count as a Care Mistake, when the Care Mistake happens, another alert sound
-                                will play and the Call Sign will turn off.</p>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-        </div>
+                <h3>Failed evolutions</h3>
+                <p>On devices whose routes read the win ratio (D-3, DM20, DMC, DMGZ, DMH, DMM, DMOG, DMRV, PEN20, PENC, PENGZ and the
+                    Vital Bracelets) a Digimon gets one try when its time comes. If it meets no route, or loses the chance roll, the
+                    evolution fails and the timer never evolves it again. The Digital Monster X (from Perfect) and the Pendulum Z (from
+                    Adult) work the same way. Items, Jogress, Armor and Level Reverse can still evolve it. Nothing on screen announces a
+                    failure.</p>
+                <p>On the Pendulum Color, Pendulum Color Godzilla, Pendulum Ver.20th, Digital Monster X and Pendulum Z a failed Digimon's
+                    Hunger and Strength drain twice as fast and it poops twice as often, as an Ultimate does after 48 hours in its form.</p>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/LibraryIcon.png" width="48" height="48" alt="" /> <span style="color: #FFEB3B;">Library</span></span><span
-                    class="arrow">▼</span></h2>
-            <div class="section-content" style="display:none;">
-                <p>The <span style="color: #FFEB3B; font-weight: bold;">Library</span> is your quest hub and navigation center. Here you can view and complete daily quests, and access important features like the Digidex, Freezer Box, and Settings.</p>
-                
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/Library1.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong style="color: #FFEB3B;">Daily Quests: </strong>Each day, three random quests are generated for you to complete. Quests provide rewards such as items, experience, trophies, or vital values. The quest system ensures variety by attempting to assign different quest types each day.</p>
-                            <p class="feature-description item"><strong style="color: #FFEB3B;">Quest Types:</strong></p>
-                            <ul>
-                                <li><strong style="color: #FFEB3B;">Boss Battles:</strong> Defeat a specified number of boss enemies</li>
-                                <li><strong style="color: #FFEB3B;">Training:</strong> Complete training sessions a set number of times</li>
-                                <li><strong style="color: #FFEB3B;">Battles:</strong> Win battles against regular enemies</li>
-                                <li><strong style="color: #FFEB3B;">Feeding:</strong> Feed special items to your pets</li>
-                                <li><strong style="color: #FFEB3B;">Evolution:</strong> Evolve your pets (normal, armor, or jogress)</li>
-                            </ul>
-                            <p class="feature-description item"><strong style="color: #FFEB3B;">Quest Progress:</strong> Each quest panel shows the quest name, progress bar, and current completion status (e.g., "0/3"). As you complete quest objectives, the progress automatically updates. When a quest reaches its target, it becomes claimable.</p>
-                            <p class="feature-description item"><strong style="color: #FFEB3B;">Quest Reset:</strong> All quests reset daily at midnight. Any unclaimed rewards from the previous day are lost, so be sure to claim them before the day ends.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Library2.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong style="color: #FFEB3B;">Claiming Rewards: </strong>Press <strong style="color: #FFEB3B;">A</strong> while hovering over a completed quest's <strong style="color: #FFEB3B;">CLAIM</strong> button to receive rewards. Alternatively, press <strong style="color: #FFEB3B;">START</strong> to claim all completed quests at once. A reward popup will display what you've earned.</p>
-                            <p class="feature-description item"><strong style="color: #FFEB3B;">Reward Types:</strong></p>
-                            <ul>
-                                <li><strong style="color: #FFEB3B;">Items:</strong> Receive special items added to your inventory</li>
-                                <li><strong style="color: #FFEB3B;">Experience:</strong> Grants experience points to ALL pets in your party</li>
-                                <li><strong style="color: #FFEB3B;">Trophies:</strong> Adds trophies to ALL pets in your party</li>
-                                <li><strong style="color: #FFEB3B;">Vital Values:</strong> Increases vital values for ALL pets in your party</li>
-                            </ul>
-                            <p class="feature-description item"><strong style="color: #FFEB3B;">Quest Completion:</strong> Quest completion counts are tracked across all your pets, not individually. The completion counter increments for all pets when you claim quest rewards.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2">
-                            <p class="feature-description item"><strong style="color: #FFEB3B;">Navigation:</strong> The Library provides quick access to three major features:</p>
-                            <ul>
-                                <li><strong style="color: #FFEB3B;">Freezer:</strong> Manage your pet storage boxes</li>
-                                <li><strong style="color: #FFEB3B;">Digidex:</strong> Browse discovered pets and evolution trees</li>
-                                <li><strong style="color: #FFEB3B;">Settings:</strong> Configure game options and view unlockables</li>
-                            </ul>
-                            <p class="feature-description item"><strong style="color: #FFEB3B;">Controls:</strong></p>
-                            <ul>
-                                <li><strong style="color: #FFEB3B;">UP/DOWN/LEFT/RIGHT:</strong> Move between quest panels and buttons. The focused element is highlighted.</li>
-                                <li><strong style="color: #FFEB3B;">A Button:</strong> Claim a quest reward or activate a navigation button (Freezer, Digidex, Settings, EXIT)</li>
-                                <li><strong style="color: #FFEB3B;">START Button:</strong> Instantly claim all completed quests at once</li>
-                                <li><strong style="color: #FFEB3B;">B Button:</strong> Exit back to the main game screen</li>
-                                <li><strong style="color: #FFEB3B;">Mouse:</strong> Click on quest CLAIM buttons or navigation buttons. Hover over elements to see focus highlights.</li>
-                            </ul>
-                            <p class="feature-description item"><strong style="color: #FFEB3B;">Tips:</strong></p>
-                            <ul>
-                                <li>Check the Library regularly to maximize your daily quest rewards</li>
-                                <li>The quest system favors diverse quest types, so you'll rarely see three identical quests in one day</li>
-                                <li>Remember to claim your rewards before midnight to avoid losing them!</li>
-                            </ul>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/FreezerIcon.png" width="48" height="48" alt="" /> Freezer Menu</span><span
-                    class="arrow">▼</span></h2>
-            <div class="section-content" style="display:none;">
-                <p>The Freezer is a storage system that allows you to manage your pet collection beyond the active party limit. You can store pets in 10 separate boxes, with each box holding up to 20 pets.</p>
-                
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/FreezerPartyBox.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Party View: </strong>The Freezer opens to Party View by default, displaying your active party. Navigate with directional keys or click on pets to select them. Press A (or click) on a pet to open the action menu.</p>
-                            <p class="feature-description item"><strong>Navigation:</strong></p>
-                            <ul>
-                                <li><strong>Directional Keys:</strong> Navigate between pets in the grids</li>
-                                <li><strong>SELECT:</strong> Switch between Party View and Box View</li>
-                                <li><strong>A Button:</strong> Select a pet and open the action menu</li>
-                                <li><strong>B Button:</strong> Exit back to the main game screen</li>
-                                <li><strong>Party Button:</strong> Switch to Party View (shows your active party)</li>
-                                <li><strong>Box Button:</strong> Switch to Box View (shows freezer storage)</li>
-                                <li><strong>EXIT Button:</strong> Return to main game screen</li>
-                            </ul>
-                            <p class="feature-description item">If you have an empty slot in your party, selecting it will take you directly to the egg selection screen to hatch a new pet.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/FreezerBox.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Box View: </strong>Switch to Box View to see the contents of your freezer storage. The current box number (1-10) is displayed in the top right corner. Navigate between boxes using L/R shoulder buttons or the arrow buttons on the sides (when mouse is enabled).</p>
-                            <p class="feature-description item"><strong>Box Navigation:</strong></p>
-                            <ul>
-                                <li><strong>L/R Buttons:</strong> Switch between boxes 1-10</li>
-                                <li><strong>LEFT/RIGHT at edges:</strong> When at the leftmost or rightmost pet, pressing LEFT/RIGHT will also change boxes</li>
-                                <li><strong>Mouse Mode:</strong> Click the < and > arrow buttons to change boxes</li>
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/FreezerPartyBoxMenu.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Action Menu: </strong>When you select a pet with A (or click), a menu appears with available actions:</p>
-                            <p class="feature-description item"><strong>In Party View:</strong></p>
-                            <ul>
-                                <li><strong>Store:</strong> Move the pet from your active party to the current freezer box. Use this to free up space in your party while keeping the pet safe.</li>
-                                <li><strong>Clear:</strong> Permanently delete a DEAD pet from your party. This action cannot be undone!</li>
-                                <li><strong>Stats:</strong> View detailed statistics for the selected pet</li>
-                            </ul>
-                            <p class="feature-description item"><strong>In Box View:</strong></p>
-                            <ul>
-                                <li><strong>Add:</strong> Move the pet from the freezer box to your active party (if you have space)</li>
-                                <li><strong>Stats:</strong> View detailed statistics for the selected pet</li>
-                            </ul>
-                            <p class="feature-description item">Use UP/DOWN to navigate the menu, A to confirm, or B to cancel and close the menu. With mouse support, simply click your desired option or click outside the menu to cancel.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/FreezerPartyBoxStats.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Stats Panel: </strong>View comprehensive information about any pet in your party or freezer boxes. The stats panel displays:</p>
-                            <ul>
-                                <li><strong>Name and Species:</strong> The pet's name</li>
-                                <li><strong>Age:</strong> How long the pet has been alive (in days)</li>
-                                <li><strong>Weight:</strong> Current weight in grams</li>
-                                <li><strong>Level:</strong> The pet's current level</li>
-                                <li><strong>Hearts:</strong> Visual indicators for Hunger and Strength stats</li>
-                                <li><strong>Power:</strong> Attack power value</li>
-                                <li><strong>Battles:</strong> Total number of battles participated in</li>
-                                <li><strong>Win Rate:</strong> Percentage of battles won</li>
-                            </ul>
-                            <p class="feature-description item">Press B (or click outside the panel) to close the stats view and return to the freezer menu.</p>
-                        </td>
-                    </tr>
-                </table>
-                
-                <p class="feature-description item"><strong>Important Notes:</strong></p>
+                <h3>Seeing the next evolution</h3>
                 <ul>
-                    <li>The Freezer can hold up to 200 pets total (20 pets per box × 10 boxes)</li>
-                    <li>Pets in the freezer do not age, get hungry, or require care</li>
-                    <li>You cannot move a pet to a full party or full freezer box</li>
-                    <li>Clearing (deleting) a pet is permanent and cannot be undone</li>
-                    <li>All changes are saved automatically when you make them</li>
+                    <li>Digivice iC: the Status screen's <strong>Next Evolution</strong> box shows the silhouette of the form the Digimon would
+                        take now, or a ? while it meets no route.</li>
+                    <li>Every module: the <a href="#digidex" onclick="openSection('digidex')">Digidex</a> tree shows the line's forms (names only for
+                        forms already met), and the module's documentation shows each route's requirements.</li>
                 </ul>
+
+                <h3>Generations (Digivice iC)</h3>
+                <p>An iC Digimon that dies at Perfect or later leaves its Digitama; hatching it starts the next generation. Per generation,
+                    up to 8, each evolution from Child up comes an hour earlier and the Digimon starts with 1 more Reliability.</p>
             </div>
         </div>
 
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/DigidexIcon.png" width="48" height="48" alt="" /> <span style="color: #8BC34A;">Digidex</span></span><span
-                    class="arrow">▼</span></h2>
+        <!-- ============================================================ DEATH -->
+        <div class="content-section" id="death" data-theme="care">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/manual/icons/menu_call.png" alt=""> Care Mistakes and Death</span><span class="arrow">&#9660;</span></h2>
             <div class="section-content" style="display:none;">
-                <p>The <span style="color: #8BC34A; font-weight: bold;">Digidex</span> is your comprehensive encyclopedia for tracking discovered pets and exploring their evolution lines. It provides two distinct viewing modes to help you understand how different species evolve and progress through their life stages.</p>
-                
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/Digidex1.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong style="color: #8BC34A;">List View: </strong>The Digidex opens to List View by default, displaying all pets sorted by stage, module, and version. Each entry shows the pet's sprite (or "????" for undiscovered pets), name, attribute, and stage.</p>
-                            <p class="feature-description item"><strong>Navigation:</strong></p>
-                            <ul>
-                                <li><strong>UP/DOWN Keys:</strong> Navigate through the list of pets</li>
-                                <li><strong>SCROLL_UP/SCROLL_DOWN:</strong> Scroll through the list with mouse wheel</li>
-                                <li><strong>Mouse Click:</strong> Click on a known pet to view its evolution tree</li>
-                                <li><strong>A Button:</strong> Open the evolution tree for the selected known pet</li>
-                                <li><strong>B Button:</strong> Exit back to the Library</li>
-                                <li><strong>FILTER Button:</strong> Open the filter menu to narrow down the list</li>
-                                <li><strong>EXIT Button:</strong> Return to Library</li>
-                            </ul>
-                            <p class="feature-description item"><strong>Pet Display:</strong></p>
-                            <ul>
-                                <li><strong>Known Pets:</strong> Show full details including name, sprite, attribute, and stage</li>
-                                <li><strong>Unknown Pets:</strong> Display as "????" with a mystery sprite until discovered</li>
-                                <li><strong>Stage Information:</strong> Ranges from 0-Egg through VII-Super Ultimate</li>
-                            </ul>
-                            <p class="feature-description item">The list can display hundreds of pets, with sprites loading dynamically as you scroll to ensure smooth performance.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Digidex2.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong style="color: #8BC34A;">Tree View: </strong>Select any known pet to view its complete evolution tree. The tree displays all possible evolution paths within that module and version, with colored lines connecting related species.</p>
-                            <p class="feature-description item"><strong>Tree Navigation:</strong></p>
-                            <ul>
-                                <li><strong>Arrow Keys:</strong> Pan around the evolution tree</li>
-                                <li><strong>Mouse Drag:</strong> Click and drag to pan smoothly across the tree</li>
-                                <li><strong>B Button:</strong> Return to List View</li>
-                                <li><strong>BACK Button:</strong> Return to List View</li>
-                            </ul>
-                            <p class="feature-description item"><strong>Tree Features:</strong></p>
-                            <ul>
-                                <li><strong>Auto-Centering:</strong> The tree automatically centers on the selected pet when opened</li>
-                                <li><strong>Evolution Lines:</strong> Colored lines show evolution paths between species
-                                    <ul>
-                                        <li>Blue lines indicate early stages (Egg through In-Training)</li>
-                                        <li>Random colors distinguish different evolution branches at higher stages</li>
-                                    </ul>
-                                </li>
-                                <li><strong>Attribute Colors:</strong> Each pet's border reflects its attribute (Data, Vaccine, Virus, or Free)</li>
-                                <li><strong>Unknown Pets:</strong> Show mystery sprites in the tree until discovered</li>
-                            </ul>
-                            <p class="feature-description item">The tree view is ideal for planning evolution strategies and understanding the full scope of each module's evolution possibilities.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Digidex3.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong style="color: #8BC34A;">Filter Menu: </strong>The Filter button in List View opens a menu with multiple filter options to help you find specific pets quickly. Filters can be combined to narrow down results.</p>
-                            <p class="feature-description item"><strong>Filter Options:</strong></p>
-                            <ul>
-                                <li><strong>Module:</strong> Filter by specific module (shows only pets from selected module)
-                                    <ul>
-                                        <li>Lists all installed modules</li>
-                                        <li>Useful for viewing pets from a specific game series</li>
-                                    </ul>
-                                </li>
-                                <li><strong>Stage:</strong> Filter by evolution stage (0-Egg through VII-Super Ultimate)
-                                    <ul>
-                                        <li>View all pets at a specific stage</li>
-                                        <li>Helpful for finding evolution candidates</li>
-                                    </ul>
-                                </li>
-                                <li><strong>Known:</strong> Filter by discovery status
-                                    <ul>
-                                        <li><strong>Yes:</strong> Show only discovered pets</li>
-                                        <li><strong>No:</strong> Show only undiscovered pets (useful for tracking progress)</li>
-                                    </ul>
-                                </li>
-                                <li><strong>Reset:</strong> Clear all active filters and show the complete list</li>
-                            </ul>
-                            <p class="feature-description item"><strong>Using Filters:</strong></p>
-                            <ul>
-                                <li>Navigate the filter menu with UP/DOWN keys or mouse</li>
-                                <li>Press A or click to select a filter option</li>
-                                <li>Choose your desired filter value from the submenu</li>
-                                <li>Multiple filters can be active simultaneously</li>
-                                <li>Active filters display at the top of the list (feature may vary)</li>
-                                <li>Use Reset to quickly clear all filters</li>
-                            </ul>
-                        </td>
-                    </tr>
+                <h3>Calls and care mistakes</h3>
+                <p>The call sign lights when a Digimon's Hunger or Strength is empty, or when it is tired at bedtime with the light on.
+                    A call left unanswered for the device's time costs one care mistake; the call then goes out until the meter is
+                    refilled or the next night. On the Pendulum Color a care mistake takes a condition heart instead. Mistakes are
+                    counted per form and reset on evolution.</p>
+                <table class="data-table">
+                    <thead><tr><th>Minutes before a mistake: Hunger / Strength / bedtime</th><th>Modules</th></tr></thead>
+                    <tbody>
+                        <tr><td>10 / 10 / 60</td><td>D-3, DMC, DMGZ, DMH, DMXW, PENC, PENGZ, VB, VBE, VH</td></tr>
+                        <tr><td>10 / 10 / 30</td><td>DMX, PEN20, PENOG, PENZ</td></tr>
+                        <tr><td>10 / 10 / 10</td><td>DM20, DMM, DMRV</td></tr>
+                        <tr><td>20 / 20 / 60</td><td>DMOG</td></tr>
+                        <tr><td>3 / - / 3</td><td>IC</td></tr>
+                        <tr><td>90 / - / 60</td><td>DW1</td></tr>
+                    </tbody>
                 </table>
-                
-                <p class="feature-description item"><strong>Tips for Using the Digidex:</strong></p>
+
+                <h3>Causes of death</h3>
+                <table class="data-table">
+                    <thead><tr><th>Cause</th><th>Modules</th></tr></thead>
+                    <tbody>
+                        <tr><td>Too many sicknesses or injuries in one form, or one untreated too long</td><td>Every module (limits in <a href="#heal" onclick="openSection('heal')">Sickness and Injury</a>)</td></tr>
+                        <tr><td>Hunger or Strength empty for 12 hours awake</td><td>DMC, DMGZ, DMH, DM20, DMRV (6 hours on DMOG)</td></tr>
+                        <tr><td>Hunger found empty 20 times without a full refill</td><td>D-3, PENC, PENGZ (18 on DMXW, which also counts Strength)</td></tr>
+                        <tr><td>20 care mistakes in one form</td><td>D-3, DM20, DMGZ, DMH, DMM, DMRV, DMX, PEN20, PENOG, PENZ, VB, VBE, VH</td></tr>
+                        <tr><td>5 care mistakes at Adult or Perfect, once past the evolution time</td><td>D-3, DM20, DMC, DMGZ, DMH, DMRV, DMX, PEN20, PENGZ, PENOG, PENZ, VB, VBE, VH</td></tr>
+                        <tr><td>5 care mistakes at Ultimate or later, after 48 hours in the form</td><td>As above, plus DMOG and DW1</td></tr>
+                        <tr><td>From 5 days of age: 16 care mistakes in one form (and Hunger and poop twice as fast)</td><td>DMXW</td></tr>
+                        <tr><td>Still unable to evolve 2 hours after the evolution time (an Ultimate: at 144 hours); again an hour after a save</td><td>IC</td></tr>
+                        <tr><td>Old age: 15 days of the Digimon's own life (time in the Freezer or with the desktop game closed does not count)</td><td>DW1</td></tr>
+                    </tbody>
+                </table>
+                <p>Digimon on the other devices do not die of old age.</p>
+
+                <h3>Death save</h3>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/main_dying.png" alt="A dying Digimon">
+                    <div>
+                        <p>On devices with a death save a Digimon that meets a cause of death goes near death first: it shows the skull and
+                            the death sound plays. Press B (or tap the Digimon area), or shake (or press Y), the number of times the device
+                            asks, within the time limit. If the count is reached and the chance roll succeeds, the Digimon survives: the
+                            cause is undone by one step and it is safe for 60 minutes. Otherwise it dies.</p>
+                        <table class="data-table">
+                            <thead><tr><th>Save</th><th>Modules</th></tr></thead>
+                            <tbody>
+                                <tr><td>60 presses of B in 30 s, then a 1 in 20 chance</td><td>IC</td></tr>
+                                <tr><td>100 presses of B in 60 s</td><td>DMM, DMX</td></tr>
+                                <tr><td>50 shakes in 30 s</td><td>PENC, PENGZ</td></tr>
+                                <tr><td>100 shakes in 60 s</td><td>D-3, PEN20, PENOG, PENZ</td></tr>
+                                <tr><td>No save: the Digimon dies at once</td><td>DM20, DMC, DMGZ, DMH, DMOG, DMRV, DMXW, DW1, VB, VBE, VH</td></tr>
+                            </tbody>
+                        </table>
+                        <p>A dead Digimon is removed 5 minutes later. When the party is empty, egg selection opens.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ LIBRARY -->
+        <div class="content-section" id="library" data-theme="library">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/manual/icons/menu_library.png" alt=""> Library</span><span class="arrow">&#9660;</span></h2>
+            <div class="section-content" style="display:none;">
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/library.png" alt="Library with three quests">
+                        <img class="shot" src="../assets/manual/library_reward.png" alt="Quest reward">
+                    </div>
+                    <div>
+                        <p>The Library shows the day's three quests and opens the <a href="#freezer" onclick="openSection('freezer')">Freezer</a>,
+                            the <a href="#digidex" onclick="openSection('digidex')">Digidex</a>, <a href="#settings" onclick="openSection('settings')">Settings</a>
+                            and <a href="#cards" onclick="openSection('cards')">Cards</a> (the four buttons at the bottom). It is the only menu that opens
+                            while a Digimon is dying.</p>
+                        <p>Quests come from the modules of the Digimon in the party. A module's daily gift takes a slot first (Digimon World's
+                            Meat Farm: 3 Giant Meat, to claim at once). Each panel shows the quest, its progress, the module and the reward.
+                            The border turns from red (no progress) to yellow (some) to green (complete).</p>
+                        <table class="data-table">
+                            <thead><tr><th>Input</th><th>Action</th></tr></thead>
+                            <tbody>
+                                <tr><td>Tap CLAIM</td><td>Claim one completed quest</td></tr>
+                                <tr><td>START</td><td>Claim every completed quest</td></tr>
+                                <tr><td>A</td><td>Press the focused button</td></tr>
+                                <tr><td>B or EXIT</td><td>Back to the main screen</td></tr>
+                            </tbody>
+                        </table>
+                        <p>Rewards: an item, experience for every Digimon in the party, trophies (for the devices that show them) or Vital
+                            Values. Quests reset at the first visit to the main screen after midnight; unclaimed rewards are lost.</p>
+                        <p>Modules with quests: the Vital Bracelets (win and train quests), D-3 (experience, armor evolution and boss quests)
+                            and Digimon World (Meat Farm). With no such module in the party the panels read "No quest".</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ FREEZER -->
+        <div class="content-section" id="freezer" data-theme="freezer">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/FreezerIcon.png" alt=""> Freezer</span><span class="arrow">&#9660;</span></h2>
+            <div class="section-content" style="display:none;">
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/freezer_party.png" alt="Freezer: party view">
+                        <img class="shot" src="../assets/manual/freezer_box.png" alt="Freezer: box view">
+                    </div>
+                    <div>
+                        <p>The Freezer stores Digimon outside the party: 10 boxes of 25. A stored Digimon does not need care.</p>
+                        <ul>
+                            <li><strong>Party view</strong>: the party; an empty slot (+) opens egg selection.</li>
+                            <li><strong>Box view</strong>: one box at a time ("Box 1/10"). L/R, or LEFT/RIGHT at a grid edge, change box.</li>
+                        </ul>
+                        <p>SELECT, or the Party and Box buttons, switch views. A on a Digimon opens its menu:</p>
+                        <table class="data-table">
+                            <thead><tr><th>Where</th><th>Options</th></tr></thead>
+                            <tbody>
+                                <tr><td>Party</td><td><strong>Store</strong> (into the current box), <strong>Stats</strong></td></tr>
+                                <tr><td>Party, dead Digimon</td><td><strong>Clear</strong> (deletes it, without confirmation), Stats</td></tr>
+                                <tr><td>Box</td><td><strong>Add</strong> (to the party, if it has room: "Party is full"), Stats</td></tr>
+                                <tr><td>Box, Arena team</td><td><strong>Arena</strong> with the time left, Stats. The Digimon stays locked until the season ends.</td></tr>
+                            </tbody>
+                        </table>
+                        <p>The party size is set in Settings &gt; Gameplay &gt; Max Pets (1-10). Changes are saved at once.</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/freezer_menu.png" alt="Freezer: Store / Stats menu">
+                    <div><p>The Stats panel shows the Digimon's main values; any button closes it.</p></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ DIGIDEX -->
+        <div class="content-section" id="digidex" data-theme="digidex">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/DigidexIcon.png" alt=""> Digidex</span><span class="arrow">&#9660;</span></h2>
+            <div class="section-content" style="display:none;">
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/digidex_modules.png" alt="Digidex: modules">
+                        <img class="shot" src="../assets/manual/digidex_list.png" alt="Digidex: list">
+                    </div>
+                    <div>
+                        <p>The Digidex lists every Digimon of every installed module and marks the ones you have met.</p>
+                        <ol class="steps">
+                            <li><strong>Modules</strong>: All, then each module with "known/total". Digimon World and the Xros Wars Color
+                                also offer their Friends list (recruits, Friends won in battle).</li>
+                            <li><strong>List</strong>: sprite, name, Attribute and Evolution Stage (dub names, as on Status). Unknown Digimon show
+                                "????". FILTER narrows the list by module, stage, known or Friend (by touch or mouse).</li>
+                            <li><strong>Tree</strong>: A on a known Digimon shows its line's evolution tree, from the egg, with boxes coloured by
+                                Attribute. The arrows or a drag move around it.</li>
+                        </ol>
+                        <p>A Digimon becomes known when it hatches or evolves in your party, when a code gives it, when it joins as a Friend,
+                            or when a temporary form (DigiXros, Mode Change) is reached in battle. In Progress Mode each first discovery pays
+                            Coins. Some unlocks ask for a number of known Digimon (for example Digimon World's eggs at 5, 10 and 15).</p>
+                        <p>B goes back one level; from the module list, to the main screen.</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/digidex_tree.png" alt="Digidex: evolution tree">
+                    <div><p>The tree of the Digital Monster Color Ver.1, centred on Agumon. Only forms already met show their name.</p></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ CARDS -->
+        <div class="content-section" id="cards" data-theme="library">
+            <h2 class="section-title" onclick="toggleSection(this)">Cards<span class="arrow">&#9660;</span></h2>
+            <div class="section-content" style="display:none;">
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/cards_grid.png" alt="CARDS: the iC plates">
+                        <img class="shot" src="../assets/manual/cards_view.png" alt="CARDS: a card">
+                    </div>
+                    <div>
+                        <p>CARDS (Library &gt; Collections) holds each module's card collection: the Digivice iC's 50 plates (Soul Plates and
+                            iD Plates) and Digimon World's 66 cards. The header shows the module, the cards owned and the copies.</p>
+                        <ul>
+                            <li>A card you do not own shows its number and back, never its name. Badges show the copies (x2), a physical card
+                                (P) and shiny copies (S). Shiny cards have a holographic finish.</li>
+                            <li><strong>VIEW</strong> (A) shows a card; <strong>USE</strong> reads it for a Digimon of its module (asking which, when
+                                there are several). A read card waits an hour before it can be read again. Its effect can be an item, DigiSoul,
+                                an unlock or a special battle.</li>
+                            <li><strong>READ</strong> (START) scans a physical card with an NFC reader (an ACR122U over USB, or a PN532 over
+                                I2C). There is no NFC on Android.</li>
+                            <li><strong>FILTER</strong> (SELECT) shows one module, or only obtained cards.</li>
+                        </ul>
+                        <p>Card packs, won or bought, open with a reveal: the pack bursts and each card turns over; A or a tap shows the next,
+                            B skips. A pack bought in a shop opens at once; one won in battle waits for the main screen.</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/cards_read.png" alt="CARDS: scan a card">
+                    <div><p>The scan page waits for a card on the reader. BACK returns to the grid.</p></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ CONNECT -->
+        <div class="content-section" id="connect" data-theme="connect">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/manual/icons/menu_connect.png" alt=""> Connect</span><span class="arrow">&#9660;</span></h2>
+            <div class="section-content" style="display:none;">
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/connect_menu.png" alt="Connect menu">
+                    <div>
+                        <p>Connect is where Omnipet meets other players and real devices.</p>
+                        <table class="data-table">
+                            <thead><tr><th>Button</th><th>Opens</th></tr></thead>
+                            <tbody>
+                                <tr><td>ARENA</td><td>Arena seasons (Progress Mode, logged in)</td></tr>
+                                <tr><td>LOCAL BATTLE</td><td>DCom battles with a real device, and WiFi battles with another Omnipet</td></tr>
+                                <tr><td>SHOP</td><td>The Omninet Shop. Shows "Loading" while Omninet is checked and "Offline" when it cannot be reached</td></tr>
+                                <tr><td>CONFIG</td><td>Omninet account and Discord link</td></tr>
+                                <tr><td>DISCORD</td><td>Online battles through Discord, once an account is linked</td></tr>
+                                <tr><td>EXIT</td><td>Back to the main screen</td></tr>
+                            </tbody>
+                        </table>
+                        <p>Accounts, the Arena, the Shop, Discord and WiFi battles are explained in <a href="online-play.html">Online Play</a>.</p>
+                    </div>
+                </div>
+                <h3>Local Battle and DCom</h3>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/connect_local.png" alt="Local Battle: WiFi Com, D-Com, Local WiFi">
+                    <div>
+                        <p>Local Battle shows three buttons. Each lights up when its connection is available, checked every 3 seconds:
+                            <strong>D-COM</strong> needs a USB serial adapter, <strong>LOCAL WIFI</strong> a local network. The WiFi Com button stays
+                            off in 1.0.</p>
+                        <p>A DCom adapter (an Arduino or Pico running DMComm firmware, plugged in over USB) lets an Omnipet Digimon battle a real
+                            device. Connection battles count for evolution like the device's own: battles, wins, Connect Points, and the
+                            unlocks that ask for connection wins.</p>
+                    </div>
+                </div>
+                <div class="screen-row">
+                    <div class="screen-stack">
+                        <img class="shot" src="../assets/manual/dcom_protocol.png" alt="DCom: choose the device line">
+                        <img class="shot" src="../assets/manual/dcom_waiting.png" alt="DCom: waiting for the device">
+                    </div>
+                    <div>
+                        <ol class="steps">
+                            <li>Connect &gt; Local Battle &gt; D-COM, and choose one Digimon.</li>
+                            <li>If it has a DigiXros or Mode Change, choose the form.</li>
+                            <li>The game finds the adapter ("Scanning for DCom..."; a menu when there are several) and opens the device line
+                                grid, focused on the Digimon's own line. Choose the line of the real device. A Digimon of another module fights
+                                as that line's compatible Digimon.</li>
+                            <li>On the iC line, weapons can be chosen; the one sent is used up by the battle.</li>
+                            <li>Play the line's charge minigame (B ends it early and keeps the charge).</li>
+                            <li>The game waits 60 seconds ("Waiting for device..."). On the Pendulum Color and Xros Wars Color lines Omnipet
+                                starts the exchange: hold the device to the adapter. On the other lines start the battle on the device.</li>
+                            <li>The battle plays from the DigiROM exchanged, then the result is counted after about 4 seconds.</li>
+                        </ol>
+                        <p>CANCEL (B) gives up at any time. When the window ends without a battle, the status line says why, for example
+                            "No response from the adapter.", "Device refused the battle. Retrying...", or "This adapter cannot send IC - it
+                            needs infrared firmware." See <a href="troubleshooting.html">Troubleshooting</a>.</p>
+                    </div>
+                </div>
+                <h3>Config</h3>
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/connect_config_free.png" alt="Config in Free Mode">
+                    <div>
+                        <p>CONFIG shows the Omninet status and account, with CONNECT / DISCONNECT (in Free Mode: SWITCH MODE), and the
+                            Discord link status with LINK / UNLINK.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ SETTINGS -->
+        <div class="content-section" id="settings" data-theme="settings">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/SettingsMenuIcon.png" alt=""> Settings</span><span class="arrow">&#9660;</span></h2>
+            <div class="section-content" style="display:none;">
+                <div class="screen-row">
+                    <img class="shot" src="../assets/manual/settings_top.png" alt="Settings">
+                    <div>
+                        <p>START on the main screen (or a right click, or Library &gt; Settings) opens SETTINGS. Every option is saved with the
+                            game; there is no configuration file to edit.</p>
+                        <p>UP/DOWN move, LEFT/RIGHT change a value, A changes it or opens a page, B goes back. With a mouse or touch screen,
+                            tap the left or right end of a row to lower or raise its value.</p>
+                    </div>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>Section</th><th>Options</th></tr></thead>
+                    <tbody>
+                        <tr><td>Gameplay</td><td><strong>Max Pets</strong> (1-10; 6 by default on Windows, 4 on Linux, Raspberry Pi and Batocera),
+                            <strong>Wake</strong> and <strong>Sleep</strong> (one schedule for every Digimon, used when both are set),
+                            <strong>Change Mode</strong> (Progress or Free Mode), <strong>Replay Tutorial</strong></td></tr>
+                        <tr><td>Display</td><td><strong>Render Res</strong> (1x-4x), <strong>Window Size</strong> (windowed only), <strong>Show Clock</strong>,
+                            <strong>Show FPS</strong>, <strong>Timeout</strong> (screensaver: OFF, 10s, 20s, 30s, 60s, 120s), <strong>Sprites</strong>
+                            (Default, Color, HD), <strong>Old Sprites</strong></td></tr>
+                        <tr><td>Audio</td><td><strong>Volume</strong>, 0-100% in steps of 10</td></tr>
+                        <tr><td>Input</td><td><strong>Remap Input</strong> (the input setup of the first start), <strong>Test Graphics</strong> (the graphics test)</td></tr>
+                        <tr><td>Backgrounds</td><td>The backgrounds unlocked or bought. LEFT/RIGHT change, SELECT switches High-Res</td></tr>
+                        <tr><td>Secrets</td><td>The unlocks found in each module. LEFT/RIGHT change module, UP/DOWN scroll</td></tr>
+                        <tr><td>System (Android)</td><td>Notification status and a shortcut to Android's notification settings</td></tr>
+                    </tbody>
+                </table>
+                <div class="screen-gallery">
+                    <figure><img class="shot small" src="../assets/manual/settings_gameplay.png" alt="Gameplay settings"><figcaption class="shot-caption">Gameplay</figcaption></figure>
+                    <figure><img class="shot small" src="../assets/manual/settings_display.png" alt="Display settings"><figcaption class="shot-caption">Display</figcaption></figure>
+                    <figure><img class="shot small" src="../assets/manual/settings_background.png" alt="Background settings"><figcaption class="shot-caption">Background</figcaption></figure>
+                    <figure><img class="shot small" src="../assets/manual/settings_secrets.png" alt="Secrets"><figcaption class="shot-caption">Secrets</figcaption></figure>
+                </div>
+                <p>To force fullscreen on a desktop, start the game with <code>--fullscreen</code> (see <a href="installation-guide.html">Installation</a>).</p>
+            </div>
+        </div>
+
+        <!-- ============================================================ MODULES -->
+        <div class="content-section" id="modules">
+            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img src="../assets/Module.png" alt=""> Modules</span><span class="arrow">&#9660;</span></h2>
+            <div class="section-content" style="display:none;">
+                <p>Each device is a module in the <code>modules</code> folder: its Digimon, evolution routes, care rules, battles, items
+                    and backgrounds. Modules are downloaded from the Shop or copied into the folder by hand (one folder per module, with
+                    its <code>module.json</code>). Each has its own documentation in the <a href="module-guide.html">Module Guide</a>.</p>
+                <table class="data-table">
+                    <thead><tr><th>Category</th><th>Module</th><th>Device</th></tr></thead>
+                    <tbody>
+                        <tr><td>Classics</td><td>DMOG</td><td>Digital Monster (original)</td></tr>
+                        <tr><td>Classics</td><td>PENOG</td><td>Digital Pendulum (original)</td></tr>
+                        <tr><td>Classics</td><td>DMX</td><td>Digital Monster X</td></tr>
+                        <tr><td>Classics</td><td>PENZ</td><td>Digital Monster Pendulum Z</td></tr>
+                        <tr><td>Classics</td><td>DM20</td><td>Digital Monster Ver.20th</td></tr>
+                        <tr><td>Classics</td><td>DMRV</td><td>Digital Monster Ver.Revival</td></tr>
+                        <tr><td>Classics</td><td>PEN20</td><td>Digital Pendulum Ver.20th</td></tr>
+                        <tr><td>Classics</td><td>DMM</td><td>Digimon Mini</td></tr>
+                        <tr><td>Classics</td><td>IC</td><td>Digivice iC 10X and 20X</td></tr>
+                        <tr><td>Modern</td><td>DMC</td><td>Digital Monster Color</td></tr>
+                        <tr><td>Modern</td><td>DMGZ</td><td>Digimon Color Godzilla 70th Edition</td></tr>
+                        <tr><td>Modern</td><td>DMH</td><td>Digimon Monster Hunter</td></tr>
+                        <tr><td>Modern</td><td>DMXW</td><td>Digital Monster Color Xros Wars</td></tr>
+                        <tr><td>Modern</td><td>PENC</td><td>Digital Pendulum Color</td></tr>
+                        <tr><td>Modern</td><td>PENGZ</td><td>Digimon Pendulum Color Godzilla Edition</td></tr>
+                        <tr><td>Conversions</td><td>VB</td><td>Vital Bracelet (DIM cards)</td></tr>
+                        <tr><td>Conversions</td><td>VBE</td><td>Vital Bracelet BE (BEM cards)</td></tr>
+                        <tr><td>Conversions</td><td>VH</td><td>Vital Hero</td></tr>
+                        <tr><td>Conversions</td><td>DW1</td><td>Digimon World (PlayStation, 1999)</td></tr>
+                        <tr><td>Custom</td><td>D-3</td><td>Based on the D-3 line</td></tr>
+                    </tbody>
+                </table>
                 <ul>
-                    <li><strong>Discovery:</strong> Pets are automatically registered in the Digidex when you first encounter them (through hatching, evolution, or battle)</li>
-                    <li><strong>Completion Tracking:</strong> Use the "Known: No" filter to see which pets you haven't discovered yet</li>
-                    <li><strong>Evolution Planning:</strong> Check the tree view before evolving to see all possible evolution options</li>
-                    <li><strong>Module Exploration:</strong> Filter by module to see the complete roster for each installed module</li>
-                    <li><strong>Performance:</strong> The Digidex uses smart sprite loading to handle large collections efficiently</li>
-                    <li><strong>UI Hiding:</strong> The FILTER button automatically hides when viewing the evolution tree</li>
+                    <li>Modules on the same connection line can battle and jogress together (DMC with DMGZ and DMH, PENC with PENGZ, DM20
+                        with DMRV, DMX with Digimon World).</li>
+                    <li>Do not remove a module while a Digimon of it is in the party or the Freezer.</li>
+                    <li>An updated module keeps the Digimon you have and refreshes their evolution routes.</li>
+                    <li>New modules are made with the <a href="module-editor.html">Module Editor</a>.</li>
                 </ul>
-            </div>
-        </div>
-
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)"><span class="status-title"><img
-                        src="../assets/SettingsMenuIcon.png" width="48" height="48" alt="" /> Settings Menu</span><span
-                    class="arrow">▼</span></h2>
-            <div class="section-content" style="display:none;">
-                <table class="feature-table">
-                    <tr>
-                        <td><img src="../assets/SettingsMenu.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item">This menu is accessible from the Main Game screen by
-                                pressing START or through the Settings icon in the Library. It contains options to customize your game experience and provides access
-                                to background selection and unlockables.</p>
-                            <p class="feature-description item"><strong>Settings Options:</strong></p>
-                            <ul>
-                                <li><strong>Show Clock:</strong> Toggles the clock and battery indicator on the main game screen.</li>
-                                <li><strong>Sound:</strong> Sets the sound level from Off to 100%.</li>
-                                <li><strong>Global Wake:</strong> Sets a global wake time override for all pets.</li>
-                                <li><strong>Global Sleep:</strong> Sets a global sleep time override for all pets. When both Wake and Sleep are set, all pets will ignore their natural sleep cycles and follow the defined schedule.</li>
-                                <li><strong>Screen Timeout:</strong> Sets the timeout duration for the screen protector to activate.</li>
-                            </ul>
-                            <p class="feature-description item"><strong>Navigation:</strong> Use UP/DOWN to navigate options, LEFT/RIGHT/A to change values. Press B to return to the main screen. When mouse support is enabled, you can click buttons directly.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/Unlockables.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Secrets: </strong>View all secrets and unlockables you've discovered from every module. Use LEFT and RIGHT (or navigation buttons when mouse is enabled) to switch between modules, and UP and DOWN to scroll through the unlockable items in each module.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/UnlockablesWithMouse.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Secrets (Mouse Mode): </strong>When mouse support is enabled, navigation buttons appear at the bottom of the screen. Click the left/right arrows to change modules, and use the BACK button to return to the main settings menu.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/SelectBackground.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Background: </strong>Select the game's background image from unlocked backgrounds. Use LEFT and RIGHT keys (or navigation buttons when mouse is enabled) to browse available backgrounds, and SELECT (or the SEL button) to toggle between normal and high-resolution versions. Changes are applied immediately - simply exit the menu when done.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><img src="../assets/SelectBackgroundWithMouse.png" width="240" height="240" alt="" /></td>
-                        <td>
-                            <p class="feature-description item"><strong>Background (Mouse Mode): </strong>When mouse support is enabled, clickable navigation buttons appear at the bottom. Use the left/right arrows to change backgrounds, SEL to toggle high-resolution mode, and BACK to return to the main settings menu.</p>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)">Module Overview<span class="arrow">▼</span>
-            </h2>
-            <div class="section-content" style="display:none;">
-                <p>Modules are a key aspect of Omnipet. They define evolution lines and stats of your pets. You can add
-                    and remove modules directly in the modules folder. To enable the training and battle mini-games you
-                    need to have at least one active module of a specific ruleset. Dummy and HeadOn require a DMC
-                    module. Excite requires a DMX module. Count requires PenC module. It is not necessary to have an
-                    active pet of a module type tho. It is not recomended to remove a module while having a pet in the
-                    party or box. Updated modules won't reflect the status in an active pet, but will update it's
-                    evolution tree.</p>
-            </div>
-        </div>
-
-        <div class="content-section">
-            <h2 class="section-title" onclick="toggleSection(this)">Settings<span class="arrow">▼</span>
-            </h2>
-            <div class="section-content" style="display:none;">
-                <p>Everything is set from the game's own Settings menu (START from the main screen) and saved with your game: there are no configuration files to edit. Each platform starts with sensible defaults (on a GamePi, Batocera or a phone: fullscreen at 240x240 and 30 fps).</p>
-                <table class="feature-table">
-                    <tr>
-                        <td style="width: 200px;"><strong>Gameplay</strong></td>
-                        <td>Max Pets (how many pets your party holds), Wake and Sleep (the times your pets go to bed and wake up), Change Mode (Free or Progress Mode), Replay Tutorial</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Display</strong></td>
-                        <td>Render Res (the resolution the game draws at), Window Size (when not fullscreen), Show Clock, Show FPS, Timeout (screen saver), Sprites (the sprite style you prefer) and Old Sprites</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Audio</strong></td>
-                        <td>Volume</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Input</strong></td>
-                        <td>Remap Input (assign keyboard keys, gamepad buttons and GamePi buttons to each action: LEFT, RIGHT, UP, DOWN, A, B, X, Y, START, SELECT, L, R) and Test Graphics (run the display setup again)</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Backgrounds</strong></td>
-                        <td>Choose among the backgrounds you have unlocked or bought</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Secrets</strong></td>
-                        <td>Enter codes</td>
-                    </tr>
-                    <tr>
-                        <td><strong>System</strong></td>
-                        <td>Android only: notifications</td>
-                    </tr>
-                </table>
-                <p><strong>Fullscreen:</strong> start the game with <code>--fullscreen</code> (for example <code>launch.sh --fullscreen</code>) to force it on a desktop.</p>
             </div>
         </div>
     </div>
 
     <script>
-        function toggleSection(titleElem) {
-            var content = titleElem.closest('.content-section').querySelector('.section-content');
-            var isOpen = titleElem.classList.contains('open');
-            if (isOpen) {
-                content.style.display = 'none';
-                titleElem.classList.remove('open');
-            } else {
-                content.style.display = '';
-                titleElem.classList.add('open');
-            }
+        function toggleSection(title) {
+            var section = title.closest('.content-section');
+            var content = section.querySelector('.section-content');
+            var open = title.classList.toggle('open');
+            content.style.display = open ? '' : 'none';
+            section.classList.toggle('collapsed', !open);
         }
+        function openSection(id) {
+            var section = document.getElementById(id);
+            if (!section) return;
+            var title = section.querySelector('.section-title');
+            if (title && !title.classList.contains('open')) toggleSection(title);
+        }
+        document.querySelectorAll('.section-title[onclick]').forEach(function (t) {
+            t.closest('.content-section').classList.add('collapsed');
+        });
+        document.querySelectorAll('.page-toc a').forEach(function (a) {
+            a.addEventListener('click', function () { openSection(a.getAttribute('href').slice(1)); });
+        });
+        if (location.hash) openSection(location.hash.slice(1));
     </script>
 </body>
+
 </html>

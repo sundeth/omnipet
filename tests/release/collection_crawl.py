@@ -52,7 +52,7 @@ KNOWN = {
          for t in ("Dragon", "Beast", "Insect", "Machine", "Water", "Bird", "Holy", "Dark")},
         **{n: "Omnipet's own default food and medicine do its work (IC research)"
            for n in ("Meat", "Cold Medicine", "Injury Medicine")}),
-    **{m: {f"NEXT Clock {s}": "not sold (owner, 2026-10-17: no evolution-timer items in the Stat Shop); "
+    **{m: {f"NEXT Clock {s}": "not a battle drop (owner, 2026-10-17: no evolution-timer items); "
                               "nothing else grants it" for s in "SML"}
        for m in ("VB", "VBE", "VH")},
 }
@@ -227,14 +227,21 @@ class Crawl:
                 way = _trigger_way(ev)
                 if ev.get("type") in (ITEM_PACKAGE, BATTLE_RUN) and ev.get("item"):
                     changed |= self._give_item(ev["item"], way, f"event {ev.get('name')}")
+                if ev.get("type") in (ITEM_PACKAGE, BATTLE_RUN):
+                    for name in ev.get("item_pool") or []:
+                        changed |= self._give_item(name, way, f"event {ev.get('name')} (pool)")
                 for name in ev.get("item_sequence") or []:
                     changed |= self._give_item(name, way, f"card battle {ev.get('name')}")
             for c in mod.codes:
                 if c.get("type") == "item" and c.get("item"):
                     changed |= self._give_item(c["item"], OWN, f"password {c.get('name')}")
+            # Connect Points counting adventure battles (the Vital Bracelets'
+            # battle drops, 2026-10-21) are own play; the rest connections.
+            cp_way = (OWN if isinstance(mod.connect_points, dict)
+                      and "adventure" in (mod.connect_points.get("battles") or []) else CONNECTION)
             for r in (mod.connect_points or {}).get("rewards", []) if isinstance(mod.connect_points, dict) else []:
                 if r.get("item"):
-                    changed |= self._give_item(r["item"], CONNECTION, "Connect Points")
+                    changed |= self._give_item(r["item"], cp_way, "Connect Points")
             for o in mod.meta.get("event_communication_outcomes") or []:
                 if o.get("outcome") == "item" and o.get("item"):
                     changed |= self._give_item(o["item"], CONNECTION, "Event Communication")

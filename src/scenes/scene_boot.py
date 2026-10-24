@@ -27,6 +27,15 @@ from utils.pygame_utils import blit_with_cache, blit_with_shadow, sprite_load_pe
 from utils.scene_utils import change_scene
 from utils import navigation_utils
 
+#: The error when no module is installed and the Shop cannot be reached. A
+#: lets the player try again once connected or after installing a module by
+#: hand; the screen had no way out but restarting the game.
+NO_MODULE_ERROR = dict(
+    message="NO MODULE DETECTED",
+    bottom_message="Connect to the internet or install a module, then A: Retry",
+    action_a=("boot", "Retry"),
+)
+
 
 def check_internet_connection(timeout: float = 2.0) -> bool:
     """
@@ -308,10 +317,7 @@ class SceneBoot:
         if not navigation_utils.has_modules_installed():
             if not check_internet_connection():
                 from scenes.scene_error import SceneError
-                SceneError.set_error(
-                    message="NO MODULE DETECTED",
-                    bottom_message="Connect to the internet or install a module manually"
-                )
+                SceneError.set_error(**NO_MODULE_ERROR)
                 change_scene("error")
                 runtime_globals.game_console.log("[SceneBoot] → Error (no modules, no internet)")
                 return
@@ -357,10 +363,7 @@ class SceneBoot:
             if not navigation_utils.has_modules_installed():
                 if not check_internet_connection():
                     from scenes.scene_error import SceneError
-                    SceneError.set_error(
-                        message="NO MODULE DETECTED",
-                        bottom_message="Connect to the internet or install a module manually"
-                    )
+                    SceneError.set_error(**NO_MODULE_ERROR)
                     change_scene("error")
                     return
 

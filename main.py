@@ -9,6 +9,24 @@ import pygame
 import os
 import sys
 
+
+def game_root():
+    """The game's own folder, which assets/, Documentation/, modules/ and save/
+    are read from. In a PyInstaller one-file exe ``__file__`` is in the
+    temporary extraction folder; there it is the exe's folder."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+# Every asset, module and save path is relative to the working folder: start
+# from the game's own, whatever launched it (a shortcut, a terminal in another
+# folder). Started elsewhere, the one-file exe found no assets/OmnipetLogo.png
+# and quit, leaving modules/ and save/ there (2026-10-24 build review);
+# main_nuitka.py does the same.
+if __name__ == "__main__":
+    os.chdir(game_root())
+
 # Add src directory to Python path so internal imports (core, components, scenes, vpet) resolve
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
@@ -218,6 +236,13 @@ def setup_display():
     return render_surface, screen_width, screen_height
 
 
+def documentation_root():
+    """The folder whose modules/ and Documentation/ the Module Guide is built
+    from: the game's own folder (``game_root``; in a one-file exe the guide
+    beside the exe was never rebuilt from ``__file__``'s folder)."""
+    return game_root()
+
+
 def main():
     """Main function to initialize and run the game"""
     print("[Init] Starting Omnipet Virtual Pet Game...")
@@ -232,7 +257,7 @@ def main():
         
         # Build module documentation
         try:
-            project_root = os.path.dirname(__file__)
+            project_root = documentation_root()
             print("[Init] Building module documentation...")
             build_module_documentation(project_root)
         except Exception as e:

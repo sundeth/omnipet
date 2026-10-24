@@ -636,19 +636,12 @@ class SceneBattlePvP:
             return False
         
         if self.battle_encounter:
+            # The encounter owns its result screen: B ends the wait and the
+            # result records what it must (the PvP counts, an arena replay's
+            # return) before it leaves. A branch here compared the (action,
+            # data) tuple to "A"/"B"/"START", so it never ran; made to work,
+            # it would have left before the result was recorded.
             self.battle_encounter.handle_event(event)
-            
-            # Check for battle completion and return to game
-            if self.battle_encounter.phase in ["result", "clear", "finished"]:
-                if (event == "A" or event == "B" or event == "START") and self.battle_encounter.replay_return:
-                    self.battle_encounter.finish_replay()
-                    return
-                if event == "A" or event == "B" or event == "START":
-                    runtime_globals.game_console.log("[SceneBattlePvP] PvP battle completed, returning to game")
-                    # Clear PvP data
-                    if hasattr(runtime_globals, 'pvp_battle_data'):
-                        delattr(runtime_globals, 'pvp_battle_data')
-                    change_scene("game")
         else:
             # If no battle encounter, return to game on any input
             if event:

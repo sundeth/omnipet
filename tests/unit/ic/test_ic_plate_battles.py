@@ -6,8 +6,9 @@ Six Plate Charge results of the 10X and 20X are a battle whose prize comes
 only with the win: the card's Encounter effect names special encounter area
 6, round 1-6 (card_utils.apply_card_effects), the pet's version picks the
 opponent (GameModule.get_enemies), and the won battle pays its `prize`
-(battle_encounter). The Burst's wait for the Burst, and so do the 20X's two
-whose opponents have no power on record (Asuramon, HippoGryphonmon).
+(battle_encounter). The Burst's wait for the Burst. The 20X's Asuramon and
+HippoGryphonmon fight at an assumed power since 2026-10-24 (owner: valid
+values for launch; utilities/IC/ic_launch_values_20261024.py).
 """
 import os
 import sys
@@ -21,8 +22,8 @@ BATTLES = (
     ("10101", "L", 1, "MetalGreymon (Vaccine)", "WarGrowlmon", "Aura"),
     ("10111", "L/R", 2, "Gallantmon", "LoaderLeomon", "Aura"),
     ("11110", "R", 3, "Angewomon", "Megadramon", "Metal Armor"),
-    ("11111", "L", 4, "LadyDevimon", None, "Reliability Max"),
-    ("11111", "R", 5, "WereGarurumon", None, "Reliability Max"),
+    ("11111", "L", 4, "LadyDevimon", "Asuramon", "Reliability Max"),
+    ("11111", "R", 5, "WereGarurumon", "HippoGryphonmon", "Reliability Max"),
     ("11111", "L/R", 6, "Kuwagamon", "Puppetmon", "Reliability Max"),
 )
 

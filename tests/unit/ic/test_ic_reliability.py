@@ -6,8 +6,12 @@ table, utilities/IC/IC_RESEARCH_AND_TODO.md "Reliability mechanics"):
 
     base 15                      a new pet starts at 15
     becoming full        +1      on the meal that fills the stomach, not while full
-    answering a call     +1      feeding during a hunger call, lights off during a bedtime call
-    ignoring a call      -1      once when the call's three minutes run out
+    answering a call     +1      feeding during a hunger call, lights off during a bedtime call,
+                                 a press while an evolution calls (IC 13, 2026-10-22; how long
+                                 it calls is an inference: the hunger call's three minutes),
+                                 the death save's presses made in time (the dying call)
+    ignoring a call      -1      once when a hunger or bedtime call's three minutes run out
+                                 (an unanswered evolution call just ends: no source)
     minigame success     +1      a won training, a cleared iC minigame
     two poops            -1      every second poop since the last flush
     sickness or injury   -1      at the onset only
@@ -183,6 +187,120 @@ class CallTests(ICCase):
         pet.set_state("idle")                   # woken in the night
         self.tick(pet, 3)
         self.assertEqual(pet.mistakes, 2)
+
+
+class EvolutionCallTests(ICCase):
+    """IC 13: the evolution call. A Digimon that evolves on its own calls
+    for the hunger call's three minutes (an INFERENCE: no source gives the
+    evolution call's length or how it is answered); a press on the main
+    screen answers it for +1; left alone it just ends."""
+
+    def evolve_on_time(self, pet):
+        pet._evol_minutes = pet.time - 1
+        self.tick(pet)                           # the minute the timer is reached
+
+    def press(self, event_type="A"):
+        """SceneMainGame.handle_event's answer, stopped right after it (a
+        C'mon Switch close-up 'ends' and the handler returns)."""
+        from scenes.scene_maingame import SceneMainGame
+        scene = SimpleNamespace(lock_inputs=False, frame_counter=0, fade_out_timer=0,
+                                PASSIVE_INPUTS=SceneMainGame.PASSIVE_INPUTS)
+        with patch("scenes.scene_maingame.accessory_utils.closeup_active", return_value=True), \
+                patch("scenes.scene_maingame.accessory_utils.end_closeup"):
+            SceneMainGame.handle_event(scene, (event_type, None))
+
+    def test_an_evolution_on_its_timer_calls_and_a_press_answers_it(self):
+        pet = self.pet(name="Agumon")            # Reliability 15, no DigiSoul: Numemon
+        self.evolve_on_time(pet)
+        self.assertEqual(pet.name, "Numemon")
+        self.assertTrue(pet.call_sign(), "the evolution calls")
+        self.assertEqual(pet.reliability, 15)
+        self.press()
+        self.assertEqual((pet.reliability, pet.evolution_call), (16, 0))
+        self.assertFalse(pet.call_sign())
+        self.press()
+        self.assertEqual(pet.reliability, 16, "the call pays once")
+
+    def test_a_moving_pointer_answers_nothing(self):
+        pet = self.pet(name="Agumon")
+        self.evolve_on_time(pet)
+        self.press("MOUSE_MOTION")
+        self.assertEqual(pet.reliability, 15)
+        self.assertGreater(pet.evolution_call, 0)
+
+    def test_an_unanswered_evolution_call_just_ends(self):
+        pet = self.pet(name="Agumon")
+        self.evolve_on_time(pet)
+        self.tick(pet, 2)                        # the call's three minutes
+        self.assertEqual(pet.evolution_call, 0)
+        self.assertFalse(pet.call_sign())
+        self.assertFalse(pet.answer_call("evolution"), "too late to answer")
+        self.assertEqual((pet.reliability, pet.mistakes), (15, 0), "no penalty")
+
+    def test_an_evolution_the_player_makes_calls_nothing(self):
+        pet = self.pet(name="Agumon")
+        self.assertTrue(pet.evolve_to("GeoGreymon", 1))    # an item's, a jogress's
+        self.assertEqual(pet.evolution_call, 0)
+        self.assertFalse(pet.answer_call("evolution"))
+
+    def test_a_hatch_calls_nothing(self):
+        egg = self.pet(stage=0, hunger=0)
+        self.evolve_on_time(egg)
+        self.assertEqual(egg.stage, 1)
+        self.assertEqual(egg.evolution_call, 0)
+
+    def test_an_old_save_has_no_call(self):
+        pet = self.pet(name="Agumon")
+        del pet.evolution_call
+        pet.patch()
+        self.assertEqual(pet.evolution_call, 0)
+
+    def test_a_module_without_reliability_raises_no_call(self):
+        pet = self.pet(self.dmc, stage=3)
+        pet._evol_minutes = pet.time - 1
+        before = pet.name
+        with patch("models.game_pet.random.random", return_value=0.0):
+            self.tick(pet)
+        self.assertNotEqual(pet.name, before, "it evolved")
+        self.assertEqual(pet.evolution_call, 0)
+        self.assertEqual(pet.reliability, 0)
+
+
+class DyingCallTests(ICCase):
+    """IC 13: the dying call. Near death the call sounds for about a minute
+    while Confirm is mashed (Master Book p.048): the presses made in time
+    answer it (+1) before the save's 1-in-20 roll."""
+
+    def dying(self, presses_left=0):
+        pet = self.pet()
+        pet.add_ailment("sick")                  # -1: 14
+        pet.dying, pet.state, pet.death_cause = True, "dying", "sick_timer"
+        pet.death_save_b_counter = presses_left
+        return pet
+
+    def test_the_presses_answer_the_call_and_a_saved_pet_keeps_the_point(self):
+        pet = self.dying()
+        with patch("models.game_pet.random.random", return_value=0.0):   # the 5% roll wins
+            self.seconds(pet, 1)
+        self.assertFalse(pet.dying)
+        self.assertNotEqual(pet.state, "dead")
+        self.assertEqual(pet.reliability, 15)
+
+    def test_the_call_is_answered_even_when_the_roll_is_lost(self):
+        pet = self.dying()
+        with patch("models.game_pet.random.random", return_value=0.99):
+            self.seconds(pet, 1)
+        self.assertEqual((pet.state, pet.reliability), ("dead", 15))
+
+    def test_too_few_presses_answer_nothing(self):
+        pet = self.dying(presses_left=5)
+        self.seconds(pet, 31)                    # the 30 seconds run out
+        self.assertEqual((pet.state, pet.reliability), ("dead", 14))
+
+    def test_no_dying_call_without_a_dying_pet(self):
+        pet = self.pet()
+        self.assertFalse(pet.answer_call("dying"))
+        self.assertEqual(pet.reliability, 15)
 
 
 class MinigameTests(ICCase):
@@ -388,6 +506,23 @@ class AndroidParityTests(ICCase):
         self.assertEqual((live.reliability, live.mistakes), (14, 1))
         for field in ("reliability", "mistakes", "care_sleep_mistake_timer"):
             self.assertEqual(getattr(offline, field), getattr(live, field), field)
+
+    def test_an_offline_evolution_calls_as_the_game_loop_does(self):
+        """Nobody answers while the app is closed: the call stands for its
+        minutes offline too, and a press after opening answers what is left."""
+        live = self.pet(name="Agumon", _cd_poop=9999)
+        live._evol_minutes = live.time - 1
+        world, start = offline_world([live], {"IC": self.ic})
+        world.advance(start + 60)
+        self.tick(live)
+        offline = world.pet_list[0]
+        self.assertEqual(live.name, "Numemon")
+        for field in ("name", "evolution_call", "reliability"):
+            self.assertEqual(getattr(offline, field), getattr(live, field), field)
+        self.assertTrue(offline.call_sign())
+        world.advance(start + 4 * 60)
+        self.tick(live, 3)
+        self.assertEqual((offline.evolution_call, live.evolution_call), (0, 0))
 
     def test_offline_poops_sickness_and_bounds(self):
         live = self.pet(_cd_poop=9999)

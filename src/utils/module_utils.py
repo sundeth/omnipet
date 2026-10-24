@@ -46,6 +46,8 @@ def load_modules():
         runtime_globals.game_modules = new_modules
         return runtime_globals.game_modules
     for folder in os.listdir(module_dir):
+        if folder.endswith(INSTALL_WORK_SUFFIXES):
+            continue            # an install's work folder, not a module
         folder_path = os.path.join(module_dir, folder)
         module_json_path = os.path.join(folder_path, "module.json")
         if os.path.isdir(folder_path) and os.path.exists(module_json_path):
@@ -96,14 +98,57 @@ def safe_module_folder(module_name: str, module_id: str = "") -> str:
     return safe_name or module_id
 
 
+#: Suffixes of the folders an install works in (install_zip_into): never
+#: modules of their own, whatever an interrupted install left in them.
+INSTALL_WORK_SUFFIXES = (".installing", ".replaced")
+
+
+def _rename(src: str, dst: str, wait: float = 1.5) -> None:
+    """os.rename, tried again for *wait* seconds on Windows while another
+    program holds files inside *src*."""
+    import time
+    deadline = time.monotonic() + wait
+    delay = 0.05
+    while True:
+        try:
+            os.rename(src, dst)
+            return
+        except PermissionError:
+            if os.name != "nt" or time.monotonic() >= deadline:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 0.5)
+
+
+def _move_into_place(src: str, dst: str) -> None:
+    """Put the unpacked module folder *src* at *dst*.
+
+    Windows refuses to rename a folder while a virus scanner or the search
+    indexer still holds the files just written into it, for up to a minute
+    ("[WinError 5] Access denied": 7 of the 15 dev shop modules failed to
+    install so on 2026-10-22). After a moment the files are copied instead:
+    reading them is allowed meanwhile."""
+    import shutil
+    try:
+        _rename(src, dst)
+    except PermissionError:
+        if os.name != "nt":
+            raise
+        try:
+            shutil.copytree(src, dst)
+        except Exception:
+            shutil.rmtree(dst, ignore_errors=True)
+            raise
+
+
 def install_zip_into(target_dir: str, zip_bytes: bytes, log_name: str = "") -> bool:
     """Unpack a module zip into *target_dir*, replacing what is there only once
     the new one is known good.
 
-    The zip goes into a sibling folder first; a single wrapping folder is
-    flattened so module.json sits at the root; only then is the installed
-    module swapped out. A broken or cut-off download used to delete the
-    module the player had before it was found to be bad.
+    The zip goes into a sibling folder first (a single wrapping folder
+    inside it is the module's root); only once module.json is there is the
+    installed module swapped out. A broken or cut-off download used to
+    delete the module the player had before it was found to be bad.
     """
     import io
     import zipfile
@@ -115,31 +160,31 @@ def install_zip_into(target_dir: str, zip_bytes: bytes, log_name: str = "") -> b
         os.makedirs(staging, exist_ok=True)
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
             zf.extractall(staging)
+        root = staging
         entries = os.listdir(staging)
         if (len(entries) == 1
                 and os.path.isdir(os.path.join(staging, entries[0]))
                 and not os.path.exists(os.path.join(staging, 'module.json'))):
-            inner = os.path.join(staging, entries[0])
-            for n in os.listdir(inner):
-                os.rename(os.path.join(inner, n), os.path.join(staging, n))
-            os.rmdir(inner)
-        if not os.path.exists(os.path.join(staging, 'module.json')):
+            root = os.path.join(staging, entries[0])
+        if not os.path.exists(os.path.join(root, 'module.json')):
             raise ValueError("the download has no module.json")
         shutil.rmtree(retired, ignore_errors=True)
         if os.path.isdir(target_dir):
-            os.rename(target_dir, retired)
+            _rename(target_dir, retired)
         try:
-            os.rename(staging, target_dir)
+            _move_into_place(root, target_dir)
         except OSError:
             if os.path.isdir(retired) and not os.path.isdir(target_dir):
-                os.rename(retired, target_dir)          # put the old one back
+                _rename(retired, target_dir)          # put the old one back
             raise
         shutil.rmtree(retired, ignore_errors=True)
         return True
     except Exception as e:
         runtime_globals.game_console.log(f"[ModuleSync] install error for {log_name or target_dir}: {e}")
-        shutil.rmtree(staging, ignore_errors=True)
         return False
+    finally:
+        # (what a scanner still holds stays until the next install of it)
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def install_module_zip(module_id: str, module_name: str, zip_bytes: bytes) -> bool:
@@ -336,6 +381,42 @@ def ensure_shop_item_data(item_id) -> bool:
     return shop_item_effect_known(meta)
 
 
+def shop_item_icon_path(meta) -> str:
+    """Where a bought shop item's icon is kept: the player's save folder,
+    `shop_items/<sprite_name>.png` ("" when the item names no sprite). The
+    game ships no shop icons (assets/items holds the core foods only)."""
+    name = os.path.basename(str((meta or {}).get('sprite_name') or ''))
+    if not name:
+        return ''
+    if not name.lower().endswith('.png'):
+        name += '.png'
+    return os.path.join(game_globals.get_save_dir(), 'shop_items', name)
+
+
+def ensure_shop_item_icon(item_id) -> bool:
+    """Keep a bought shop item's icon, from `GET /shop/item/{id}/sprite`, so
+    the inventory can draw it (it drew an empty square). Network: call off
+    the main thread. True when the icon is on disk."""
+    from services.omninet_service import omninet_service
+    path = shop_item_icon_path(game_globals.shop_items_data.get(item_id))
+    if not path:
+        return False
+    if os.path.isfile(path) and os.path.getsize(path) > 0:
+        return True
+    data = omninet_service.get_shop_sprite_bytes('item', item_id)
+    if not data:
+        runtime_globals.game_console.log(f"[Shop] item {item_id}: no icon")
+        return False
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'wb') as f:
+            f.write(data)
+    except OSError as exc:
+        runtime_globals.game_console.log(f"[Shop] item {item_id}: icon not saved ({exc})")
+        return False
+    return True
+
+
 def shop_item_effect_known(meta) -> bool:
     """An item's effect is known when it has one: an `effect`, or a `status`
     (an empty effect with a status is a plain status change, item_effects)."""
@@ -360,6 +441,9 @@ def sync_account_data(download_missing: bool = False) -> None:
         ui = omninet_service.get_user_info()
         if ui and ui.get('coins') is not None:
             game_globals.coins = int(ui['coins'])
+        # Contribution points, a balance of their own (Shop > Specials).
+        if ui and ui.get('contribution_points') is not None:
+            game_globals.contribution_points = int(ui['contribution_points'])
     except Exception:
         pass
 
@@ -393,6 +477,12 @@ def sync_account_data(download_missing: bool = False) -> None:
                 except Exception as exc:
                     runtime_globals.game_console.log(
                         f"[AccountSync] item {item_id} data failed: {exc}")
+            if quantity > 0:
+                try:
+                    ensure_shop_item_icon(item_id)
+                except Exception as exc:
+                    runtime_globals.game_console.log(
+                        f"[AccountSync] item {item_id} icon failed: {exc}")
 
     try:
         game_globals.save()

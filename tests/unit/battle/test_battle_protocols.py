@@ -3210,11 +3210,12 @@ class BattleProtocolTester:
         saved = getattr(globals_, "game_modules", None)
         globals_.game_modules = {"DMC": StubModule()}
         try:
+            # The line is the session's, never read off the ROM.
             result = executor.execute(
                 digirom.parse_command(
                     "C1-47444C4300000001000C007300019408-"
                     "47444C4300020002000000000000938B"),
-                Pet())
+                Pet(), "DMC")
             entries = result.split()
             # Upstream's own two tests for a finished exchange.
             self.check("the result carries an r: entry", "r:" in result, result)
@@ -3235,23 +3236,29 @@ class BattleProtocolTester:
                 digirom.parse_command(
                     "C2-47444C4300000001000C007300019408-"
                     "47444C4300020002000000000000938B"),
-                Pet())
+                Pet(), "DMC")
             self.check("turn 2 leads with ours",
                        listened.split()[0].startswith("r:"), listened)
+            # Turn 2: the adapter listens, so our pet opens, and the adapter
+            # listens once more after its last packet -- every capture of a
+            # turn-2 exchange ends "... s:XXXX t".
+            self.check("...and ends listening", listened.endswith(" t"), listened)
 
             # A Colour ROM addressed to another line gets no answer: "sending
             # a Pendulum Color GDLC is why it never answered".
             other_line = executor.execute(
                 digirom.parse_command("C2-4456353200010000001A010F00007AB2"),
-                Pet())
+                Pet(), "DMC")
             self.check("a Digivice Color scan is not answered by a DMC pet",
                        "r:" not in other_line, other_line)
 
             # A scan is one packet, and is answered with one -- not a battle.
             scan = digirom.parse_command("C1-47444C43000000010000000000009388")
-            self.check("a one-packet scan picks the Colour wire",
-                       executor.battle_format_for(scan, Pet()) == "DMC")
-            answered = executor.execute(scan, Pet())
+            self.check("a one-packet scan fits the selected Colour line",
+                       executor.fits(scan, "DMC") is None)
+            self.check("...and not another line on the same wire",
+                       executor.fits(scan, "PENC") is not None)
+            answered = executor.execute(scan, Pet(), "DMC")
             self.check("...and is answered with exactly one packet each way",
                        len(answered.split()) == 2, answered)
         finally:

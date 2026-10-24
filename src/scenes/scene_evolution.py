@@ -21,9 +21,22 @@ BASE_SPRITE_SIZE = 72
 CENTER_COLOR = (181, 255, 255)
 
 class SceneEvolution:
+    """The evolution cutscene: an experimental 0.9.x preview, not wired in.
+
+    Nothing sets ``runtime_globals.evolution_pet`` (an evolution plays its
+    jingle and swaps the sprite in place), and the main scene's trigger is
+    switched off (``scene_maingame.EVOLUTION_CUTSCENE``). Reached without an
+    evolution to show, the scene goes straight back to the game.
+    """
+
     def __init__(self):
         self.evolutions = runtime_globals.evolution_data
         self.phase = "flash"
+        self.frame_counter = 0
+        #: Nothing to show: leave on the first update instead of raising.
+        self._empty = not self.evolutions or runtime_globals.evolution_pet is None
+        if self._empty:
+            return
 
         # Check digidex BEFORE the scene completes so we can reward "new pet"
         # only when the evolved form has never been registered before.
@@ -40,8 +53,8 @@ class SceneEvolution:
             self.phase = "mega_intro"
             # 🔹 Draw the background sprite using the new method, scaled to screen width
             self.evo_background = sprite_load_percent(constants.EVO5_PATH, percent=100, keep_proportion=True, base_on="width")
-            self.from_sprite_scaled = pygame.transform.scale(self.evolutions[0].from_sprite, (int(100 * UI_SCALE), int(100 * UI_SCALE)))
-            self.to_sprite_scaled = pygame.transform.scale(self.evolutions[0].to_sprite, (int(100 * UI_SCALE), int(100 * UI_SCALE)))
+            self.from_sprite_scaled = pygame.transform.scale(self.evolutions[0].from_sprite, (int(100 * runtime_globals.UI_SCALE), int(100 * runtime_globals.UI_SCALE)))
+            self.to_sprite_scaled = pygame.transform.scale(self.evolutions[0].to_sprite, (int(100 * runtime_globals.UI_SCALE), int(100 * runtime_globals.UI_SCALE)))
             self.sectors = self.get_non_transparent_sectors(self.from_sprite_scaled)
             self.active_green_pixels = []
             self.active_particles = []
@@ -53,7 +66,7 @@ class SceneEvolution:
         self.active_energy_pixels = []
         self.energy_index = 0
 
-        self.font = get_font(FONT_SIZE_MEDIUM)
+        self.font = get_font(runtime_globals.FONT_SIZE_MEDIUM)
         self.fonts = [get_font(20), get_font(26), get_font_alt(20), get_font_alt(26)]
 
         # Use new method for fog image, scale to screen width
@@ -79,14 +92,14 @@ class SceneEvolution:
         self.orb_sprite = sprite_load_percent(constants.ORB_PATH, percent=100, keep_proportion=True, base_on="width")
 
         self.evo_text_image = sprite_load_percent(constants.EVO1_PATH, percent=100, keep_proportion=True, base_on="width")
-        self.evo_text_size = int(480 * UI_SCALE)  # Initial size
+        self.evo_text_size = int(480 * runtime_globals.UI_SCALE)  # Initial size
         self.evo_text_angle = 0
 
         self.explosion_flash = None
         self.light_particles = []
         self.light_source = sprite_load_percent(constants.LIGHT_SOURCE_PATH, percent=100, keep_proportion=True, base_on="width")
-        self.light_particle1 = pygame.transform.scale(self.light_source, (int(8 * UI_SCALE), int(8 * UI_SCALE)))
-        self.light_particle2 = pygame.transform.scale(sprite_load_percent(constants.LIGHT_PARTICLE_PATH, percent=100, keep_proportion=True, base_on="width"), (int(8 * UI_SCALE), int(8 * UI_SCALE)))
+        self.light_particle1 = pygame.transform.scale(self.light_source, (int(8 * runtime_globals.UI_SCALE), int(8 * runtime_globals.UI_SCALE)))
+        self.light_particle2 = pygame.transform.scale(sprite_load_percent(constants.LIGHT_PARTICLE_PATH, percent=100, keep_proportion=True, base_on="width"), (int(8 * runtime_globals.UI_SCALE), int(8 * runtime_globals.UI_SCALE)))
 
         self.dna_particles = []  # List of falling DNA sprites
         self.dna_sprite = sprite_load_percent(constants.DNA_PATH, percent=100, keep_proportion=True, base_on="width")
@@ -95,6 +108,9 @@ class SceneEvolution:
 
     # =================== Update Logic ===================
     def update(self):
+        if self._empty:
+            change_scene("game")
+            return
         self.frame_counter += 1
         self.update_scrolling_texts()
         self.bg_angle = (self.bg_angle + 6) % 360
@@ -214,7 +230,7 @@ class SceneEvolution:
         #runtime_globals.evolution_pet.y += 1
 
         if self.frame_counter == 60:
-            self.explosion_flash = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            self.explosion_flash = pygame.Surface((runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT))
             self.explosion_flash.fill((255, 255, 255))
             self.flash_alpha = 255
             self.switch_phase("mega_shine", False)
@@ -288,7 +304,7 @@ class SceneEvolution:
             drop["y"] += drop["speed"]
 
         # Remove drops that fall past the screen
-        self.rain_drops = [drop for drop in self.rain_drops if drop["y"] < SCREEN_HEIGHT]
+        self.rain_drops = [drop for drop in self.rain_drops if drop["y"] < runtime_globals.SCREEN_HEIGHT]
 
         if self.frame_counter > 90 and self.frame_counter < 120:
             self.generate_spiral_particles()
@@ -305,7 +321,7 @@ class SceneEvolution:
         if not self.dna_particles or self.dna_particles[-1]["y"] > 0:  
             # 🔹 Only add a new particle if there's space for it
             self.dna_particles.append({
-                "x": (SCREEN_WIDTH - 37) // 2,  # Keep them centered
+                "x": (runtime_globals.SCREEN_WIDTH - 37) // 2,  # Keep them centered
                 "y": -47,  # Start just above the screen
                 "speed": 10,  
                 "disappeared_rows": 0  
@@ -313,7 +329,7 @@ class SceneEvolution:
 
     def update_dna_particles(self):
         """Moves DNA particles downward and truncates them as they hit the Digimon."""
-        digimon_y = (72 + SCREEN_HEIGHT) // 2  
+        digimon_y = (72 + runtime_globals.SCREEN_HEIGHT) // 2  
 
         for particle in self.dna_particles:
             particle["y"] += particle["speed"]
@@ -328,8 +344,8 @@ class SceneEvolution:
         """Creates falling rain particles that originate off-screen at the top."""
         for _ in range(2):  # Maintain consistent density
             self.rain_drops.append({
-                "x": random.randint(0, SCREEN_WIDTH),  # Random horizontal position
-                "y": random.randint(-SCREEN_HEIGHT, -10),  # 🔥 Start above the screen
+                "x": random.randint(0, runtime_globals.SCREEN_WIDTH),  # Random horizontal position
+                "y": random.randint(-runtime_globals.SCREEN_HEIGHT, -10),  # 🔥 Start above the screen
                 "speed": random.uniform(2, 5)  # Random fall speed
             })
 
@@ -338,13 +354,13 @@ class SceneEvolution:
         if len(self.light_particles) >= 50:
             return
 
-        center_x, center_y = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+        center_x, center_y = runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_HEIGHT // 2
 
         # Extract sprite colors for particles
 
         for _ in range(10):
             angle = random.uniform(0, 2 * math.pi)  
-            distance = random.uniform(SCREEN_WIDTH // 2, SCREEN_WIDTH) 
+            distance = random.uniform(runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_WIDTH) 
             speed = random.uniform(3, 7)  
             color = random.choice(self.color_list)
 
@@ -368,7 +384,7 @@ class SceneEvolution:
 
             if self.phase in ['rain', 'explode']:
                 # 🔥 Stop movement when close enough to the center
-                if abs(particle["x"] - SCREEN_WIDTH // 2) < 5 and abs(particle["y"] - SCREEN_HEIGHT // 2) < 5:
+                if abs(particle["x"] - runtime_globals.SCREEN_WIDTH // 2) < 5 and abs(particle["y"] - runtime_globals.SCREEN_HEIGHT // 2) < 5:
                     particle["dx"] = 0  # Stop movement
                     particle["dy"] = 0
 
@@ -392,8 +408,8 @@ class SceneEvolution:
 
         for _ in range(1):  # Maintain density
             self.particles.append([
-                random.randint(0, SCREEN_WIDTH),  # x position
-                random.randint(-SCREEN_HEIGHT + y, -10 + y),  # Start above screen (y)
+                random.randint(0, runtime_globals.SCREEN_WIDTH),  # x position
+                random.randint(-runtime_globals.SCREEN_HEIGHT + y, -10 + y),  # Start above screen (y)
                 0,  # dx (falling straight down)
                 random.uniform(2, 5),  # dy (fall speed)
                 color,  # Color (same as previous)
@@ -407,11 +423,11 @@ class SceneEvolution:
             particle[5] -= 1  # Reduce lifetime
 
         # 🔹 Remove expired particles and those that fall beyond the screen
-        self.particles = [p for p in self.particles if p[5] > 0 and p[1] < SCREEN_HEIGHT]
+        self.particles = [p for p in self.particles if p[5] > 0 and p[1] < runtime_globals.SCREEN_HEIGHT]
 
     def trigger_explosion(self):
         """Triggers a burst explosion effect when particles converge at the center."""
-        center_x, center_y = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+        center_x, center_y = runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_HEIGHT // 2
 
         self.light_particles.clear()  # 🔥 Ensures old particles are removed
         explosion_particles = []
@@ -432,7 +448,7 @@ class SceneEvolution:
 
         self.light_particles = explosion_particles 
 
-        self.explosion_flash = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.explosion_flash = pygame.Surface((runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT))
         self.explosion_flash.fill((255, 255, 255))  # Full white flash
         self.explosion_flash.set_alpha(255)
 
@@ -445,9 +461,9 @@ class SceneEvolution:
         """Updates the movement of scrolling text effects."""
         for scroll in self.scroll_texts:
             scroll[2] += scroll[4]  # Move horizontally based on speed
-            if scroll[2] < -200 or scroll[2] > SCREEN_WIDTH + 200:  # Check bounds
-                scroll[2] = -200 if scroll[4] > 0 else SCREEN_WIDTH + 200  # Reset position
-                scroll[3] = random.randint(0, SCREEN_HEIGHT - 20)  # Randomize vertical placement
+            if scroll[2] < -200 or scroll[2] > runtime_globals.SCREEN_WIDTH + 200:  # Check bounds
+                scroll[2] = -200 if scroll[4] > 0 else runtime_globals.SCREEN_WIDTH + 200  # Reset position
+                scroll[3] = random.randint(0, runtime_globals.SCREEN_HEIGHT - 20)  # Randomize vertical placement
 
     def update_phase_flash(self):
         self.flash_alpha = abs(255 - (self.frame_counter % 10) * 50)
@@ -500,7 +516,7 @@ class SceneEvolution:
 
     def generate_light_particles(self):
         """Creates expanding particles from the center, limiting the amount and reducing lifespan."""
-        center_x, center_y = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+        center_x, center_y = runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_HEIGHT // 2
 
         # 🔹 Reduce particle count by half and enforce a max limit
         particle_count = min((2 + self.frame_counter // 30) // 2, 5)  # 🔥 Reduced & capped at 5
@@ -524,7 +540,7 @@ class SceneEvolution:
 
     def generate_colored_particles(self):
         """Creates particles with randomized colors from behind the Digimon, limiting count and lifespan."""
-        center_x, center_y = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+        center_x, center_y = runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_HEIGHT // 2
 
         # 🔹 Reduce particle count by half and enforce a max limit
         particle_count = min((2 + self.frame_counter // 30) // 2, 5)  # 🔥 Reduced & capped at 5
@@ -613,6 +629,8 @@ class SceneEvolution:
     # =================== Drawing Logic ===================
     def draw(self, surface):
         surface.fill((0, 0, 0))
+        if self._empty:
+            return
 
         self.draw_fog(surface)
 
@@ -637,21 +655,21 @@ class SceneEvolution:
 
     def draw_phase_mega_transformation(self, surface):
         """Draws scaled sprite, green overlay, and explosion particles during transformation."""
-        sprite_x, sprite_y = (SCREEN_WIDTH - int(100 * UI_SCALE)) // 2, (SCREEN_HEIGHT - int(100 * UI_SCALE)) // 2
+        sprite_x, sprite_y = (runtime_globals.SCREEN_WIDTH - int(100 * runtime_globals.UI_SCALE)) // 2, (runtime_globals.SCREEN_HEIGHT - int(100 * runtime_globals.UI_SCALE)) // 2
         
         # 🔹 Draw base scaled-up sprite
         surface.blit(self.evolutions[0].from_sprite, (sprite_x, sprite_y))
 
         # 🔹 Draw green pixels replacing exploded sectors
         for pixel in self.active_green_pixels:
-            green_surface = pygame.Surface((int(5 * UI_SCALE), int(5 * UI_SCALE)), pygame.SRCALPHA)
+            green_surface = pygame.Surface((int(5 * runtime_globals.UI_SCALE), int(5 * runtime_globals.UI_SCALE)), pygame.SRCALPHA)
             green_surface.fill((0, 255, 0))
             green_surface.set_alpha(pixel["alpha"])
             surface.blit(green_surface, (pixel["x"] + sprite_x, pixel["y"] + sprite_y))
 
         for p in self.particles:
             if p[5] > 0:
-                pygame.draw.circle(surface, p[4], (int(p[0]), int(p[1])), int(1 * UI_SCALE))
+                pygame.draw.circle(surface, p[4], (int(p[0]), int(p[1])), int(1 * runtime_globals.UI_SCALE))
 
     def draw_phase_mega_intro(self, surface):
         surface.blit(self.evolutions[0].from_sprite, (runtime_globals.evolution_pet.x, runtime_globals.evolution_pet.y))
@@ -665,7 +683,7 @@ class SceneEvolution:
 
         # 🔥 Apply the flash effect
         if self.flash_alpha > 0:
-            flash_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            flash_surface = pygame.Surface((runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT))
             flash_surface.fill((255, 255, 255))
             flash_surface.set_alpha(self.flash_alpha)
             surface.blit(flash_surface, (0, 0))
@@ -740,7 +758,7 @@ class SceneEvolution:
 
     def draw_symbol_animation(self, surface):
         """Renders Evo1 symbol rotation effect."""
-        center_x, center_y = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+        center_x, center_y = runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_HEIGHT // 2
 
         # 🔹 First, resize the image before rotating
         size = max(1, int(self.evo_text_size))
@@ -783,7 +801,7 @@ class SceneEvolution:
 
     def draw_phase_explode(self, surface):
         """Draws particle explosion effects during evolution."""
-        surface.blit(self.light_source, ((SCREEN_WIDTH - BASE_SPRITE_SIZE) // 2, (SCREEN_HEIGHT - BASE_SPRITE_SIZE) // 2))
+        surface.blit(self.light_source, ((runtime_globals.SCREEN_WIDTH - BASE_SPRITE_SIZE) // 2, (runtime_globals.SCREEN_HEIGHT - BASE_SPRITE_SIZE) // 2))
         for p in self.particles:
             if p[5] > 0:
                 pygame.draw.circle(surface, p[4], (int(p[0]), int(p[1])), 1)
@@ -837,7 +855,7 @@ class SceneEvolution:
 
     def draw_phase_beams(self, surface):
         self.draw_symbol_animation(surface)
-        center_x, center_y = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+        center_x, center_y = runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_HEIGHT // 2
         pygame.draw.rect(surface, CENTER_COLOR, (center_x - 5, center_y - 5, 10, 10))  # Cover center spot
 
         for beam in self.beams:
@@ -861,13 +879,13 @@ class SceneEvolution:
 
     def draw_background(self, surface):
         rotated = pygame.transform.rotate(self.bg_base, self.bg_angle)
-        rect = rotated.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        rect = rotated.get_rect(center=(runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_HEIGHT // 2))
         surface.blit(rotated, rect.topleft)
 
     # =================== Helpers ===================
     def prepare_beams(self):
-        center_x = SCREEN_WIDTH // 2
-        center_y = SCREEN_HEIGHT // 2
+        center_x = runtime_globals.SCREEN_WIDTH // 2
+        center_y = runtime_globals.SCREEN_HEIGHT // 2
         for i in range(NUM_BEAMS):
             self.beams.append({"angle": (360 / NUM_BEAMS) * i, "rotation_speed": random.choice([-2, 2]), "pos": (center_x, center_y)})
 
@@ -876,15 +894,15 @@ class SceneEvolution:
         return self.tint_surface_manual(img)
     
     def create_flash_surface(self):
-        flash = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        flash = pygame.Surface((runtime_globals.SCREEN_WIDTH, runtime_globals.SCREEN_HEIGHT))
         flash.fill((255, 255, 255))  # White flash effect
         flash.set_alpha(255)  # Full opacity initially
         return flash
 
     def add_scrolling_word(self, text, font):
         """Adds individual scrolling text entries."""
-        y = random.randint(0, SCREEN_HEIGHT - 50)
-        x = random.randint(0, SCREEN_WIDTH + 50)
+        y = random.randint(0, runtime_globals.SCREEN_HEIGHT - 50)
+        x = random.randint(0, runtime_globals.SCREEN_WIDTH + 50)
         speed = random.uniform(0.5, 2.5) * random.choice([-1, 1])
         self.scroll_texts.append([text, font, x, y, speed])
 
@@ -903,8 +921,8 @@ class SceneEvolution:
 
     def add_scrolling_word(self, text, font):
         """Adds individual scrolling text entries."""
-        y = random.randint(0, SCREEN_HEIGHT - 50)
-        x = random.randint(0, SCREEN_WIDTH + 50)
+        y = random.randint(0, runtime_globals.SCREEN_HEIGHT - 50)
+        x = random.randint(0, runtime_globals.SCREEN_WIDTH + 50)
         speed = random.uniform(0.5, 2.5) * random.choice([-1, 1])
         self.scroll_texts.append([text, font, x, y, speed])
 
@@ -932,15 +950,15 @@ class SceneEvolution:
     def get_side_rect(self, idx, w, h):
         """Determines placement for Digimon sprites during evolution animation."""
         if len(self.evolutions) == 1:
-            return pygame.Rect((SCREEN_WIDTH - w) // 2, (SCREEN_HEIGHT - h) // 2, w, h)
-        x = 32 if idx == 0 else SCREEN_WIDTH - w - 32
-        y = (SCREEN_HEIGHT - h) // 2
+            return pygame.Rect((runtime_globals.SCREEN_WIDTH - w) // 2, (runtime_globals.SCREEN_HEIGHT - h) // 2, w, h)
+        x = 32 if idx == 0 else runtime_globals.SCREEN_WIDTH - w - 32
+        y = (runtime_globals.SCREEN_HEIGHT - h) // 2
         return pygame.Rect(x, y, w, h)
 
     def generate_particles(self):
         """Creates explosion particle effects for evolution animation."""
         self.particles.clear()
-        cx, cy = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+        cx, cy = runtime_globals.SCREEN_WIDTH // 2, runtime_globals.SCREEN_HEIGHT // 2
 
         for idx, evo in enumerate(self.evolutions):
             sprite = pygame.transform.scale(evo.from_sprite, (72, 72))

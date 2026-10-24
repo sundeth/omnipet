@@ -37,7 +37,7 @@ from ui.components.label_value import LabelValue
 from ui.components.team_display import TeamDisplay
 from ui.ui_constants import BASE_RESOLUTION
 from core import runtime_globals, game_globals
-from services.omninet_service import omninet_service
+from services.omninet_service import UNREADABLE_ANSWER, omninet_service
 
 #: Colours of the result line: win, loss, draw, neutral.
 _RESULT_COLORS = {"win": (120, 230, 120), "loss": (255, 120, 100),
@@ -94,6 +94,22 @@ def _sprite_pets(team: dict) -> list:
     return pets
 
 
+#: The season line when Omninet could not be asked (a failed fetch, not the
+#: server's 404 between seasons).
+SEASON_UNREACHABLE = "Cannot reach Omninet"
+#: What OmninetService returns when no answer came, or one it cannot read.
+_FETCH_FAILURES = ("Cannot connect to server", "Connection timeout", UNREADABLE_ANSWER,
+                   "Omninet request failed, try again later")
+
+
+def season_fetch_failed(message) -> bool:
+    """Whether a refused current-season request failed to reach Omninet
+    (no answer, a gateway error, a page it cannot read) rather than being
+    told that no season is running (404 "No arena season is running")."""
+    text = str(message or "")
+    return text in _FETCH_FAILURES or text.startswith("Request failed: 5")
+
+
 class ArenaView:
     """Arena hub view — team summary, rank, find battle, sub-view navigation."""
 
@@ -106,6 +122,9 @@ class ArenaView:
 
         # Server data (filled in by background fetch)
         self._season = None
+        #: The season could not be fetched (no answer, an error page), as
+        #: opposed to the server saying no season is running.
+        self._season_unreachable = False
         self._team = None
         # Finished-season team whose results were not seen yet. When set,
         # the view shows those results before anything else.
@@ -269,8 +288,10 @@ class ArenaView:
                 ok_s, season = omninet_service.get_current_season()
                 if ok_s and isinstance(season, dict):
                     self._season = season
+                    self._season_unreachable = False
                 else:
                     self._season = None
+                    self._season_unreachable = not ok_s and season_fetch_failed(season)
 
                 ok_t, team = omninet_service.get_current_team()
                 if ok_t and isinstance(team, dict):
@@ -425,6 +446,9 @@ class ArenaView:
             self.time_label.set_text(self._format_time_left(self._season))
         elif self._closing_team:
             self.time_label.set_text("Season over: results in a moment...")
+        elif self._season_unreachable:
+            # A failed fetch read "No active season" too.
+            self.time_label.set_text(SEASON_UNREACHABLE)
         else:
             self.time_label.set_text("No active season")
 
@@ -605,7 +629,7 @@ class ArenaView:
             self._say("See your last season's results first.")
             return
         if not self._season:
-            self._say("No active season")
+            self._say(SEASON_UNREACHABLE if self._season_unreachable else "No active season")
             return
         self.change_view("arena_team_creation", season=self._season)
 

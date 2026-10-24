@@ -38,7 +38,10 @@ class EventData:
     connection), 6 a card battle (the Vital
     Bracelet's random battle, utils.card_battle): a monster of the pet's own
     version by its ``encounter_chances``, each win paying the next item of
-    ``item_sequence`` ("" a win without one).
+    ``item_sequence`` ("" a win without one). An item or run event (1, 4)
+    may name ``item_pool`` instead of ``item``: one of its items at random
+    each time the event happens (the iC 20X's Special Coliseum: one of the
+    Attack +2 weapons, whatever the line-up).
 
     ``trigger``: "random" (the hourly XAI roll, ``chance_percent`` a weight
     among the module's random events), "adventure" (after an adventure
@@ -84,5 +87,6 @@ class EventData:
     reward_round: int = 0
     delay_minutes: Optional[List[int]] = None
     item_sequence: Optional[List[str]] = None
+    item_pool: Optional[List[str]] = None
     trigger_areas: Optional[List[int]] = None
     until_friend: bool = False

@@ -145,7 +145,7 @@ def _redeem_pet(module, password, change_scene) -> bool:
     if password.get("device_version") is not None:
         data["device_version"] = int(password["device_version"])
     pet = GamePet(data)
-    # Password pets are marked as modded so they can't enter PvP battles.
+    # Password pets are marked edited, which keeps them out of the Arena.
     pet.edited = True
     register_digidex_entry(pet.name, pet.module, pet.version)
 

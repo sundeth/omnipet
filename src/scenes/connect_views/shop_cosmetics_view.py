@@ -430,7 +430,10 @@ class ShopCosmeticsView:
             try:
                 success, message = omninet_service.purchase_item('cosmetic', item.id)
                 if success:
-                    game_globals.coins -= item.price
+                    # the balance the server left, not the listed price
+                    remaining = omninet_service.last_coins_remaining
+                    game_globals.coins = (remaining if remaining is not None
+                                          else game_globals.coins - item.price)
                     game_globals.purchases.add_cosmetic(item.id)
                     game_globals.save()
                     
@@ -472,11 +475,34 @@ class ShopCosmeticsView:
                     out_dir = os.path.join(game_globals.get_save_dir(), "cosmetics", "backgrounds")
                     os.makedirs(out_dir, exist_ok=True)
                     sprites = data.get('sprites') or {}
+                    if not sprites:
+                        base = item.sprite_name or ''
+                        sprites = {f"{base if base.startswith('bg_') else 'bg_' + base}.png": ""}
+
+                    def picture(raw):
+                        try:
+                            return pygame.image.load(io.BytesIO(raw)).convert_alpha() if raw else None
+                        except Exception:
+                            return None
+
                     saved_paths = {}
+                    preview = None
                     for sprite_name, b64 in sprites.items():
                         try:
-                            raw = base64.b64decode(b64)
+                            raw = base64.b64decode(b64 or "")
                         except Exception:
+                            raw = b""
+                        surf = picture(raw)
+                        if surf is None:
+                            # Omninet's download names the files but leaves
+                            # their pictures empty: the shop's own picture of
+                            # the background stands in (it wrote 0-byte files
+                            # that never drew, 2026-10-22).
+                            if preview is None:
+                                preview = omninet_service.get_shop_sprite_bytes('cosmetic', item.id) or b""
+                            raw = preview
+                            surf = picture(raw)
+                        if surf is None:
                             continue
                         out_path = os.path.join(out_dir, sprite_name)
                         with open(out_path, 'wb') as f:
@@ -484,12 +510,12 @@ class ShopCosmeticsView:
                         saved_paths[sprite_name] = out_path
                         # Also cache the surface so the settings selector
                         # can blit instantly without re-reading from disk.
-                        try:
-                            surf = pygame.image.load(io.BytesIO(raw)).convert_alpha()
-                            shop_image_cache.put(
-                                item.id, sprite_name, surf, kind='background')
-                        except Exception:
-                            pass
+                        shop_image_cache.put(item.id, sprite_name, surf, kind='background')
+                    if not saved_paths:
+                        runtime_globals.game_console.log(
+                            f"[ShopCosmeticsView] {item.name}: the download has no picture")
+                        runtime_globals.game_sound.play("cancel")
+                        return
 
                     game_globals.shop_backgrounds[item.id] = {
                         'id': item.id,

@@ -390,13 +390,17 @@ class ShopItemsView:
             try:
                 success, message = omninet_service.purchase_item('item', item.id)
                 if success:
-                    game_globals.coins -= item.price
+                    # the balance the server left, not the listed price
+                    remaining = omninet_service.last_coins_remaining
+                    game_globals.coins = (remaining if remaining is not None
+                                          else game_globals.coins - item.price)
                     # One item for this purchase row (the account sync then
                     # does not count it again), and its effect from the
                     # server: the listing has none (online findings 5, 7).
                     game_globals.purchases.apply_item_purchase(item.id, omninet_service.last_purchase_id)
-                    from utils.module_utils import ensure_shop_item_data
+                    from utils.module_utils import ensure_shop_item_data, ensure_shop_item_icon
                     ensure_shop_item_data(item.id)
+                    ensure_shop_item_icon(item.id)
                     game_globals.save()
                     
                     item.quantity = game_globals.purchases.get_item_quantity(item.id)

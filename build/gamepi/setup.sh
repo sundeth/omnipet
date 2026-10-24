@@ -73,8 +73,8 @@ fi
 
 # Install Python packages
 echo "🐍 Installing Python packages for $PYTHON_CMD..."
-"$PYTHON_CMD" -m pip install --user pygame psutil || \
-    echo "⚠️  pip refused; install pygame and psutil for $PYTHON_CMD with your package manager"
+"$PYTHON_CMD" -m pip install --user pygame psutil requests || \
+    echo "⚠️  pip refused; install pygame, psutil and requests for $PYTHON_CMD with your package manager"
 
 # Test if pygame works
 echo "🧪 Testing pygame installation..."
@@ -104,12 +104,16 @@ EOF
 fi
 
 # Optional: Create systemd service for auto-start (Raspberry Pi/embedded systems)
+# A system unit is wanted by graphical.target (the desktop's boot target) and
+# waits for the display manager: graphical-session.target exists only in a
+# user's own systemd, so a system unit wanted by it never started. (After=
+# graphical.target would make an ordering cycle with WantedBy= on it.)
 if [ "$1" = "--service" ] && [ -f "/usr/bin/raspi-config" ]; then
     echo "🚀 Creating systemd service for auto-start..."
     sudo tee /etc/systemd/system/omnipet.service > /dev/null << EOF
 [Unit]
 Description=Omnipet Virtual Pet Game
-After=graphical-session.target
+After=display-manager.service
 
 [Service]
 Type=simple
@@ -117,10 +121,11 @@ User=$USER
 WorkingDirectory=$(pwd)
 ExecStart=$(pwd)/launch.sh
 Restart=always
+RestartSec=3
 Environment="DISPLAY=:0"
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=graphical.target
 EOF
     
     sudo systemctl daemon-reload

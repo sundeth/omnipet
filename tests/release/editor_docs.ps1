@@ -6,9 +6,12 @@ module fixes". Loads the built editor assembly and calls what the Generate
 Documentation button calls (HTMLGenerator.GenerateDocumentation, then
 DeviceGenerator.GenerateDevicesPage), without the dialogs.
 
-This WRITES modules/<MODULE>/documentation/. Each existing documentation folder
-is first copied to <BackupRoot>/<MODULE>_<yyyyMMdd_HHmmss>/ (dated, never
-overwritten; utilities/ is not shipped).
+The editor writes modules/<MODULE>/documentation/; a module may not keep it
+(owner, 2026-10-24; MOD-18), so each module's pages then move to
+utilities/<MODULE>/documentation/ with their links pointed back into the
+module (utilities/claude/relocate_module_docs.py). Each existing
+utilities/<MODULE>/documentation/ is first copied to
+<BackupRoot>/<MODULE>_<yyyyMMdd_HHmmss>/ (dated, never overwritten).
 
     powershell -NoProfile -ExecutionPolicy Bypass -File tests/release/editor_docs.ps1 [-Modules DMC,IC] [-Exe path]
 
@@ -51,16 +54,18 @@ $devices = $deviceType.GetMethod("GenerateDevicesPage", $static, $null, [type[]]
 
 # The generators read and write relative to the working directory in places.
 $failed = 0
+$relocate = Join-Path $root "utilities\claude\relocate_module_docs.py"
 $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
 foreach ($m in $Modules) {
     $dir = Join-Path $ModulesRoot $m
     $docDir = Join-Path $dir "documentation"
+    $keptDir = Join-Path $root "utilities\$m\documentation"
     if (-not (Test-Path (Join-Path $dir "module.json"))) { "{0,-6} no module.json" -f $m; $failed++; continue }
-    if (Test-Path $docDir) {
+    if (Test-Path $keptDir) {
         $dest = Join-Path $BackupRoot "${m}_$stamp"
         if (Test-Path $dest) { "{0,-6} backup {1} exists" -f $m, $dest; $failed++; continue }
         New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
-        Copy-Item -Recurse $docDir $dest
+        Copy-Item -Recurse $keptDir $dest
     }
     $prev = [Environment]::CurrentDirectory
     try {
@@ -68,7 +73,9 @@ foreach ($m in $Modules) {
         [void]$generate.Invoke($null, @([string]$dir))
         [void]$devices.Invoke($null, @([string]$docDir, [string]$dir))
         $pages = @(Get-ChildItem -Recurse -File $docDir -Filter *.html).Count
-        "{0,-6} ok, {1} pages" -f $m, $pages
+        & python -B $relocate $m --write | Out-Null
+        if ($LASTEXITCODE -ne 0 -or (Test-Path $docDir)) { throw "moving the pages to utilities\$m\documentation failed" }
+        "{0,-6} ok, {1} pages (utilities\{0}\documentation)" -f $m, $pages
     } catch {
         "{0,-6} FAILED: {1}" -f $m, $_.Exception.GetBaseException().Message
         $failed++

@@ -365,15 +365,10 @@ class MogeraTraining(Training):
             else:
                 # Use AnimatedSprite component with predefined result animations
                 if not self.animated_sprite.is_animation_playing():
-                    duration = combat_constants.RESULT_SCREEN_FRAMES / constants.FRAME_RATE
-                    
-                    # Choose which result animation to play
-                    if self.strength < 7:
-                        self.animated_sprite.play_bad(duration)
-                    elif self.strength < 14:
-                        self.animated_sprite.play_great(duration)
-                    else:
-                        self.animated_sprite.play_excellent(duration)
+                    # The banner of the grade paid (get_attack_count, the DMGZ
+                    # manual): a surviving M.O.G.E.R.A. is GOOD (it read BAD),
+                    # a destroyed one EXCELLENT (7-13 read GREAT).
+                    self.play_grade_banner(self.get_attack_count())
                 
                 # Draw the animated sprite
                 self.animated_sprite.draw(surface)

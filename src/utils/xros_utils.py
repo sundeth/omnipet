@@ -14,6 +14,14 @@ Requirements checked at selection time:
     friend_count — [min, max] Friends on the module's list (DMXW's Shoutmon X7:
                 Superior Mode, "only available when there are 13 or more
                 Digimon in the Friend list"; 999999 = no cap)
+    battle_area — [min, max] the area the battle is fought in: an adventure
+                area of the pet's own module, 0 for any other battle (events,
+                special encounters, Versus, DCom). DMXW's Arresterdramon:
+                Superior Mode [0, 19] ("not available during World 20"), its
+                Brave Snatcher [20, 20] ("only available during World 20")
+    xros_cost — DP the form costs (default 0, free): offered only to a pet
+                holding that much, and spent when the form is taken
+                (DMXW's DigiXros, humulos "Required DP: 1" to "7")
     megahit   — battle-time condition; does NOT gate the pre-battle selection
 
 While transformed the pet uses the target form's sprites and power, plus its
@@ -267,20 +275,71 @@ def _friends_ok(evo, pet) -> bool:
         return True
     module_friends = get_module_friends(pet.module)
     if count:
-        lo = count[0] if len(count) > 0 and count[0] not in (-1, None) else 0
-        hi = count[1] if len(count) > 1 and count[1] not in (-1, None) else 999999
+        lo, hi = _range(count)
         if not lo <= len(module_friends) <= hi:
             return False
     return all(fname in module_friends for fname in friends)
 
 
-def get_available_temp_evolutions(pet):
-    """Return the pet's temporary evolutions whose requirements are met now."""
+def _range(rng, low=0):
+    """(lo, hi) of a [min, max] criterion; -1 or None is open on that side."""
+    lo = rng[0] if len(rng) > 0 and rng[0] not in (-1, None) else low
+    hi = rng[1] if len(rng) > 1 and rng[1] not in (-1, None) else 999999
+    return lo, hi
+
+
+def _area_ok(evo, area) -> bool:
+    """The battle is fought in the form's `battle_area`. ``area`` is the
+    adventure area of the pet's own module, 0 for any other battle."""
+    rng = evo.get("battle_area")
+    if not rng:
+        return True
+    lo, hi = _range(rng)
+    return lo <= (area or 0) <= hi
+
+
+def xros_cost(evo) -> int:
+    """DP the form costs to take (`xros_cost`; 0 = free)."""
+    try:
+        return max(0, int(evo.get("xros_cost") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _cost_ok(evo, pet) -> bool:
+    """The pet holds the form's DP (humulos, DMXW: "Required DP")."""
+    cost = xros_cost(evo)
+    return cost <= 0 or (getattr(pet, "dp", 0) or 0) >= cost
+
+
+def pay_xros_cost(pet, evo) -> int:
+    """Spend the form's DP on the pet itself; returns what was spent.
+
+    DMXW's DP "is required for using a DigiXros" and comes back by sleeping
+    four hours or with Protein (humulos manual), so taking the form uses it.
+    """
+    cost = xros_cost(evo)
+    if cost <= 0:
+        return 0
+    real = getattr(pet, "pet", pet)       # never an XrosPet's own copy
+    real.dp = max(0, (getattr(real, "dp", 0) or 0) - cost)
+    runtime_globals.game_console.log(
+        f"[Xros] {real.name} spent {cost} DP on {evo.get('to')} ({real.dp} left)")
+    return cost
+
+
+def get_available_temp_evolutions(pet, area=0):
+    """Return the pet's temporary evolutions whose requirements are met now.
+
+    ``area`` is the battle's adventure area in the pet's own module, 0 for
+    any other battle (a connection, an event): see `battle_area`.
+    """
     result = []
     for evo in (getattr(pet, "temp_evolve", None) or []):
         if not evo.get("to"):
             continue
-        if _strength_ok(evo, pet) and _unlock_ok(evo, pet) and _friends_ok(evo, pet):
+        if _strength_ok(evo, pet) and _unlock_ok(evo, pet) and _friends_ok(evo, pet) \
+                and _area_ok(evo, area) and _cost_ok(evo, pet):
             result.append(evo)
     return result
 
@@ -405,7 +464,10 @@ class XrosPet:
 
 
 def make_xros_pet(pet, evo):
-    """Build the battle-only evolved form for *pet*, or None if unavailable."""
+    """Build the battle-only evolved form for *pet*, or None if unavailable.
+
+    Taking the form spends its DP (`xros_cost`) and records it (record_form).
+    """
     module = get_module(pet.module)
     data = module.get_monster(evo.get("to"), pet.version) if module else None
     if not data:
@@ -415,6 +477,7 @@ def make_xros_pet(pet, evo):
     form = XrosPet(pet, evo, data)
     runtime_globals.game_console.log(
         f"[Xros] {pet.name} fights as {form.name} ({evo.get('type')})")
+    pay_xros_cost(pet, evo)
     record_form(module, form.name, pet.version)
     return form
 

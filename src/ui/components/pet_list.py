@@ -1002,7 +1002,13 @@ class PetList(UIComponent):
         """Handle scroll wheel events - behave like LEFT/RIGHT keys"""
         if not (runtime_globals.INPUT_MODE == runtime_globals.MOUSE_MODE):
             return False
-        
+
+        # The UI manager hands on the whole ("SCROLL", {"direction": ...})
+        # event; this compared it to "SCROLL_UP"/"SCROLL_DOWN" only, so the
+        # wheel did nothing on the pet row.
+        if isinstance(action, tuple) and len(action) == 2 and action[0] == "SCROLL":
+            action = "SCROLL_" + str((action[1] or {}).get("direction", ""))
+
         if action == "SCROLL_UP":
             self.select_previous()
             self.needs_redraw = True

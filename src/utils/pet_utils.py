@@ -82,35 +82,15 @@ def get_battle_pvp_targets():
 def can_battle_wificom(pet):
     """Whether *pet* can be put on the wire as a WiFiCom.
 
-    Everything a PvP battle needs, plus what a real device expects to read
-    off the packets:
-
-    * the pet's module must declare a ``battle_protocol`` -- that protocol is
-      the one used, so a module without one has no wire to speak;
-    * the pet needs a ``device_version``, which is the hardware revision the
-      protocols key off (not the gameplay ``version``);
-    * the pet needs an ``index``, its id in the device's own roster.  Index 0
-      is the "outsider" sentinel a compatibility battle sends, so a pet that
-      has one cannot present itself as native to the line it is announcing.
+    The same as a DCom battle: the player chooses the line on the WiFiCom
+    screen, a pet native to it goes out with its own index and version, and
+    any other pet as the line's outsider (a compatibility battle,
+    `pet_to_digimon`). It used to require a module declaring a
+    ``battle_protocol`` and a roster index, from when the pet's own module
+    decided the line -- which kept every pet of a protocol-less module (VB)
+    off the WiFiCom and left no line to choose.
     """
-    if not pet.can_battle_pvp():
-        return False
-
-    from utils.module_utils import get_module
-    module = get_module(getattr(pet, 'module', ''))
-    if not module or not getattr(module, 'battle_protocol', ''):
-        return False
-
-    # **0 is a real device_version on the Colour line**, whose releases are
-    # numbered from zero -- a Digital Monster Color Ver.1 announces 0. So the
-    # test is whether the pet has one at all, not whether it is truthy; the
-    # falsy reading kept every Ver.1 pet off the WiFiCom.
-    if getattr(pet, 'device_version', None) is None:
-        return False
-    if not getattr(pet, 'index', 0):
-        return False
-
-    return True
+    return pet.can_battle_pvp()
 
 def get_wificom_battle_targets():
     """

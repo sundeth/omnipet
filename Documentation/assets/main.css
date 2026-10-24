@@ -1,836 +1,894 @@
+/* Omnipet player documentation.
+   The look follows the module documentation the Module Editor generates
+   (modules/<NAME>/documentation/module.css): a dark navigation bar, a light
+   page, white cards with soft shadows and violet gradient headers.
+   Sections may take a menu colour from the game with data-theme. */
+
+:root {
+  --nav-bg: #2c3e50;
+  --nav-hover: #34495e;
+  --page-bg: #f5f5f5;
+  --card-bg: #ffffff;
+  --card-border: #e0e0e0;
+  --row-border: #f0f0f0;
+  --row-alt: #fafafa;
+  --row-hover: #f8f9ff;
+  --text: #333333;
+  --text-soft: #555555;
+  --text-muted: #888888;
+  --accent: #667eea;
+  --accent-dark: #764ba2;
+  --link: #4c5fd5;
+  --code-bg: #f1f3f8;
+  --shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html, body {
+  height: 100%;
+}
+
 body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-  background: linear-gradient(135deg, #2e3e4d 0%, #1f2023 100%);
-  min-height: 100vh;
-  color: #a2adc1;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--page-bg);
+  color: var(--text);
   line-height: 1.6;
 }
+
+a {
+  color: var(--link);
+}
+
+a:hover {
+  color: var(--accent-dark);
+}
+
+code, kbd {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 0.92em;
+  background: var(--code-bg);
+  border: 1px solid #dde1ea;
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: #3b3f5c;
+}
+
+kbd {
+  font-weight: 600;
+  border-bottom-width: 2px;
+}
+
+/* ------------------------------------------------------------------ frame */
+/* index.html: the navigation bar and the page frame below it */
 
 .layout {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-}
-
-#iframe, iframe {
-  border: none;
-}
-
-/* Menu iframe styles */
-#menu {
-  height: 80px;
-  width: 100%;
-  border: none;
-  overflow: hidden;
-  position: relative;
-  z-index: 100;
-}
-
-/* Content iframe fills the rest */
-#content {
-  flex: 1;
-  width: 100%;
-  border: none;
-  background: #ffffff;
-}
-
-/* Center the navbar container */
-.navbar-container {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  height: 100vh;
 }
 
 .navbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px 40px;
+  background: var(--nav-bg);
   color: #fff;
-  min-width: 900px;
-  max-width: 1200px;
-  width: 90%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  padding: 10px 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 10;
 }
 
-.logo {
-  font-weight: 700;
-  letter-spacing: 1px;
-  font-size: 24px;
-  color: #ffffff;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+.navbar-logo {
+  display: flex;
+  align-items: center;
+}
+
+.navbar-logo img {
+  height: 40px;
+  width: auto;
+  display: block;
 }
 
 .nav-links {
   display: flex;
-  gap: 32px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   align-items: center;
 }
 
 .nav-links a {
+  color: #fff;
   text-decoration: none;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 16px;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  position: relative;
-  padding: 8px 0;
+  padding: 8px 14px;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+  white-space: nowrap;
 }
 
-.nav-links a::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #ffd700, #ffed4e);
-  transition: width 0.3s ease;
-}
-
+.nav-links a:hover,
 .nav-links a.active {
-  color: #ffd700;
+  background-color: var(--nav-hover);
+  color: #fff;
 }
 
-.nav-links a.active::after,
-.nav-links a:hover::after {
-  width: 100%;
-}
-
-.nav-links a:hover:not(.active) {
-  color: #ffffff;
-  transform: translateY(-1px);
-}
-
-.download-btn {
-  background: linear-gradient(135deg, #ffd700, #ffed4e);
-  border: none;
-  padding: 12px 24px;
-  border-radius: 25px;
-  color: #2d3748;
+.nav-links a.nav-install {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 15px;
-  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+  margin-left: 8px;
 }
 
-.download-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
+.nav-links a.nav-install:hover,
+.nav-links a.nav-install.active {
+  filter: brightness(1.1);
 }
 
-/* Page Content Styles */
+.content-frame,
+#content {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: var(--page-bg);
+}
+
+/* ------------------------------------------------------------------ page */
+
 .page-content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 60px 40px;
-  background: rgb(31, 32, 38);
-  min-height: calc(100vh - 140px);
+  padding: 20px;
 }
 
 .page-header {
-  text-align: center;
-  margin-bottom: 60px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 30px;
+  margin-bottom: 30px;
+  padding: 30px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  border-radius: 15px;
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.page-header-icon {
+  flex-shrink: 0;
+  width: 96px;
+  height: 96px;
+  image-rendering: pixelated;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.page-header-text {
+  flex: 1;
+}
+
+/* a title and subtitle placed straight in the header (generated pages) */
+.page-header > .page-title,
+.page-header > .page-subtitle {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .page-title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: rgb(162, 173, 193);
-  margin-bottom: 20px;
+  margin: 0 0 10px 0;
+  font-size: 2.4em;
   line-height: 1.2;
+  color: #fff;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .page-subtitle {
-  font-size: 1.2rem;
-  color: rgb(162, 173, 193);
-  max-width: 600px;
-  margin: 0 auto;
+  font-size: 1.1em;
+  margin: 0;
+  opacity: 0.95;
+  color: #fff;
 }
+
+/* "On this page": a row of links to the sections */
+.page-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -10px 0 30px 0;
+}
+
+.page-toc a {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-soft);
+  text-decoration: none;
+  font-size: 0.9em;
+  font-weight: 600;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.page-toc a:hover {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+}
+
+/* ------------------------------------------------------------------ sections */
 
 .content-section {
-  margin-bottom: 50px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 25px;
+  margin-bottom: 30px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--card-border);
+  scroll-margin-top: 20px;
 }
 
-/* Default section title - Blue theme (BLUE_DARK, BLUE, BLUE_LIGHT) */
 .section-title {
-  --section-border-color: rgb(1, 170, 222);
-  --section-bg-color: rgb(33, 87, 127);
-  --section-hover-color: rgb(217, 255, 248);
-  --section-notch-size: 20px;
-
-  position: relative;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-
-  font-size: 1.5rem;
+  gap: 12px;
+  margin: 0 0 20px 0;
+  padding-bottom: 10px;
+  font-size: 1.45em;
   font-weight: 600;
-  color: var(--section-border-color);
+  color: var(--text);
+  border-bottom: 3px solid var(--accent);
+}
 
-  padding: 24px 28px;
-  margin-top: 20px;
-  margin-bottom: 20px;
-
-  border: 4px solid var(--section-border-color);
-  background: transparent;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+.section-title[onclick] {
   cursor: pointer;
-  transition: all 0.2s ease;
-  isolation: isolate;
-  overflow: hidden;
+  user-select: none;
 }
 
-.section-title::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--section-bg-color);
-  clip-path: polygon(
-    var(--section-notch-size) 0,
-    100% 0,
-    100% calc(100% - var(--section-notch-size)),
-    calc(100% - var(--section-notch-size)) 100%,
-    0 100%,
-    0 var(--section-notch-size)
-  );
-  z-index: -2;
+.section-title[onclick]:hover {
+  color: var(--accent-dark);
 }
 
-.section-title::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(135deg, var(--section-border-color) 0 50%, transparent 50%) top left / var(--section-notch-size) var(--section-notch-size) no-repeat,
-    linear-gradient(315deg, var(--section-border-color) 0 50%, transparent 50%) bottom right / var(--section-notch-size) var(--section-notch-size) no-repeat;
-  z-index: -1;
-}
-
-.section-title:hover {
-  --section-border-color: var(--section-hover-color);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
-}
-
-/* Status Menu - Purple theme (PURPLE_DARK, PURPLE, PURPLE_LIGHT) */
-.content-section:has(img[src*="Status.png"]) .section-title {
-  --section-bg-color: rgb(76, 46, 77);
-  --section-border-color: rgb(204, 82, 133);
-  --section-hover-color: rgb(255, 238, 217);
-}
-
-/* Feeding Menu - Blue theme */
-.content-section:has(img[src*="Food.png"]) .section-title {
-  --section-bg-color: rgb(46, 62, 77);
-  --section-border-color: rgb(82, 163, 204);
-  --section-hover-color: rgb(217, 255, 248);
-}
-
-/* Training Menu - Green theme (GREEN_DARK, GREEN, GREEN_LIGHT) */
-.content-section:has(img[src*="Training.png"]) .section-title {
-  --section-bg-color: rgb(46, 77, 59);
-  --section-border-color: rgb(102, 204, 82);
-  --section-hover-color: rgb(217, 255, 238);
-}
-
-/* Battle Menu - Red theme (RED_DARK, RED, RED_LIGHT) */
-.content-section:has(img[src*="Battle.png"]) .section-title {
-  --section-bg-color: rgb(77, 46, 46);
-  --section-border-color: rgb(204, 82, 82);
-  --section-hover-color: rgb(255, 217, 217);
-}
-
-/* Sleep Menu - Yellow theme (YELLOW_DARK, YELLOW, YELLOW_LIGHT) */
-.content-section:has(img[src*="Sleep.png"]) .section-title {
-  --section-bg-color: rgb(77, 71, 46);
-  --section-border-color: rgb(179, 145, 45);
-  --section-hover-color: rgb(255, 242, 204);
-}
-
-/* Library - Yellow Bright theme (YELLOW_BRIGHT_DARK, YELLOW_BRIGHT, YELLOW_BRIGHT_LIGHT) */
- .content-section:has(img[src*="Library.png"]) .section-title,
- .content-section:has(img[src*="BagIcon.png"]) .section-title,
- .content-section:has(img[src*="LibraryMenu.png"]) .section-title,
- .content-section:has(img[src*="LibraryIcon.png"]) .section-title {
-  --section-bg-color: rgb(77, 74, 46);
-  --section-border-color: rgb(255, 235, 59);
-  --section-hover-color: rgb(255, 252, 217);
-}
-
-/* Freezer Menu - Cyan theme (CYAN_DARK, CYAN, CYAN_LIGHT) */
-.content-section:has(img[src*="FreezerIcon.png"]) .section-title {
-  --section-bg-color: rgb(46, 77, 77);
-  --section-border-color: rgb(82, 204, 204);
-  --section-hover-color: rgb(217, 255, 255);
-}
-
-.content-section:has(img[src*="FreezerIcon.png"]) .section-content h3,
-.content-section:has(img[src*="FreezerIcon.png"]) .section-content h4,
-.content-section:has(img[src*="FreezerIcon.png"]) .section-content strong {
-  color: rgb(82, 204, 204);
-}
-
-.content-section:has(img[src*="FreezerIcon.png"]) .sub-table th,
-.content-section:has(img[src*="FreezerIcon.png"]) .sub-table td {
-  border: 2px solid rgb(82, 204, 204);
-  color: rgb(162, 173, 193);
-}
-
-.content-section:has(img[src*="FreezerIcon.png"]) .sub-table th {
-  background: rgb(46, 77, 77);
-  font-weight: 600;
-  color: rgb(82, 204, 204);
-}
-
-.content-section:has(img[src*="FreezerIcon.png"]) .feature-card {
-  box-shadow: 0 0 0 4px rgb(82, 204, 204), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="FreezerIcon.png"]) .feature-card:hover {
-  box-shadow: 0 0 0 4px rgb(217, 255, 255), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="FreezerIcon.png"]) .feature-card .feature-title {
-  color: rgb(82, 204, 204);
-}
-
-/* Digidex - Lime theme (LIME_DARK, LIME, LIME_LIGHT) */
-.content-section:has(img[src*="DigidexIcon.png"]) .section-title {
-  --section-bg-color: rgb(56, 77, 31);
-  --section-border-color: rgb(139, 195, 74);
-  --section-hover-color: rgb(241, 248, 233);
-}
-
-.content-section:has(img[src*="DigidexIcon.png"]) .section-content h3,
-.content-section:has(img[src*="DigidexIcon.png"]) .section-content h4,
-.content-section:has(img[src*="DigidexIcon.png"]) .section-content strong {
-  color: rgb(139, 195, 74);
-}
-
-.content-section:has(img[src*="DigidexIcon.png"]) .sub-table th,
-.content-section:has(img[src*="DigidexIcon.png"]) .sub-table td {
-  border: 2px solid rgb(139, 195, 74);
-  color: rgb(162, 173, 193);
-}
-
-.content-section:has(img[src*="DigidexIcon.png"]) .sub-table th {
-  background: rgb(56, 77, 31);
-  font-weight: 600;
-  color: rgb(139, 195, 74);
-}
-
-.content-section:has(img[src*="DigidexIcon.png"]) .feature-card {
-  box-shadow: 0 0 0 4px rgb(139, 195, 74), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="DigidexIcon.png"]) .feature-card:hover {
-  box-shadow: 0 0 0 4px rgb(241, 248, 233), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="DigidexIcon.png"]) .feature-card .feature-title {
-  color: rgb(139, 195, 74);
-}
-
-/* Settings Menu - Gray theme (GRAY_DARK, GRAY, GRAY_LIGHT) */
-.content-section:has(img[src*="SettingsMenuIcon.png"]) .section-title {
-  --section-bg-color: rgb(64, 64, 64);
-  --section-border-color: rgb(162, 173, 193);
-  --section-hover-color: rgb(247, 250, 254);
-}
-
-.toggle-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.3em;
-  color: inherit;
-  display: flex;
-  align-items: center;
-  margin-left: 12px;
-}
-
-.toggle-btn:focus {
-  outline: 2px solid #ffd700;
-}
-
-.toggle-btn .arrow {
-  transition: transform 0.2s;
-  display: inline-block;
-}
-
-.toggle-btn[aria-expanded="true"] .arrow {
-  transform: rotate(180deg);
+/* a collapsed section shows only its title */
+.content-section.collapsed .section-title {
+  margin-bottom: 0;
 }
 
 .section-title .arrow {
+  font-size: 0.7em;
+  color: var(--text-muted);
   transition: transform 0.2s;
-  display: inline-block;
-  margin-left: 10px;
 }
 
 .section-title.open .arrow {
   transform: rotate(180deg);
 }
 
-.section-content {
-  font-size: 1.1rem;
-  color: rgb(162, 173, 193);
-  line-height: 1.8;
-}
-
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 30px;
-  margin-top: 40px;
-}
-
-.feature-card {
-  padding: 30px;
-  background: rgb(46, 62, 77);
-  clip-path: polygon(
-    20px 0,
-    100% 0,
-    100% calc(100% - 20px),
-    calc(100% - 20px) 100%,
-    0 100%,
-    0 20px
-  );
-  transition: all 0.3s ease;
-  box-shadow: 0 0 0 4px rgb(82, 163, 204), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.feature-card:hover {
-  box-shadow: 0 0 0 4px rgb(217, 255, 248), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.feature-table {
-  width: 100%;
-  margin: 5px;
-  border: none;
-  color: rgb(162, 173, 193);
-}
-
-.item {
-    margin-left: 5px;
-}
-
-.feature-table td {
-  padding: 12px 16px;
-  border: none;
-  vertical-align: top;
-}
-
-.feature-table strong {
-  color: rgb(217, 255, 248);
-}
-
-.feature-table ul {
-  color: rgb(162, 173, 193);
-}
-
-.feature-table code {
-  background: rgb(31, 32, 38);
-  color: rgb(255, 235, 59);
-  padding: 2px 6px;
-  border: 2px solid rgb(162, 173, 193);
-}
-
+/* a pixel icon in front of a section title */
 .status-title {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  vertical-align: middle;
+  gap: 12px;
 }
 
-.sub-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-  margin-bottom: 10px;
-  background: rgb(31, 32, 38);
-  font-size: 1em;
+.status-title img,
+.section-icon {
+  width: 40px;
+  height: 40px;
+  image-rendering: pixelated;
 }
 
-.sub-table th,
-.sub-table td {
-  border: 2px solid rgb(82, 163, 204);
-  padding: 4px 8px;
-  text-align: center;
-  color: rgb(162, 173, 193);
+.section-content {
+  color: var(--text-soft);
+  font-size: 1.02em;
 }
 
-.sub-table th {
-  background: rgb(46, 62, 77);
-  font-weight: 600;
-  color: rgb(82, 163, 204);
+.section-content > * + * {
+  margin-top: 12px;
 }
 
-.feature-icon {
-  width: 60px;
-  height: 60px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
-  font-size: 24px;
-  color: white;
+.section-content h3 {
+  color: var(--text);
+  font-size: 1.15em;
+  margin-top: 24px;
+  margin-bottom: 8px;
+  padding-left: 12px;
+  border-left: 4px solid var(--accent);
 }
 
-.feature-title {
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: rgb(82, 163, 204);
-  margin-bottom: 15px;
-}
-
-.feature-description {
-  color: rgb(162, 173, 193);
-  line-height: 1.6;
-}
-
-/* Section-specific content styling */
-.section-content h3,
 .section-content h4 {
-  color: rgb(82, 163, 204);
-  margin-top: 20px;
-  margin-bottom: 10px;
-}
-
-.section-content p {
-  color: rgb(162, 173, 193);
+  color: var(--text);
+  font-size: 1em;
+  margin-top: 16px;
+  margin-bottom: 6px;
 }
 
 .section-content ul,
 .section-content ol {
-  color: rgb(162, 173, 193);
-  margin-left: 20px;
+  margin-left: 22px;
 }
 
 .section-content li {
+  margin-bottom: 6px;
+}
+
+.section-content li > ul,
+.section-content li > ol {
+  margin-top: 6px;
+}
+
+.section-content strong {
+  color: var(--text);
+}
+
+.section-content hr {
+  border: none;
+  border-top: 1px solid var(--row-border);
+  margin: 20px 0;
+}
+
+/* Menu colours from the game (src/ui palette): DARK to base */
+[data-theme="status"]   { --accent: rgb(204, 82, 133);  --accent-dark: rgb(76, 46, 77); }
+[data-theme="feeding"]  { --accent: rgb(82, 163, 204);  --accent-dark: rgb(46, 62, 77); }
+[data-theme="training"] { --accent: rgb(102, 184, 82);  --accent-dark: rgb(46, 77, 59); }
+[data-theme="battle"]   { --accent: rgb(204, 82, 82);   --accent-dark: rgb(77, 46, 46); }
+[data-theme="sleep"]    { --accent: rgb(199, 160, 45);  --accent-dark: rgb(77, 71, 46); }
+[data-theme="library"]  { --accent: rgb(214, 190, 40);  --accent-dark: rgb(77, 74, 46); }
+[data-theme="freezer"]  { --accent: rgb(82, 194, 204);  --accent-dark: rgb(46, 77, 77); }
+[data-theme="digidex"]  { --accent: rgb(139, 195, 74);  --accent-dark: rgb(56, 77, 31); }
+[data-theme="connect"]  { --accent: rgb(220, 70, 70);   --accent-dark: rgb(90, 30, 40); }
+[data-theme="settings"] { --accent: rgb(130, 140, 160); --accent-dark: rgb(64, 64, 64); }
+[data-theme="care"]     { --accent: rgb(160, 120, 200); --accent-dark: rgb(70, 50, 90); }
+
+/* ------------------------------------------------------------------ screens */
+/* A game screen beside its description */
+
+.screen-row {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 24px;
+  align-items: start;
+  padding: 20px 0;
+  border-top: 1px solid var(--row-border);
+}
+
+.section-content > .screen-row:first-child,
+.screen-row.first {
+  border-top: none;
+  padding-top: 0;
+}
+
+.screen-row.wide {
+  grid-template-columns: 1fr;
+}
+
+.screen-row > div > * + * {
+  margin-top: 10px;
+}
+
+.screen-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shot {
+  display: block;
+  width: 240px;
+  height: 240px;
+  image-rendering: pixelated;
+  border-radius: 8px;
+  border: 2px solid var(--card-border);
+  background: #1f2026;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.shot.small {
+  width: 160px;
+  height: 160px;
+}
+
+.shot.free {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  background: transparent;
+}
+
+/* Photos (the build guide): smooth scaling, unlike .shot */
+.photo {
+  display: block;
+  width: auto;
+  max-width: min(720px, 100%);
+  height: auto;
+  margin: 14px auto;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+}
+
+.photo.small {
+  max-width: min(420px, 100%);
+}
+
+.shot-caption {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 4px;
+}
+
+.screen-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.screen-gallery figure {
+  margin: 0;
+}
+
+.pixel {
+  image-rendering: pixelated;
+  vertical-align: middle;
+}
+
+/* ------------------------------------------------------------------ tables */
+/* Same as the module documentation's tables */
+
+.data-table,
+.sub-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--card-bg);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  margin: 12px 0;
+  font-size: 0.95em;
+}
+
+.data-table thead,
+.sub-table thead {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: #fff;
+}
+
+.data-table th,
+.sub-table th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.85em;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.data-table td,
+.sub-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--row-border);
+  vertical-align: top;
+  color: var(--text-soft);
+}
+
+.data-table tbody tr:last-child td,
+.sub-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:nth-child(even),
+.sub-table tbody tr:nth-child(even) {
+  background: var(--row-alt);
+}
+
+.data-table tbody tr:hover,
+.sub-table tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.data-table td:first-child {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.data-table.plain td:first-child {
+  font-weight: normal;
+  color: var(--text-soft);
+}
+
+.data-table.center th,
+.data-table.center td,
+.sub-table th,
+.sub-table td {
+  text-align: center;
+}
+
+.data-table img {
+  image-rendering: pixelated;
+  vertical-align: middle;
+}
+
+/* ------------------------------------------------------------------ cards */
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+  margin-top: 10px;
+}
+
+.feature-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+a.feature-card {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.feature-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+  border-color: var(--accent);
+}
+
+.feature-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+}
+
+.feature-icon img {
+  max-width: 40px;
+  max-height: 40px;
+  image-rendering: pixelated;
+}
+
+.feature-title {
+  font-size: 1.15em;
+  font-weight: 600;
+  color: var(--text);
   margin-bottom: 8px;
 }
 
-/* Status Menu - Purple themed content */
-.content-section:has(img[src*="Status.png"]) .section-content h3,
-.content-section:has(img[src*="Status.png"]) .section-content h4,
-.content-section:has(img[src*="Status.png"]) .section-content strong {
-  color: rgb(204, 82, 133);
+.feature-description {
+  color: var(--text-soft);
 }
 
-.content-section:has(img[src*="Status.png"]) .sub-table th,
-.content-section:has(img[src*="Status.png"]) .sub-table td {
-  border-color: rgb(204, 82, 133);
+.section-content .feature-title {
+  margin: 0 0 8px 0;
+  padding-left: 0;
+  border-left: none;
 }
 
-.content-section:has(img[src*="Status.png"]) .sub-table th {
-  background: rgb(76, 46, 77);
-  color: rgb(204, 82, 133);
+.section-content .feature-card > * + * {
+  margin-top: 0;
 }
 
-/* Feeding Menu - Blue themed content */
-.content-section:has(img[src*="Food.png"]) .section-content h3,
-.content-section:has(img[src*="Food.png"]) .section-content h4,
-.content-section:has(img[src*="Food.png"]) .section-content strong {
-  color: rgb(82, 163, 204);
+/* Key/value list, as on the module documentation's Module Info page */
+.attribute-list {
+  list-style: none;
+  margin: 0 !important;
+  padding: 0;
 }
 
-.content-section:has(img[src*="Food.png"]) .sub-table th {
-  background: rgb(46, 62, 77);
-  color: rgb(82, 163, 204);
-}
-
-/* Training Menu - Green themed content */
-.content-section:has(img[src*="Training.png"]) .section-content h3,
-.content-section:has(img[src*="Training.png"]) .section-content h4,
-.content-section:has(img[src*="Training.png"]) .section-content strong {
-  color: rgb(102, 204, 82);
-}
-
-.content-section:has(img[src*="Training.png"]) .sub-table th,
-.content-section:has(img[src*="Training.png"]) .sub-table td {
-  border-color: rgb(102, 204, 82);
-}
-
-.content-section:has(img[src*="Training.png"]) .sub-table th {
-  background: rgb(46, 77, 69);
-  color: rgb(102, 204, 82);
-}
-
-/* Battle Menu - Red themed content */
-.content-section:has(img[src*="Battle.png"]) .section-content h3,
-.content-section:has(img[src*="Battle.png"]) .section-content h4,
-.content-section:has(img[src*="Battle.png"]) .section-content strong {
-  color: rgb(204, 82, 82);
-}
-
-.content-section:has(img[src*="Battle.png"]) .sub-table th,
-.content-section:has(img[src*="Battle.png"]) .sub-table td {
-  border-color: rgb(204, 82, 82);
-}
-
-.content-section:has(img[src*="Battle.png"]) .sub-table th {
-  background: rgb(77, 39, 46);
-  color: rgb(204, 82, 82);
-}
-
-/* Sleep Menu - Yellow themed content */
-.content-section:has(img[src*="LightSleep.png"]) .section-content h3,
-.content-section:has(img[src*="LightSleep.png"]) .section-content h4,
-.content-section:has(img[src*="LightSleep.png"]) .section-content strong {
-  color: rgb(179, 145, 45);
-}
-
-.content-section:has(img[src*="LightSleep.png"]) .sub-table th,
-.content-section:has(img[src*="LightSleep.png"]) .sub-table td {
-  border-color: rgb(179, 145, 45);
-}
-
-.content-section:has(img[src*="LightSleep.png"]) .sub-table th {
-  background: rgb(153, 89, 46);
-  color: rgb(179, 145, 45);
-}
-
-/* Library - Yellow Bright themed content */
- .content-section:has(img[src*="BagIcon.png"]) .section-content h3,
- .content-section:has(img[src*="BagIcon.png"]) .section-content h4,
- .content-section:has(img[src*="BagIcon.png"]) .section-content strong,
- .content-section:has(img[src*="LibraryMenu.png"]) .section-content h3,
- .content-section:has(img[src*="LibraryMenu.png"]) .section-content h4,
- .content-section:has(img[src*="LibraryMenu.png"]) .section-content strong,
- .content-section:has(img[src*="LibraryIcon.png"]) .section-content h3,
- .content-section:has(img[src*="LibraryIcon.png"]) .section-content h4,
- .content-section:has(img[src*="LibraryIcon.png"]) .section-content strong {
-  color: rgb(255, 235, 59);
-}
-
- .content-section:has(img[src*="BagIcon.png"]) .sub-table th,
- .content-section:has(img[src*="BagIcon.png"]) .sub-table td,
- .content-section:has(img[src*="LibraryMenu.png"]) .sub-table th,
- .content-section:has(img[src*="LibraryMenu.png"]) .sub-table td,
- .content-section:has(img[src*="LibraryIcon.png"]) .sub-table th,
- .content-section:has(img[src*="LibraryIcon.png"]) .sub-table td {
-  border-color: rgb(255, 235, 59);
-}
-
- .content-section:has(img[src*="BagIcon.png"]) .sub-table th,
- .content-section:has(img[src*="LibraryMenu.png"]) .sub-table th,
- .content-section:has(img[src*="LibraryIcon.png"]) .sub-table th {
-  background: rgb(153, 138, 46);
-  color: rgb(255, 235, 59);
-}
-
-/* Settings Menu - Gray themed content */
-.content-section:has(img[src*="SettingsMenuIcon.png"]) .section-content h3,
-.content-section:has(img[src*="SettingsMenuIcon.png"]) .section-content h4,
-.content-section:has(img[src*="SettingsMenuIcon.png"]) .section-content strong {
-  color: rgb(162, 173, 193);
-}
-
-.content-section:has(img[src*="SettingsMenuIcon.png"]) .sub-table th,
-.content-section:has(img[src*="SettingsMenuIcon.png"]) .sub-table td {
-  border-color: rgb(162, 173, 193);
-}
-
-.content-section:has(img[src*="SettingsMenuIcon.png"]) .sub-table th {
-  background: rgb(64, 64, 64);
-  color: rgb(162, 173, 193);
-}
-
-/* Apply theme colors to feature cards within each section */
-.content-section:has(img[src*="Status.png"]) .feature-card {
-  background: rgb(76, 46, 77);
-  box-shadow: 0 0 0 4px rgb(204, 82, 133), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="Status.png"]) .feature-card:hover {
-  box-shadow: 0 0 0 4px rgb(255, 238, 217), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="Status.png"]) .feature-card .feature-title {
-  color: rgb(204, 82, 133);
-}
-
-.content-section:has(img[src*="Food.png"]) .feature-card {
-  background: rgb(46, 62, 77);
-  box-shadow: 0 0 0 4px rgb(82, 163, 204), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="Food.png"]) .feature-card:hover {
-  box-shadow: 0 0 0 4px rgb(217, 255, 248), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="Food.png"]) .feature-card .feature-title {
-  color: rgb(82, 163, 204);
-}
-
-.content-section:has(img[src*="Training.png"]) .feature-card {
-  background: rgb(46, 77, 69);
-  box-shadow: 0 0 0 4px rgb(102, 204, 82), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="Training.png"]) .feature-card:hover {
-  box-shadow: 0 0 0 4px rgb(217, 255, 218), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="Training.png"]) .feature-card .feature-title {
-  color: rgb(102, 204, 82);
-}
-
-.content-section:has(img[src*="Battle.png"]) .feature-card {
-  background: rgb(77, 39, 46);
-  box-shadow: 0 0 0 4px rgb(204, 82, 82), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="Battle.png"]) .feature-card:hover {
-  box-shadow: 0 0 0 4px rgb(255, 217, 217), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="Battle.png"]) .feature-card .feature-title {
-  color: rgb(204, 82, 82);
-}
-
-.content-section:has(img[src*="LightSleep.png"]) .feature-card {
-  background: rgb(153, 89, 46);
-  box-shadow: 0 0 0 4px rgb(179, 145, 45), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="LightSleep.png"]) .feature-card:hover {
-  box-shadow: 0 0 0 4px rgb(255, 255, 217), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="LightSleep.png"]) .feature-card .feature-title {
-  color: rgb(179, 145, 45);
-}
-
- .content-section:has(img[src*="BagIcon.png"]) .feature-card,
- .content-section:has(img[src*="Library1.png"]) .feature-card,
- .content-section:has(img[src*="Library2.png"]) .feature-card,
- .content-section:has(img[src*="LibraryIcon.png"]) .feature-card {
-  background: rgb(153, 138, 46);
-  box-shadow: 0 0 0 4px rgb(255, 235, 59), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
- .content-section:has(img[src*="BagIcon.png"]) .feature-card:hover,
- .content-section:has(img[src*="Library1.png"]) .feature-card:hover,
- .content-section:has(img[src*="Library2.png"]) .feature-card:hover,
- .content-section:has(img[src*="LibraryMenu.png"]) .feature-card:hover,
- .content-section:has(img[src*="LibraryIcon.png"]) .feature-card:hover {
-  box-shadow: 0 0 0 4px rgb(255, 253, 217), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
- .content-section:has(img[src*="BagIcon.png"]) .feature-card .feature-title,
- .content-section:has(img[src*="Library1.png"]) .feature-card .feature-title,
- .content-section:has(img[src*="Library2.png"]) .feature-card .feature-title,
- .content-section:has(img[src*="LibraryMenu.png"]) .feature-card .feature-title,
- .content-section:has(img[src*="LibraryIcon.png"]) .feature-card .feature-title {
-  color: rgb(255, 235, 59);
-}
-
-.content-section:has(img[src*="SettingsMenuIcon.png"]) .feature-card {
-  background: rgb(64, 64, 64);
-  box-shadow: 0 0 0 4px rgb(162, 173, 193), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="SettingsMenuIcon.png"]) .feature-card:hover {
-  box-shadow: 0 0 0 4px rgb(247, 250, 254), 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.content-section:has(img[src*="SettingsMenuIcon.png"]) .feature-card .feature-title {
-  color: rgb(162, 173, 193);
-}
-
-/* Footer Styles */
-.footer {
-  background: linear-gradient(135deg, #2d3748, #4a5568);
-  color: #e2e8f0;
-  padding: 40px 0;
-  text-align: center;
-  margin-top: auto;
-}
-
-.footer-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 40px;
-}
-
-.footer-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 15px;
-}
-
-.footer-text {
-  font-size: 1rem;
-  opacity: 0.8;
-  margin-bottom: 20px;
-}
-
-.footer-links {
+.attribute-item {
   display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--row-border);
+}
+
+.attribute-item:last-child {
+  border-bottom: none;
+}
+
+.attribute-label {
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.attribute-value {
+  color: var(--text);
+  text-align: right;
+}
+
+/* ------------------------------------------------------------------ boxes */
+
+.note,
+.tip,
+.warning,
+.spoiler-warning {
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 14px 0;
+  border: 1px solid;
+}
+
+.note {
+  background: #eef1ff;
+  border-color: #c9d0fb;
+  color: #3b4378;
+}
+
+.tip {
+  background: #eaf7ee;
+  border-color: #b9e2c5;
+  color: #2c5a3a;
+}
+
+.warning {
+  background: #fff4e5;
+  border-color: #f5c58a;
+  color: #7a4a0c;
+}
+
+.note strong,
+.tip strong,
+.warning strong {
+  color: inherit;
+}
+
+.spoiler-warning {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  border-color: #d68910;
+  color: #fff;
+  box-shadow: 0 5px 15px rgba(243, 156, 18, 0.3);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 0.78em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #eef1ff;
+  color: #4c5fd5;
+  border: 1px solid #c9d0fb;
+  vertical-align: 2px;
+}
+
+.badge.green  { background: #d4edda; color: #155724; border-color: #8fd19e; }
+.badge.yellow { background: #fff3cd; color: #856404; border-color: #ffe08a; }
+.badge.red    { background: #f8d7da; color: #721c24; border-color: #f1a7ae; }
+.badge.blue   { background: #d1ecf1; color: #0c5460; border-color: #8fd0dc; }
+.badge.grey   { background: #eceff3; color: #4a5260; border-color: #cfd5de; }
+
+/* Numbered steps */
+.steps {
+  list-style: none;
+  counter-reset: step;
+  margin-left: 0 !important;
+}
+
+.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 40px;
+  margin-bottom: 12px;
+  min-height: 28px;
+}
+
+.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 30px;
-  margin-bottom: 20px;
 }
 
-.footer-links a {
+.code-block,
+pre {
+  background: #1e293b;
   color: #e2e8f0;
-  text-decoration: none;
-  transition: color 0.3s ease;
+  padding: 14px 16px;
+  border-radius: 8px;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 0.92em;
+  overflow-x: auto;
+  white-space: pre;
 }
 
-.footer-links a:hover {
-  color: #ffd700;
+.code-block code,
+pre code {
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 0;
 }
 
-.footer-bottom {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 20px;
-  margin-top: 20px;
-  font-size: 0.9rem;
-  opacity: 0.7;
+/* ------------------------------------------------------------------ tabs */
+/* Used by the installation guide */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--card-border);
 }
 
-/* Responsive Design */
+.tab {
+  padding: 10px 18px;
+  border: 1px solid var(--card-border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: var(--row-alt);
+  color: var(--text-soft);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  border-color: transparent;
+  color: #fff;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+/* ------------------------------------------------------------------ footer */
+
+.page-footer {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9em;
+  padding: 10px 0 30px;
+}
+
+/* ------------------------------------------------------------------ changelog */
+/* changelog.html brings its own dark palette as :root variables; these
+   rules are more specific and give it the light look of the other pages. */
+
+:root:has(.version-header) {
+  --accent: #667eea;
+  --accent-soft: #eef1ff;
+  --text: #444444;
+  --text-strong: #222222;
+  --text-muted: #777777;
+  --border: #e6e8ee;
+  --bg-page: transparent;
+  --bg-card: #ffffff;
+  --bg-soft: #f8f9ff;
+  --tag-bg: #eceff3;
+  --tag-text: #4a5260;
+}
+
+:root:has(.version-header) .page-content {
+  max-width: 960px;
+}
+
+:root:has(.version-header) .page-header {
+  display: block;
+  padding: 30px;
+  border-bottom: none;
+}
+
+:root:has(.version-header) .page-header .page-title,
+:root:has(.version-header) .page-header .page-subtitle {
+  color: #fff;
+}
+
+:root:has(.version-header) .page-header .source-link {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+:root:has(.version-header) .version {
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  border-color: var(--card-border);
+}
+
+:root:has(.version-header) .version-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border-bottom: none;
+}
+
+:root:has(.version-header) .version-header .release-date,
+:root:has(.version-header) .version-header::after {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root:has(.version-header) .version.unreleased .version-header {
+  background: linear-gradient(135deg, #9aa3b5 0%, #6f7787 100%);
+  color: #fff;
+}
+
+:root:has(.version-header) .feature-category h3 {
+  color: #5a4fb0;
+}
+
+:root:has(.version-header) .tag-new       { background: #d4edda; color: #155724; }
+:root:has(.version-header) .tag-improved  { background: #d1ecf1; color: #0c5460; }
+:root:has(.version-header) .tag-fixed     { background: #fff3cd; color: #856404; }
+:root:has(.version-header) .tag-technical { background: #eceff3; color: #4a5260; }
+:root:has(.version-header) .tag-community { background: #f8d7e6; color: #7a1f4a; }
+
+:root:has(.version-header) code {
+  background: var(--code-bg);
+  color: #3b3f5c;
+  border-color: #dde1ea;
+}
+
+:root:has(.version-header) .note {
+  background: #eef1ff;
+  border: none;
+  border-left: 3px solid #667eea;
+  border-radius: 0 6px 6px 0;
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ small screens */
+
 @media (max-width: 768px) {
   .navbar {
-    min-width: auto;
-    width: 95%;
-    padding: 15px 20px;
+    padding: 10px;
+    gap: 6px;
   }
-  
-  .nav-links {
-    gap: 20px;
-  }
-  
+
   .nav-links a {
-    font-size: 14px;
+    padding: 6px 10px;
+    font-size: 0.92em;
   }
-  
+
   .page-content {
-    padding: 40px 20px;
+    padding: 15px;
   }
-  
-  .page-title {
-    font-size: 2.5rem;
-  }
-  
-  .footer-links {
+
+  .page-header {
     flex-direction: column;
-    gap: 15px;
+    text-align: center;
+    padding: 24px;
+  }
+
+  .page-title {
+    font-size: 2em;
+  }
+
+  .screen-row {
+    grid-template-columns: 1fr;
+  }
+
+  .content-section {
+    padding: 18px;
   }
 }

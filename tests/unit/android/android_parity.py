@@ -639,6 +639,7 @@ PET_FIELDS = (
     'back_to_sleep', 'overfeed_timer', '_99g_triggered', 'burpmon_active', 'death_save_immunity',
     'death_save_b_counter', 'death_save_shake_counter', 'evolution_history', 'dp',
     'sleep_disturbances', 'poop_count_flag', 'dna', '_reliability_sleep_call_resolved', 'nap_until',
+    'evolution_call',
 )
 MISSING = '<missing>'
 

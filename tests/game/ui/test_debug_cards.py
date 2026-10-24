@@ -1,6 +1,6 @@
 """The debug scene's card tools: "+Card Packs" opens one of every module's
-packs into the collection (packs are never held unopened), and "+Shiny Card"
-(temporary, for the holo) adds a shiny copy of one card per module.
+packs into the collection (packs are never held unopened). "+Shiny Card"
+(temporary, for the holo) is commented out for the release, with its test.
 """
 import os
 import sys
@@ -41,17 +41,18 @@ class DebugCards(unittest.TestCase):
         self.assertTrue(self.game.scene._add_card_packs())
         self.assertGreaterEqual(self.copies("digital") - before, packs, "a card a pack at least")
 
-    def test_one_shiny_a_module(self):
-        before = self.copies("shiny")
-        self.assertTrue(self.game.scene._add_shiny_card())
-        shinyable = sum(any(self.cards.card_can_be_shiny(name, c.get("id")) for c in data["cards"])
-                        for name, data in self.modules)
-        self.assertEqual(self.copies("shiny") - before, shinyable)
+    # "+Shiny Card" is commented out in the debug scene for the release.
+    # def test_one_shiny_a_module(self):
+    #     before = self.copies("shiny")
+    #     self.assertTrue(self.game.scene._add_shiny_card())
+    #     shinyable = sum(any(self.cards.card_can_be_shiny(name, c.get("id")) for c in data["cards"])
+    #                     for name, data in self.modules)
+    #     self.assertEqual(self.copies("shiny") - before, shinyable)
 
-    def test_both_are_on_the_menu(self):
+    def test_card_packs_on_the_menu_shiny_off(self):
         names = [name for name, _, _ in self.game.scene.debug_options]
         self.assertIn("+Card Packs", names)
-        self.assertIn("+Shiny Card", names)
+        self.assertNotIn("+Shiny Card", names)
 
 
 if __name__ == "__main__":

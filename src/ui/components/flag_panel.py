@@ -85,7 +85,7 @@ class FlagPanel(UIComponent):
         if attribute == "":
             flags.append(('Free', 'Attribute: Free'))
         elif attribute == "Da":
-            flags.append(('Da', 'Attribute: Dark'))
+            flags.append(('Da', 'Attribute: Data'))
         elif attribute == "Va":
             flags.append(('Va', 'Attribute: Vaccine'))
         elif attribute == "Vi":

@@ -308,14 +308,19 @@ if __name__ == "__main__":
             base_dir = sys._MEIPASS
             print(f"[Nuitka] Using temporary extraction directory: {base_dir}")
         elif '__compiled__' in globals():
-            # Nuitka specific: use the compiled module's directory
+            # Nuitka: the folder of the running omnipet.exe. A standalone
+            # build's __compiled__.containing_dir is the folder above it
+            # (2026-10-22: the game looked for assets/ one level too high),
+            # so take the first candidate that holds the game's assets.
+            candidates = [os.path.dirname(os.path.abspath(sys.argv[0])), os.path.dirname(sys.executable)]
             try:
                 import __main__
-                base_dir = __main__.__compiled__.containing_dir
-                print(f"[Nuitka] Using __compiled__.containing_dir: {base_dir}")
-            except:
-                base_dir = os.path.dirname(sys.executable)
-                print(f"[Nuitka-fallback] Using executable directory: {base_dir}")
+                candidates.append(__main__.__compiled__.containing_dir)
+            except Exception:
+                pass
+            base_dir = next((d for d in candidates if os.path.isdir(os.path.join(d, "assets"))),
+                            candidates[0])
+            print(f"[Nuitka] Using program directory: {base_dir}")
         else:
             # Standard frozen executable directory
             base_dir = os.path.dirname(sys.executable)

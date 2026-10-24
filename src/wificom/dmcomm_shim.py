@@ -20,9 +20,8 @@ WiFiCom that cannot read the DigiROM the server sent has to say so, and the
 callers in `realtime.py` already treat `CommandError` as the normal way a bad
 ROM is reported.
 
-`src/battle/dcom/dcom_protocol.py` formats DigiROM command strings but does
-not parse them back, so the parser is still to be written (or dmcomm-python
-vendored alongside this package). See utilities/wificom/UPSTREAM.md.
+The parser is `wificom/digirom.py`; `services/wificom_service.py` installs it
+when it starts. See utilities/wificom/UPSTREAM.md.
 """
 
 from typing import Any, Callable, Optional

@@ -174,7 +174,11 @@ try {
     Add-Type -AssemblyName "System.IO.Compression.FileSystem"
     $sourcePath = (Resolve-Path "$TEMP_DIR\$BUILD_NAME").Path
     $zipPath = (Resolve-Path $RELEASE_DIR).Path + "\$BUILD_NAME.zip"
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($sourcePath, $zipPath)
+    # Forward slashes and Unix permissions (scripts executable, folders
+    # writable): .NET's ZipFile wrote backslashes and no modes, which Linux
+    # unzip and Python's zipfile mis-extract (build/make_zip.py).
+    python (Join-Path $PSScriptRoot "make_zip.py") $sourcePath $zipPath
+    if ($LASTEXITCODE -ne 0) { throw "make_zip.py failed with exit code $LASTEXITCODE" }
 } catch {
     Write-Error-Message "Failed to create ZIP file: $_"
     exit 1

@@ -1,7 +1,11 @@
 """
-Scene Healing - Heal sick pets (Dots or Skull disease)
-Based on scene_sleep.py structure. Uses TEAL theme.
-Only accessible when dots disease is possible for at least one module in the party.
+Scene Healing - choose which ailment to treat. TEAL theme.
+
+Opened from the main screen's heal icon when the party has both sick (Dots)
+and injured (Skull) Digimon; with one kind only, the icon treats it at once.
+A dose reaches every Digimon of that kind in the party, so the strip shows
+the whole party (it showed the selection only) and lights the ones the
+focused button treats.
 """
 import pygame
 
@@ -12,7 +16,7 @@ from ui.components.pet_selector import PetSelector
 from ui.windows.window_background import WindowBackground
 from core import runtime_globals, game_globals
 from utils import ailments
-from utils.pet_utils import distribute_pets_evenly, get_selected_pets
+from utils.pet_utils import distribute_pets_evenly
 from utils.scene_utils import change_scene
 from ui.ui_constants import BASE_RESOLUTION
 
@@ -89,7 +93,7 @@ class SceneHealing:
         selector_y = exit_y + exit_height + 10
         selector_height = 60
         self.pet_selector = PetSelector(10, selector_y, ui_width - 20, selector_height)
-        self.pet_selector.set_pets(get_selected_pets())
+        self.pet_selector.set_pets(self._party())
         self.pet_selector.set_interactive(False)
         self.update_pet_selector_state()
         self.ui_manager.add_component(self.pet_selector)
@@ -106,7 +110,7 @@ class SceneHealing:
         if self.ui_manager.focused_index >= 0 and self.ui_manager.focusable_components:
             focused = self.ui_manager.focusable_components[self.ui_manager.focused_index]
 
-        all_pets = get_selected_pets()
+        all_pets = self._party()
         enabled_indices = []
 
         # Skull: the injured; Dots (the default): the sick.
@@ -116,6 +120,11 @@ class SceneHealing:
                 enabled_indices.append(i)
 
         self.pet_selector.set_enabled_pets(enabled_indices)
+
+    @staticmethod
+    def _party():
+        """The Digimon a dose can reach: the party (eggs left out)."""
+        return [pet for pet in game_globals.pet_list if getattr(pet, "stage", 0) > 0]
 
     def update(self) -> None:
         """Update the scene."""

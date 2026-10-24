@@ -15,7 +15,9 @@ of their own module, and the card pack reveal (owner, 2026-10-17).
 * "Add some animation when a card pack is being opened to reveal the card":
   the reveal queues each pack and holds the input until it is done; a won
   or unlocked pack waits for the main game screen.
-* The Vital Bracelet modules' Stat Shops never sell the NEXT Clocks.
+
+The Vital Bracelet modules' former Stat Shops are battle drops since
+2026-10-21: tests/unit/items/test_battle_drops.py.
 """
 
 import json
@@ -323,26 +325,6 @@ class ModuleDataTests(unittest.TestCase):
         data = _module_json("IC", "module.json")
         if data is not None:
             self.assertEqual(data.get("battle_item_use"), "round")
-
-    def test_the_vital_bracelet_stat_shops(self):
-        for module in ("VB", "VBE", "VH"):
-            shop, items = _module_json(module, "shop.json"), _module_json(module, "item.json")
-            if shop is None or items is None:
-                continue
-            by_name = {i["name"]: i for i in items["item"]}
-            sold = [row["item"] for s in shop["shop"] for row in s["items"]]
-            self.assertTrue(sold, module)
-            for name in sold:
-                self.assertIn(name, by_name, module)
-                self.assertNotEqual(by_name[name].get("status"), "timer",
-                                    f"{module} sells {name}, an evolution-timer item")
-            self.assertEqual(by_name["ATK+5"]["effect"], "status_change", module)
-            self.assertEqual(by_name["POWER+3"]["effect"], "status_change", module)
-            gains = shop["currency"][0]["training_gain"]
-            self.assertTrue(any(gains), f"{module}: its currency must be earnable")
-        vb = _module_json("VB", "module.json")
-        if vb is not None:
-            self.assertGreater(vb["hp_max_item_boost"], 0, "VB's HP+ items were always refused")
 
 
 if __name__ == "__main__":

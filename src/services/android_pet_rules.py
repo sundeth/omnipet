@@ -276,6 +276,8 @@ class AndroidPetRules:
         if module.death_save_by == "Nothing":
             self.die()
         elif self.death_save_b_counter <= 0 and self.death_save_shake_counter <= 0:
+            # The presses answered the dying call (GamePet.answer_call).
+            self._apply_reliability_event('reliability_answering_call')
             if self.world.rng.random() * 100 < module.death_save_chance:
                 self._death_saved()
             else:
@@ -406,10 +408,13 @@ class AndroidPetRules:
     def update_evolution(self):
         """GamePet.update_evolution: defeat-count routes at once, the rest on
         the timer, and a failed evolution is final."""
+        before = (getattr(self, "name", None), getattr(self, "version", None),
+                  int(getattr(self, "stage", 0) or 0))
         if any(evolution_rules.is_immediate_route(e) for e in (self.evolve or [])):
             evo = self.find_evolution(kind="immediate")
             if evo is not None:
                 self._apply_evolution(evo)
+                self._raise_evolution_call(before)
                 return
 
         if self._evol_minutes < self.time or self.need_care():
@@ -427,6 +432,20 @@ class AndroidPetRules:
                 self.world.log(f"{self.name} failed to evolve.")
             return
         self._apply_evolution(evo)
+        self._raise_evolution_call(before)
+
+    def _raise_evolution_call(self, before):
+        """GamePet._raise_evolution_call: an evolution on its own calls, for
+        the module's hunger-call minutes, on a module that pays answered
+        calls. Nobody answers while the app is closed; a call still standing
+        when it opens is answered by a press there."""
+        name, version, stage = before
+        if (getattr(self, "name", None), getattr(self, "version", None)) == (name, version) or stage == 0:
+            return
+        module = self.world.get_module(self.module)
+        if not module or not getattr(module, 'reliability_answering_call', 0):
+            return
+        self.evolution_call = max(0, int(getattr(module, 'meat_care_mistake_time', 0) or 0))
 
     def death_evolution(self):
         """GamePet._death_evolution: a death route (``at_death``) taken
@@ -738,8 +757,11 @@ class AndroidPetRules:
             # The window closed: the next bedtime is a new call.
             self.care_sleep_mistake_timer = 0
             self._reliability_sleep_call_resolved = False
-                
-        
+
+        # An evolution's call runs out unanswered (GamePet).
+        if getattr(self, 'evolution_call', 0) > 0:
+            self.evolution_call -= 1
+
         if sound_alert:
             self.world.sound("alarm")
 
@@ -811,6 +833,8 @@ class AndroidPetRules:
         elif self.strength_empty() and self.care_strength_mistake_timer < self.world.get_module(self.module).protein_care_mistake_time:
             return True
         elif self.should_sleep() and self.care_sleep_mistake_timer < self.world.get_module(self.module).sleep_care_mistake_timer:
+            return True
+        elif getattr(self, 'evolution_call', 0) > 0:
             return True
         return False
 

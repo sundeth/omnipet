@@ -176,11 +176,18 @@ New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\src" -Force | Out-Null
 Copy-Item "..\src\vpet.py" "$TEMP_DIR\$BUILD_NAME\src\"
 Copy-Item "..\src\__init__.py" "$TEMP_DIR\$BUILD_NAME\src\"
 
-# Copy Module Editor (excluding Source folder)
+# Copy the Module Editor: its own repository's Release build (beside this
+# repository); an older checkout kept a copy in "Module Editor" here.
 Write-Status "Copying Module Editor..."
-New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\Module Editor" -Force | Out-Null
-Get-ChildItem "..\Module Editor" | Where-Object { $_.Name -ne "Source" } | ForEach-Object {
-    Copy-Item -Recurse $_.FullName "$TEMP_DIR\$BUILD_NAME\Module Editor\"
+$editorSrc = @("..\Module Editor", "..\..\Omnipet Module Editor\OmnipetModuleEditor\bin\Release") |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($editorSrc) {
+    New-Item -ItemType Directory -Path "$TEMP_DIR\$BUILD_NAME\Module Editor" -Force | Out-Null
+    Get-ChildItem $editorSrc | Where-Object { $_.Name -ne "Source" } | ForEach-Object {
+        Copy-Item -Recurse $_.FullName "$TEMP_DIR\$BUILD_NAME\Module Editor\"
+    }
+} else {
+    Write-Host "[WARNING] No Module Editor build found (build it in Release first); shipping without it" -ForegroundColor Yellow
 }
 
 # Ship an EMPTY modules/ folder - releases must not include the dev
@@ -200,7 +207,6 @@ Copy-Item "..\launch.bat" "$TEMP_DIR\$BUILD_NAME\"
 Copy-Item "..\launch.sh" "$TEMP_DIR\$BUILD_NAME\"
 Copy-Item "..\LICENSE.txt" "$TEMP_DIR\$BUILD_NAME\"
 Copy-Item "..\main.py" "$TEMP_DIR\$BUILD_NAME\"
-Copy-Item "..\ModuleEditor.bat" "$TEMP_DIR\$BUILD_NAME\"
 
 # Create the ZIP file
 Write-Status "Creating ZIP archive..."
@@ -218,7 +224,11 @@ try {
     Add-Type -AssemblyName "System.IO.Compression.FileSystem"
     $sourcePath = (Resolve-Path "$TEMP_DIR\$BUILD_NAME").Path
     $zipPath = (Resolve-Path $RELEASE_DIR).Path + "\$BUILD_NAME.zip"
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($sourcePath, $zipPath)
+    # Forward slashes and Unix permissions (scripts executable, folders
+    # writable): .NET's ZipFile wrote backslashes and no modes, which Linux
+    # unzip and Python's zipfile mis-extract (build/make_zip.py).
+    python (Join-Path $PSScriptRoot "make_zip.py") $sourcePath $zipPath
+    if ($LASTEXITCODE -ne 0) { throw "make_zip.py failed with exit code $LASTEXITCODE" }
 } catch {
     Write-Error-Message "Failed to create ZIP file: $_"
     exit 1

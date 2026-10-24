@@ -138,7 +138,7 @@ class WindowPetSelector:
                     blit_with_shadow(surface, flag, (PAGE_MARGIN + self.LEFT_PADDING, y_pos + int(6 * runtime_globals.UI_SCALE)))
 
             name_text = self.font.render(f"{pet.name}", True, constants.FONT_COLOR_DEFAULT)
-            stage_name = constants.STAGES[pet.stage] if pet.stage < len(constants.STAGES) else "Unknown"
+            stage_name = constants.stage_name(pet.stage)
             attribute_text = self.font.render(f"{stage_name} | {pet.attribute}", True, (200, 200, 200))
 
             blit_with_shadow(surface, name_text, (PAGE_MARGIN + self.ITEM_HEIGHT + self.LEFT_PADDING, y_pos))

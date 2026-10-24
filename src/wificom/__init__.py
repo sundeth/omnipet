@@ -22,6 +22,10 @@ This package is upstream wificom-lib, vendored. Layout:
     version.py          ported              version info sent to the server
     transport.py        Omnipet             paho-mqtt in place of wifi_picow
     dmcomm_shim.py      Omnipet             stands in for dmcomm-python
+    digirom.py          Omnipet             DigiROM parser; resolves the
+                                            adapter's operators as dmcomm does
+    executor.py         Omnipet             plays a ROM against the pet on
+                                            the line the player chose
 
 Upstream's own imports (`from wificom import mqtt`) resolve unchanged,
 because `main.py` puts `src/` on `sys.path` and this package sits there under

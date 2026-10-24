@@ -128,8 +128,21 @@ FRAME_SIZE = 48  # Original pet sprite frame size
 # Note: PET_WIDTH, PET_HEIGHT now in runtime_globals
 STAGES = [
     "0-Egg", "I-Fresh", "II-In-Training", "III-Rookie",
-    "IV-Champion", "V-Ultimate", "VI-Mega", "VII-Super Ultimate"
+    "IV-Champion", "V-Ultimate", "VI-Mega", "VII-Super Ultimate",
+    # Stage 8 (module-rules: Super Ultimate+): DMX's Jesmon GX and Ogudomon
+    # (X Antibody). Without it their Status and Digidex rows raised IndexError.
+    "VIII-Super Ultimate+",
 ]
+
+
+def stage_name(stage):
+    """The screen name of an Evolution Stage number; never raises (a stage
+    past the table reads as its number)."""
+    try:
+        stage = int(stage)
+    except (TypeError, ValueError):
+        return str(stage)
+    return STAGES[stage] if 0 <= stage < len(STAGES) else str(stage)
 ATTR_COLORS = {
             "Da": (66, 165, 245),
             "Va": (102, 187, 106),

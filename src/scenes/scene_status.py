@@ -52,9 +52,11 @@ def connect_points_slot(visible_stats):
     return None
 
 
-def connect_points_tooltip(points, cap):
-    return (f"Connect Points {int(points)}/{int(cap)} - earned in every battle "
-            "with another device or pet; a full meter gives an item")
+def connect_points_tooltip(points, cap, battles=("connection",)):
+    where = ("every adventure battle and every battle with another device or pet"
+             if "adventure" in battles else "every battle with another device or pet")
+    return (f"Connect Points {int(points)}/{int(cap)} - earned in {where}; "
+            "a full meter gives an item")
 
 
 def digisoul_below_flags_available(visible_stats, use_condition_hearts=False):
@@ -522,7 +524,7 @@ class SceneStatus:
         self.pet_name_label.set_tooltip(f"Module: {pet.module}, Version: {pet.version}")
 
         # Update stage
-        stage_text = f"Stage: {constants.STAGES[pet.stage]}"
+        stage_text = f"Stage: {constants.stage_name(pet.stage)}"
         self.stage_label.set_text(stage_text)
 
         # Get module configuration before laying out flags: DigiSoul can use
@@ -588,6 +590,9 @@ class SceneStatus:
         # Show trophy meter if Trophies is in visible stats but Level is not
         if "Trophies" in visible_stats and "Level" not in visible_stats:
             self.trophy_meter.set_value(getattr(pet, 'trophies', 0))
+            # The meter holds three digits; the tooltip has the whole count.
+            self.trophy_meter.set_tooltip(
+                f"Trophies: {getattr(pet, 'trophies', 0)} - earned by this pet")
             self.trophy_meter.visible = True
         else:
             self.trophy_meter.visible = False
@@ -663,6 +668,10 @@ class SceneStatus:
             self.reliability_meter.set_value(
                 getattr(pet, 'reliability', constants.RELIABILITY_MIN)
             )
+            # The gauge draws no number: the tooltip gives it.
+            self.reliability_meter.set_tooltip(
+                f"Reliability {int(getattr(pet, 'reliability', constants.RELIABILITY_MIN) or 0)}"
+                f"/{constants.RELIABILITY_MAX} - trust between the pet and player")
             self.reliability_meter.visible = True
             self.strength_meter.visible = False
         else:
@@ -684,8 +693,10 @@ class SceneStatus:
 
         # Connect Points: shown wherever the module has them (events.json's
         # connect_points block), not by a visible_stats entry.
+        # A cap of 1 (the Vital Bracelets' battle drops) has no meter to show.
         cp_settings = connect_points.settings(module)
-        cp_slot = connect_points_slot(visible_stats) if cp_settings else None
+        cp_slot = (connect_points_slot(visible_stats)
+                   if connect_points.shows_meter(cp_settings) else None)
         if cp_slot:
             cap = int(cp_settings["cap"])
             points = getattr(pet, 'connect_points', 0) or 0
@@ -693,7 +704,8 @@ class SceneStatus:
             self.connect_points_meter.set_maximum(cap)
             self.connect_points_meter.set_value(points)
             self.connect_points_meter.set_tooltip(
-                connect_points_tooltip(self.connect_points_meter.value, cap))
+                connect_points_tooltip(self.connect_points_meter.value, cap,
+                                       connect_points.battles(cp_settings)))
             self.connect_points_meter.visible = True
         else:
             self.connect_points_meter.visible = False
@@ -763,6 +775,9 @@ class SceneStatus:
             'sicknesses': getattr(pet, 'sick_total', 0),
             'virus': getattr(pet, 'virus', 0),
             'evolution_timer': getattr(pet, 'time', '00:00'),
+            # The evolution clock itself (GamePet._evol_minutes), which also
+            # catches up offline; 'timer' is only the animation frame count.
+            'evolution_minutes': getattr(pet, '_evol_minutes', 0),
             'timer': getattr(pet, 'timer', 0),
             'evolve': getattr(pet, 'evolve', False),
             'sleeps': getattr(pet, 'sleeps', '00:00'),

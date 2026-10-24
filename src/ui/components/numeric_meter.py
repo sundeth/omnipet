@@ -28,6 +28,15 @@ class NumericMeter(UIComponent):
             self.value = value
             self.needs_redraw = True
         
+    def display_text(self):
+        """The number as drawn: a value with more digits than the meter
+        holds shows its top value (999) instead of its first digits (1234
+        read "123")."""
+        value_str = str(self.value)
+        if len(value_str) > self.max_digits:
+            value_str = "9" * self.max_digits
+        return value_str
+
     def render(self):
         # Use screen dimensions for surface
         surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
@@ -74,10 +83,7 @@ class NumericMeter(UIComponent):
         blit_with_cache(surface, self.icon, icon_rect)
         
         # Format and render numeric value
-        value_str = str(self.value)
-        # Limit digits if necessary
-        if len(value_str) > self.max_digits:
-            value_str = value_str[:self.max_digits]
+        value_str = self.display_text()
         
         # Render text
         text_surface = self.font.render(value_str, True, text_color)

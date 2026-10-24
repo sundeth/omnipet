@@ -57,7 +57,7 @@ class StatsPanel(UIComponent):
         current_y += 20
         
         # Stage
-        stage_text = f"Stage: {constants.STAGES[self.pet.stage]}"
+        stage_text = f"Stage: {constants.stage_name(self.pet.stage)}"
         stage_label = Label(padding, padding + current_y, stage_text, is_title=False)
         self.stat_components.append(stage_label)
         current_y += line_height

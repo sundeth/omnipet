@@ -381,7 +381,14 @@ class SceneDigidex:
             return True     # nothing to press until the roster is built
 
         event_type, event_data = event
-        
+
+        # SELECT opens FILTER in the list: keys and buttons never reach the
+        # FILTER button, the list keeps the focus (only a tap opened it).
+        if (event_type == "SELECT" and self.state == 'list' and self.filter_button.visible
+                and self.ui_manager.active_menu is None):
+            self._on_filter_click()
+            return True
+
         # Handle events through UIManager
         if self.ui_manager.handle_event(event):
             return True

@@ -45,7 +45,11 @@ class CountBarTraining(Training):
         if self.phase == "alert":
             return
 
-        if self.phase == "charge":
+        if self.phase == "charge" and event_type == "B":
+            # B (and the EXIT button, which sends it) leaves, as in Dummy.
+            # RPM training is this class too.
+            self.quit_charge()
+        elif self.phase == "charge":
             self.count_bar.handle_event(event)
         elif self.phase in ["wait_attack", "attack_move", "impact"] and event_type in ["B", "START"]:
             # Skip to result phase

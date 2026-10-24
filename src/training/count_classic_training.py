@@ -143,8 +143,11 @@ class CountMatchClassicTraining(Training):
         
         if self.phase == "charge" and self.minigame and self.minigame.handle_event(event):
             return
-        
-        if self.phase in ["wait_attack", "attack_move", "impact"] and event_type in ["B", "START"]:
+
+        if self.phase == "charge" and event_type == "B":
+            # B (and the EXIT button, which sends it) leaves, as in Dummy.
+            self.quit_charge()
+        elif self.phase in ["wait_attack", "attack_move", "impact"] and event_type in ["B", "START"]:
             # Skip to result phase
             runtime_globals.game_sound.play("cancel")
             self.animated_sprite.stop()
@@ -186,15 +189,8 @@ class CountMatchClassicTraining(Training):
         else:
             # Use AnimatedSprite component with predefined result animations
             if not self.animated_sprite.is_animation_playing():
-                duration = combat_constants.RESULT_SCREEN_FRAMES / constants.FRAME_RATE
-                
-                # Choose which result animation to play
-                if grade == 0:
-                    self.animated_sprite.play_bad(duration)
-                elif grade < 3:
-                    self.animated_sprite.play_great(duration)
-                else:
-                    self.animated_sprite.play_excellent(duration)
+                # The banner of the grade paid (grade 1 used to read GREAT).
+                self.play_grade_banner(grade)
             
             # Draw the animated sprite
             self.animated_sprite.draw(surface)

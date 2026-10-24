@@ -172,6 +172,7 @@ class SceneSetup:
     def _on_skip_graphics(self) -> None:
         """Skip-button callback for the graphics test phase."""
         self._clear_phase_buttons()
+        self._restore_pre_test_graphics()
         game_globals.setup_graphics = False
         self.complete_setup()
 
@@ -582,6 +583,9 @@ class SceneSetup:
         self.test_stable_frames = 0
         self.test_current_multiplier = 1.0
         self.test_completed = False
+        # What the test may raise, kept so declining its result restores it.
+        self._pre_test_frame_rate = game_globals.configuration.frame_rate
+        self._pre_test_multiplier = getattr(game_globals.configuration, "resolution_multiplyer_max", 1.0)
 
         runtime_globals.game_console.log("[SceneSetup] Graphics test started")
 
@@ -746,8 +750,17 @@ class SceneSetup:
         runtime_globals.game_console.log("[SceneSetup] Graphics settings accepted and applied")
         self.complete_setup()
 
+    def _restore_pre_test_graphics(self) -> None:
+        """Undo what the graphics test raised (the frame rate it doubled
+        while testing, the resolution it recommends): CANCEL, B or Skip kept
+        the raised frame rate."""
+        if hasattr(self, "_pre_test_frame_rate"):
+            game_globals.configuration.frame_rate = self._pre_test_frame_rate
+            game_globals.configuration.resolution_multiplyer_max = self._pre_test_multiplier
+
     def reject_graphics_settings(self) -> None:
         """Reject graphics settings and use defaults."""
+        self._restore_pre_test_graphics()
         game_globals.setup_graphics = False
         runtime_globals.game_console.log("[SceneSetup] Graphics settings rejected, using defaults")
         self.complete_setup()
@@ -1007,7 +1020,7 @@ class SceneSetup:
         
         # Input mapping - map buttons
         elif self.phase == "input_mapping":
-            if event_type in ["B"]:
+            if event_type in ["B"] and not self._mapping_button_b():
                 self.skip_input_setup()
                 return True
             # Handle in handle_raw_input instead
@@ -1023,6 +1036,7 @@ class SceneSetup:
         elif self.phase == "graphics_test":
             if event_type in ["B"]:
                 # Skip graphics test and use defaults
+                self._restore_pre_test_graphics()
                 game_globals.setup_graphics = False
                 self.complete_setup()
                 return True
@@ -1210,6 +1224,11 @@ class SceneSetup:
         
         return False
 
+    def _mapping_button_b(self) -> bool:
+        """Whether the mapping prompt is asking for B."""
+        index = getattr(self, "current_button_index", 0)
+        return 0 <= index < len(self.INPUT_BUTTONS) and self.INPUT_BUTTONS[index] == "B"
+
     def map_input_button(self, pygame_event) -> bool:
         """Map individual input buttons."""
         if self.current_button_index >= len(self.INPUT_BUTTONS):
@@ -1217,9 +1236,14 @@ class SceneSetup:
         
         current_button = self.INPUT_BUTTONS[self.current_button_index]
         
+        # Each device's skip key is its default B, so at the "Press B" prompt
+        # it maps B like any other key; it used to abort the whole mapping
+        # there, dropping the buttons already set.
+        mapping_b = current_button == "B"
+
         if self.detected_input_type == "keyboard":
             if pygame_event.type == pygame.KEYDOWN:
-                if pygame_event.key == pygame.K_ESCAPE:
+                if pygame_event.key == pygame.K_ESCAPE and not mapping_b:
                     self.skip_input_setup()
                     return True
                 
@@ -1264,7 +1288,7 @@ class SceneSetup:
             if hasattr(pygame_event, 'gpio_pin') and pygame_event.type == GPIO_RELEASE_EVENT:
                 pin = pygame_event.gpio_pin
                 if pin in GameConfiguration.VALID_GPIO_PINS:
-                    if pin == 20:  # Skip
+                    if pin == 20 and not mapping_b:  # Skip
                         self.skip_input_setup()
                         return True
                     
@@ -1277,7 +1301,7 @@ class SceneSetup:
         
         elif self.detected_input_type == "joystick":
             if pygame_event.type == pygame.JOYBUTTONDOWN:
-                if pygame_event.button == 1:  # Skip
+                if pygame_event.button == 1 and not mapping_b:  # Skip
                     self.skip_input_setup()
                     return True
                 

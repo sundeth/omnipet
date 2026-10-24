@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Troubleshooting - Omnipet Documentation</title>
+  <link rel="stylesheet" href="../assets/main.css">
+</head>
+
+<body>
+  <div class="page-content">
+    <div class="page-header">
+      <div class="page-header-text">
+        <h1 class="page-title">Troubleshooting</h1>
+        <p class="page-subtitle">What to check, and what to do, when something does not work.</p>
+      </div>
+    </div>
+
+    <nav class="page-toc">
+      <a href="#evolution">Evolution and care</a>
+      <a href="#modules">Modules and modes</a>
+      <a href="#dcom">DCom</a>
+      <a href="#online">WiFi and Discord</a>
+      <a href="#arena">Arena</a>
+      <a href="#saves">Saves</a>
+      <a href="#android">Android</a>
+      <a href="#pi">GamePi and Batocera</a>
+      <a href="#display">Display and controls</a>
+    </nav>
+
+    <!-- ============================================================ EVOLUTION -->
+    <div class="content-section" id="evolution" data-theme="status">
+      <h2 class="section-title">Evolution and care</h2>
+      <div class="section-content">
+
+        <h3>My Digimon is not evolving</h3>
+        <p>When its evolution time comes, the game reads the form's evolution routes in the order the module lists them.
+          The first route whose requirements are all met is taken. Each requirement is a range: one value outside its
+          range rules the route out, and the next route is tried.</p>
+        <ol class="steps">
+          <li><strong>Wait for the evolution time.</strong> Each form has its own. Devices that show it have an Evolution
+            Timer box on the Status screen.</li>
+          <li><strong>Answer every care need.</strong> An awake Digimon does not evolve while Hunger or Strength is empty,
+            while it is sick or injured, or while it is awake after bedtime. The evolution time keeps counting. Once the
+            need is answered, it evolves at the next minute.</li>
+          <li><strong>Compare its counters with the routes.</strong> Open the module in the
+            <a href="module-guide.html">Module Guide</a>, page Evolution Charts. Read the current form's routes from the
+            top. The Status screen shows the counters this device shows.</li>
+          <li><strong>Check for a locked form.</strong> A secret form stays locked until its unlock is earned. Its route
+            is skipped. <strong>Settings &rsaquo; Secrets</strong> lists each module's unlocks.</li>
+          <li><strong>Check for a failed evolution</strong> (below).</li>
+        </ol>
+
+        <h4>Requirements</h4>
+        <table class="data-table">
+          <thead>
+            <tr><th>Requirement</th><th>What is counted</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Mistakes</td><td>Care mistakes in this form. Devices with Condition Hearts count the hearts left
+                instead: one mistake costs one heart.</td></tr>
+            <tr><td>Training</td><td>Effort from training in this form.</td></tr>
+            <tr><td>Battles</td><td>Battles in this form: adventure battles and connection battles (Versus, DCom, WiFi,
+                online).</td></tr>
+            <tr><td>Win Ratio</td><td>Wins divided by battles in this form, in percent. Not checked before the form's
+                first battle.</td></tr>
+            <tr><td>Overfeed</td><td>Food given while Hunger was full, in this form.</td></tr>
+            <tr><td>Sleep Disturbances</td><td>Times it was woken while asleep, in this form.</td></tr>
+            <tr><td>Weight</td><td>Its current Weight.</td></tr>
+            <tr><td>Area</td><td>The furthest adventure area this Digimon has won in.</td></tr>
+            <tr><td>Item</td><td>Uses of the named item from the Armor / Item menu.</td></tr>
+            <tr><td>Chance</td><td>A percentage, rolled after every other requirement passes. A lost roll moves on to
+                the next route.</td></tr>
+            <tr><td>Time Range</td><td>The time of day on the clock.</td></tr>
+          </tbody>
+        </table>
+        <p>Most counters start at zero in each new form. On a few devices, the Digimon Mini and the Digivice iC among
+          them, battles and wins carry over.</p>
+
+        <h4>Sleep</h4>
+        <p>On the original Digital Monster (DMOG), the Digital Monster Ver.20th (DM20) and the Vital Bracelet (VB), time
+          asleep does not count, and a sleeping Digimon does not evolve. On the other modules the evolution time runs
+          during sleep, and a sleeping Digimon can evolve.</p>
+
+        <h4>Failed evolutions</h4>
+        <div class="warning">
+          <strong>One try.</strong> If any route of the current form reads the win ratio, the Digimon gets one try when
+          its evolution time comes. If it meets no route, or loses the chance roll, the evolution fails. The timer never
+          evolves that form again. Nothing on screen marks it: the time passes and the form stays.
+        </div>
+        <p>The same applies to every form from Perfect on the Digital Monster X, and from Adult on the Pendulum Z, win
+          ratio or not.</p>
+        <p>A failed form can still change through items, jogress, armor evolution and Level Reverse. On the Pendulum
+          Color, Pendulum Color Godzilla, Pendulum Ver.20th, Digital Monster X and Pendulum Z, its hearts then deplete
+          twice as fast and it poops twice as often.</p>
+        <div class="tip">On these forms, meet a route's requirements before the evolution time comes.</div>
+
+        <h3>Where can I see the next evolution?</h3>
+        <table class="data-table">
+          <thead>
+            <tr><th>Where</th><th>What it shows</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Status screen, Next Evolution box (Digivice iC)</td><td>The silhouette of the form the Digimon would
+                take now, or <strong>?</strong> while it meets no route. A route's chance counts as met; care needs are
+                ignored.</td></tr>
+            <tr><td>Digidex</td><td>Select a Digimon you have raised: its evolution tree. Forms you have not raised show
+                as unknown, without a name.</td></tr>
+            <tr><td><a href="module-guide.html">Module Guide</a></td><td>Each module's Evolution Charts: every route,
+                with its requirements, in order.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>My Digimon sleeps at the wrong time</h3>
+        <p>Each form sleeps and wakes at its device's times. <strong>Settings &rsaquo; Gameplay &rsaquo; Wake</strong>
+          and <strong>Sleep</strong> replace them for every Digimon. Set both: with either one Off, the device times
+          apply. A form with no sleep schedule is not affected.</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ MODULES -->
+    <div class="content-section" id="modules" data-theme="library">
+      <h2 class="section-title">Modules and modes</h2>
+      <div class="section-content">
+
+        <h3>The game has no modules</h3>
+        <p>The downloads come with an empty <code>modules</code> folder. Modules come from the Shop, or are copied in by
+          hand.</p>
+        <ol class="steps">
+          <li><strong>Connect &rsaquo; Shop &rsaquo; Modules</strong> downloads a module. It needs an internet
+            connection.</li>
+          <li>Or copy a module folder into <code>modules</code>. The folder must hold <code>module.json</code> directly:
+            <code>modules/DMC/module.json</code>. A zip file, or a folder inside a folder, is not read.</li>
+          <li>Start the game again.</li>
+        </ol>
+        <p>With no module and no connection, the game starts on <code>NO MODULE DETECTED</code>: "Connect to the
+          internet or install a module manually".</p>
+
+        <h3>How do I unlock modules? Progress Mode and Free Mode</h3>
+        <table class="data-table">
+          <thead>
+            <tr><th></th><th>Progress Mode</th><th>Free Mode</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Account</td><td>An Omninet account, checked at every start: needs internet.</td><td>None. Plays
+                offline.</td></tr>
+            <tr><td>Modules</td><td>Only the modules you own. Buy them in <strong>Connect &rsaquo; Shop &rsaquo;
+                  Modules</strong>; the first one is free.</td><td>Every installed module. <strong>Shop &rsaquo;
+                  Modules</strong> downloads them free.</td></tr>
+            <tr><td>Coins</td><td>Earned by playing, spent in the Shop.</td><td>None.</td></tr>
+            <tr><td>Shop</td><td>Modules, Items, Gameplay, Cosmetics, Specials.</td><td>Modules only.</td></tr>
+            <tr><td>Arena</td><td>Yes.</td><td>No.</td></tr>
+            <tr><td>DCom, WiFi and Discord battles</td><td>Yes.</td><td>Yes.</td></tr>
+            <tr><td>Save folder</td><td><code>save/&lt;account id&gt;</code></td><td><code>save/Default</code></td></tr>
+          </tbody>
+        </table>
+        <p>Coins come from evolutions, new Digimon in the Digidex, first unlocks, first area clears, a module's whole
+          adventure and Arena prizes. Modules you own are downloaded on any device after you log in, and again at each
+          start when one is missing.</p>
+        <p>To switch: <strong>Settings &rsaquo; Gameplay &rsaquo; Change Mode</strong>, or in Free Mode
+          <strong>Connect &rsaquo; Config &rsaquo; SWITCH MODE</strong>. See <a href="online-play.html">Online Play</a>.
+        </p>
+
+        <h3>A module is missing from the egg screen</h3>
+        <ul>
+          <li>Progress Mode lists only modules you own. A module copied in by hand but not bought is not listed.</li>
+          <li>Modules are grouped: Classic, Modern, Conversions, Custom. A group with no module is dimmed.</li>
+          <li>A module with no egg is not listed.</li>
+          <li>A device is offered only when one of its eggs is available now. Secret eggs appear once their unlock is
+            earned (<strong>Settings &rsaquo; Secrets</strong>). Eggs held back for a later version are not
+            offered.</li>
+          <li>A module that fails to load is skipped. The main screen shows <code>Error loading module
+              &lt;folder&gt;</code>.</li>
+        </ul>
+
+        <h3>A module is missing from the Module Guide</h3>
+        <p>The <a href="module-guide.html">Module Guide</a> is rebuilt each time the game starts, from the installed
+          modules that carry <code>documentation/index.html</code>. Start the game once after installing. A module
+          without documentation is not listed.</p>
+
+        <h3>My Digimon are gone after changing mode or account</h3>
+        <p>Free Mode and each Omninet account have their own save folder. Nothing is deleted. Switch back to the mode
+          and account you played on.</p>
+
+        <h3>The game stops at SERVER or at the login screen</h3>
+        <table class="data-table">
+          <thead>
+            <tr><th>Message</th><th>Meaning</th><th>What to do</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>SERVER: Cannot connect to server</code>, <code>SERVER: Connection timeout</code></td>
+              <td>Progress Mode checks the account at start. Omninet could not be reached.</td>
+              <td>Check the connection and press Retry. Free Mode opens the Free Mode save instead.</td></tr>
+            <tr><td>Login screen: <code>No internet connection found.</code></td>
+              <td>Progress Mode, no account on this device, no connection.</td>
+              <td>Connect, or press Change to Free Play.</td></tr>
+            <tr><td><code>You need to be logged in to Omninet to access the shop.</code></td>
+              <td>Progress Mode without a login.</td>
+              <td><strong>Connect &rsaquo; Config &rsaquo; CONNECT</strong>.</td></tr>
+            <tr><td>Shop button dimmed</td>
+              <td>Omninet could not be reached. The Shop needs it in both modes.</td>
+              <td>Check the connection and open Connect again.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================================================ DCOM -->
+    <div class="content-section" id="dcom" data-theme="battle">
+      <h2 class="section-title">DCom</h2>
+      <div class="section-content">
+
+        <h3>The DCom adapter is not recognized</h3>
+        <p><strong>Connect &rsaquo; Local Battle</strong> looks for an adapter every 3 seconds while it is open. The
+          DCom button lights when the system lists a USB serial port. Local Battle itself needs a Digimon in the
+          party.</p>
+        <ol class="steps">
+          <li>Plug the adapter in with the menu open. Wait a few seconds.</li>
+          <li>Check that the system sees it: a COM port in Windows Device Manager, a <code>/dev/tty…</code> device on
+            Linux. If it does not appear, install the driver for the adapter's USB-serial chip.</li>
+          <li>Running from source (Python Desktop, GamePi): install pyserial with <code>pip install pyserial</code>.
+            Without it the console prints <code>pyserial not installed. DCom functionality disabled.</code></li>
+          <li>Several USB serial devices plugged in: the game lists them all. Pick the adapter. It names the USB id
+            1A86:7523 (CH340) "DCom" and lists any other port by its own name.</li>
+        </ol>
+        <div class="note">DCom is not available on Android: the Android build has no serial support.</div>
+
+        <h3>The adapter is found but the battle does not start</h3>
+        <p>After the device line and the charge, the game opens a 60-second window. Start the battle on the device, or
+          press <kbd>START</kbd>. After 30 seconds of silence the game swaps roles once and asks: "Start battle on the
+          device, then connect it."</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>On screen</th><th>Meaning</th><th>What to do</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>No DCom found (N ports)</code></td><td>Serial ports exist; none is a USB device.</td>
+              <td>Plug the adapter in. Check its driver.</td></tr>
+            <tr><td><code>No serial ports found!</code></td><td>The system lists no serial port.</td>
+              <td>Same.</td></tr>
+            <tr><td><code>Error: Failed to connect</code></td><td>The port could not be opened: another program holds it
+                (Arduino IDE Serial Monitor, another Omnipet), or access was denied.</td>
+              <td>Close the other program. Unplug and replug the adapter.</td></tr>
+            <tr><td><code>Waiting for device... (Ns)</code></td><td>The window is open.</td>
+              <td>Start the battle on the device, or press <kbd>START</kbd>.</td></tr>
+            <tr><td><code>No device detected. Check the cable and start the battle on your device.</code></td>
+              <td>Nothing arrived on the line.</td><td>Seat the device. Start its battle.</td></tr>
+            <tr><td><code>Device never answered. Reseat it in the adapter and try again.</code></td>
+              <td>The line went low and did not come back.</td><td>Reseat the device.</td></tr>
+            <tr><td><code>Signal misread. Make sure the device is fully seated.</code></td>
+              <td>The start of a packet was mistimed.</td><td>Seat the device fully.</td></tr>
+            <tr><td><code>Signal broke off after N bits. Hold the device steady.</code></td>
+              <td>A packet stopped part way.</td><td>Hold the device still.</td></tr>
+            <tr><td><code>Device refused the battle. Retrying...</code></td>
+              <td>The device rejected what was sent (FF00).</td><td>The game retries.</td></tr>
+            <tr><td><code>No response from the adapter.</code></td><td>The adapter sent nothing back in 60 seconds.</td>
+              <td>Check the chosen port and the adapter's firmware.</td></tr>
+            <tr><td><code>Adapter refused the … command.</code></td>
+              <td>The firmware does not know this device line. It answered <code>(paused)</code>.</td>
+              <td>Use firmware that carries the line (table below).</td></tr>
+            <tr><td><code>IC needs an infrared adapter; this one is V/X/Y/C only.</code>,
+                <code>This adapter cannot send IC - it needs infrared firmware.</code></td>
+              <td>The Digivice iC uses an infrared signal.</td><td>Use an infrared adapter (table below).</td></tr>
+            <tr><td><code>Adapter is at the CircuitPython REPL - reset it so code.py runs.</code></td>
+              <td>The adapter's program stopped.</td><td>Press Ctrl-D in its serial console, or unplug and replug
+                it.</td></tr>
+            <tr><td><code>Adapter disconnected - check the USB cable.</code>, <code>Reconnecting... (Ns)</code></td>
+              <td>The port went away.</td><td>The game waits 30 seconds for it. Check the cable.</td></tr>
+            <tr><td><code>Incomplete adapter transcript. Retry the connection.</code></td>
+              <td>The adapter's report was cut short.</td><td>Retry.</td></tr>
+            <tr><td><code>ERROR: corrupt data from device</code></td><td>The packets failed their checks.</td>
+              <td>Retry.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>What does "(paused)" mean?</h3>
+        <p>The adapter printed <code>(paused)</code> instead of running the command. The classic dmcomm Arduino firmware
+          stops any command whose signal letter it does not know; it knows V, X, Y and C. The game treats this as a
+          refusal and ends the attempt at once. A Pico adapter reports <code>CommandError</code> instead.</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>Device line</th><th>Adapter firmware</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Lines on the V, X and Y signals</td><td>Classic dmcomm Arduino firmware.</td></tr>
+            <tr><td>Color lines: Digital Monster Color, Pendulum Color, Xros Wars Color (C signal)</td><td>Firmware that
+                accepts full C messages. Measured with WiFiCom/Pico firmware 2.1.0.</td></tr>
+            <tr><td>Digivice iC (infrared, two-letter signal)</td><td>dmcomm-python firmware with infrared hardware: a
+                WiFiCom or a Pico build. Classic firmware refuses it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================================================ WIFI AND DISCORD -->
+    <div class="content-section" id="online" data-theme="connect">
+      <h2 class="section-title">WiFi and Discord</h2>
+      <div class="section-content">
+
+        <h3>The WiFi button is dimmed</h3>
+        <p>The WiFi button needs a local network address. It does not need internet: a phone hotspot works. Connect the
+          device to a network and open <strong>Connect &rsaquo; Local Battle</strong> again.</p>
+
+        <h3>The WiFi battle host is not found</h3>
+        <p>The joining game asks the local network for hosts for 3 seconds. Hosts answer on <strong>UDP port
+            47555</strong>. The battle then runs over a TCP port the host picks at random.</p>
+        <ol class="steps">
+          <li>Put both games on the same local network. The search is a broadcast on that network.</li>
+          <li>Host first. The host shows "Hosting WiFi battle", a Code and its IP. Then Join Battle on the other game,
+            or Search again.</li>
+          <li>Allow Omnipet through the firewall on both computers (<code>Omnipet.exe</code>, or Python when running from
+            source). The host receives the search on UDP 47555 and the connection on its TCP port.</li>
+          <li>Two games on one computer also work: the search includes the computer itself.</li>
+        </ol>
+        <table class="data-table">
+          <thead>
+            <tr><th>On screen</th><th>Meaning</th><th>What to do</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>No host found</code></td><td>No host answered within 3 seconds.</td>
+              <td>The steps above, then Search again.</td></tr>
+            <tr><td><code>Others cannot find this game</code></td><td>UDP port 47555 is taken on this computer, for
+                example by another game hosting.</td><td>Close the other host. Host again.</td></tr>
+            <tr><td><code>Cannot host on this network</code></td><td>The game could not open a network port.</td>
+              <td>Check the network connection.</td></tr>
+            <tr><td><code>Could not connect</code></td><td>The host was found but the connection failed.</td>
+              <td>Check the host's firewall. Host and join again.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>The WiFiCom button is dimmed</h3>
+        <p>WiFi-Com battles are switched off in 1.0.</p>
+
+        <h3>Discord linking says offline or invalid</h3>
+        <p>Link in <strong>Connect &rsaquo; Config &rsaquo; Discord &rsaquo; LINK</strong>. Send <code>!link</code> in
+          Discord to get a 4-character code, then enter it. Discord battles work in both modes.</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>On screen</th><th>Meaning</th><th>What to do</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Discord is offline</code></td><td>The server has no Discord relay running, or could not be
+                reached.</td><td>Check the connection. Try again later.</td></tr>
+            <tr><td><code>Invalid or expired code</code></td><td>The relay does not know this code.</td>
+              <td>Get a new code with <code>!link</code>.</td></tr>
+            <tr><td><code>Please enter a 4-character code</code></td><td>The code is incomplete.</td>
+              <td>Enter all four characters.</td></tr>
+            <tr><td>DISCORD button dimmed (Connect menu)</td><td>No linked account, or the relay did not answer when the
+                menu opened.</td><td>Link first. Open Connect again later.</td></tr>
+            <tr><td><code>No rooms found</code></td><td>No room is open.</td><td>Host Room, or Refresh.</td></tr>
+            <tr><td><code>Failed to create room</code>, <code>Discord not connected</code>, <code>Failed to join
+                  room</code></td><td>The relay refused or could not be reached.</td><td>Retry.</td></tr>
+          </tbody>
+        </table>
+        <p>More in <a href="online-play.html">Online Play</a>.</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ ARENA -->
+    <div class="content-section" id="arena" data-theme="connect">
+      <h2 class="section-title">Arena</h2>
+      <div class="section-content">
+
+        <h3>The Arena button is dimmed</h3>
+        <ul>
+          <li>Free Mode has no Arena. Switch to Progress Mode.</li>
+          <li>The party has no Digimon.</li>
+        </ul>
+
+        <h3>The Arena shows no season</h3>
+        <p><code>No active season</code> and <code>SEASON NOT STARTED</code> mean no season is running, or the server
+          could not be reached: the hub shows the same in both cases. Check the connection and open the Arena again.
+          Seasons last a week by default. <code>Season over: results in a moment...</code> shows while a finished
+          season's results are on the way.</p>
+
+        <h3>A Digimon cannot join the team</h3>
+        <p>Only Digimon in the party can be picked. Select a dimmed one to see why.</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>Reason shown</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Pet cannot battle</code></td><td>It has no power or no attack.</td></tr>
+            <tr><td><code>Pet is dead</code></td><td>The Digimon has died.</td></tr>
+            <tr><td><code>Module not in this arena season</code></td><td>Only modules published on Omninet take
+                part.</td></tr>
+            <tr><td><code>Fought last season: evolve it first</code></td><td>A Digimon fights one season per form.</td>
+            </tr>
+            <tr><td><code>Wrong stage for this season</code>, <code>Wrong attribute for this season</code>,
+                <code>Wrong module for this season</code></td><td>The season's restrictions. See RULES.</td></tr>
+            <tr><td><code>Edited pets aren't allowed</code></td><td>It was changed in the debug screen.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>FIND BATTLE is dimmed</h3>
+        <ul>
+          <li>No team registered this season.</li>
+          <li>No attacks left: 10 a day by default. The hub says when new ones come: "No attacks left. New ones in
+            …".</li>
+        </ul>
+
+        <h3>A Digimon is locked in the Freezer</h3>
+        <p>A team's Digimon go to the Freezer when the team is registered, locked until the season ends. The Freezer
+          shows <code>Arena &lt;time&gt;</code> in place of Add. The lock ends at the season's end time, even offline.
+          Open the Arena after the season: each Digimon gets its team's battle record.</p>
+      </div>
+    </div>
+
+    <!-- ============================================================ SAVES -->
+    <div class="content-section" id="saves" data-theme="freezer">
+      <h2 class="section-title">Saves</h2>
+      <div class="section-content">
+
+        <h3>Where is my save?</h3>
+        <table class="data-table">
+          <thead>
+            <tr><th>Platform</th><th>Location</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Windows, Python Desktop, GamePi, Batocera</td><td>The <code>save</code> folder in the folder the game
+                starts from: next to <code>Omnipet.exe</code> or <code>main.py</code>.</td></tr>
+            <tr><td>Android</td><td>The <code>save</code> folder in the app's own storage.</td></tr>
+          </tbody>
+        </table>
+        <div class="warning">Start the game from its own folder. A shortcut must start in the game folder, or the game
+          makes a new, empty <code>save</code> folder where it was started.</div>
+        <table class="data-table">
+          <thead>
+            <tr><th>In <code>save</code></th><th>Holds</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>game_mode.cfg</code></td><td>The mode chosen: 0 Free, 1 Progress.</td></tr>
+            <tr><td><code>omninet_device.json</code></td><td>This device's Omninet login.</td></tr>
+            <tr><td><code>discord_data.json</code></td><td>The linked Discord account.</td></tr>
+            <tr><td><code>Default/</code></td><td>The Free Mode save.</td></tr>
+            <tr><td><code>&lt;account id&gt;/</code></td><td>The Progress Mode save of one Omninet account (a long
+                id).</td></tr>
+          </tbody>
+        </table>
+        <table class="data-table">
+          <thead>
+            <tr><th>In each mode folder</th><th>Holds</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>save_data_1.dat</code> … <code>save_data_10.dat</code></td><td>The game. Each save writes the
+                next number; the ten newest are kept.</td></tr>
+            <tr><td><code>freezer.pkl</code></td><td>The Freezer.</td></tr>
+            <tr><td><code>digidex.json</code></td><td>The Digidex.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Backups and restoring an older save</h3>
+        <p>The game saves every minute, when you quit, and when Android sends it to the background. At start it loads
+          the newest file. If that file cannot be read, it tries the one before.</p>
+        <ol class="steps">
+          <li>Close the game.</li>
+          <li>Copy the mode folder somewhere safe.</li>
+          <li>Sort the <code>save_data_N.dat</code> files by date modified. Move out every file newer than the one you
+            want.</li>
+          <li>Start the game. It loads the newest file left.</li>
+        </ol>
+        <div class="note">The Freezer and the Digidex are single files. Restoring an older <code>save_data</code> file
+          does not restore them.</div>
+
+        <h3>Moving a save to another computer</h3>
+        <ol class="steps">
+          <li>Close the game on both computers.</li>
+          <li>Copy the mode folder (<code>Default</code>, or your account's folder) into the new game's
+            <code>save</code> folder.</li>
+          <li>Start the new game. Free Mode: choose Free Mode. Progress Mode: log in with the same account; the game
+            opens your account's folder.</li>
+        </ol>
+        <div class="note">Settings (display, sound, buttons) are stored in the save. After moving between platforms,
+          check <strong>Settings &rsaquo; Display</strong> and <strong>Settings &rsaquo; Input &rsaquo; Remap
+            Input</strong>.</div>
+      </div>
+    </div>
+
+    <!-- ============================================================ ANDROID -->
+    <div class="content-section" id="android" data-theme="care">
+      <h2 class="section-title">Android</h2>
+      <div class="section-content">
+
+        <h3>Does my Digimon live while the app is closed?</h3>
+        <p>Yes. There is no background service. When you come back, every minute you were away is played through as if
+          the app had stayed open: care calls, poop, sickness, evolution, death, sleep and midnight. There is no limit on
+          the time away. A reboot, a time-zone change and a clock set back or forward are handled.</p>
+
+        <h3>I get no notifications</h3>
+        <p>Reminders are planned when you leave the app, up to seven days ahead, and Android delivers them. They are
+          cancelled while the game is open.</p>
+        <ol class="steps">
+          <li>Allow notifications. Android 13 and later ask when the game first starts.</li>
+          <li>Check <strong>Settings &rsaquo; System &rsaquo; Notifications</strong> in the game: Enabled or
+            Disabled.</li>
+          <li><strong>Settings &rsaquo; System &rsaquo; Notification Settings</strong> opens Android's page for
+            Omnipet. Three channels can be switched separately: Pet care (calls, sickness, dying), Pet cleanup (poop)
+            and Random events.</li>
+          <li>Open the game at least once a week. The plan covers seven days from your last visit.</li>
+        </ol>
+        <div class="note">No battery exemption is needed. Android may deliver a reminder late; when several of one kind
+          are due together, one notification gives the count, such as "3 pets need attention".</div>
+        <div class="tip">Tap a random event's notification within five minutes to open the event.</div>
+      </div>
+    </div>
+
+    <!-- ============================================================ PI AND BATOCERA -->
+    <div class="content-section" id="pi" data-theme="settings">
+      <h2 class="section-title">GamePi and Batocera</h2>
+      <div class="section-content">
+
+        <h3>The game does not start on a Raspberry Pi</h3>
+        <p>Start it with <code>launch.sh</code>. It picks the display driver: Wayland or X11 on a desktop, KMS/DRM on
+          the console with no desktop. It looks for Python 3.10 or newer with pygame: a <code>Python-3*</code> folder in
+          the game folder, then <code>python3.14</code> down to <code>python3.10</code>, then <code>python3</code>. The
+          GamePi image has <code>/usr/local/bin/python3.10</code>. Raspberry Pi OS Bullseye's <code>python3</code> is
+          3.9, too old.</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>Message</th><th>What to do</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Error: no Python 3.10 or newer with pygame found</code></td><td>Install Python 3.10 or newer
+                and pygame, or use the GamePi image. <code>setup.sh</code> installs pygame for the newest Python 3.10+
+                it finds.</td></tr>
+            <tr><td><code>No compatible SDL video driver found!</code></td><td>No display driver started. Start the game
+                with <code>launch.sh</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>GPIO buttons do nothing</h3>
+        <ol class="steps">
+          <li>GPIO needs the gpiozero Python package. Without it the console prints <code>GPIO unavailable: gpiozero
+              not installed or import failed</code>.</li>
+          <li><strong>Settings &rsaquo; Input &rsaquo; Remap Input.</strong> Press any GPIO button first ("GPIO
+            detected"). Then press each button when asked: UP, DOWN, LEFT, RIGHT, A, B, X, Y, L, R, START, SELECT. A
+            button not pressed within 15 seconds keeps its default.</li>
+          <li>On Batocera, <code>input_test.pygame</code> (in the Batocera download) shows the GPIO, keyboard and
+            controller events the device sends.</li>
+        </ol>
+        <table class="data-table center">
+          <thead>
+            <tr><th>Button</th><th>UP</th><th>DOWN</th><th>LEFT</th><th>RIGHT</th><th>A</th><th>B</th><th>X</th>
+              <th>Y</th><th>L</th><th>R</th><th>START</th><th>SELECT</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Default GPIO</td><td>5</td><td>6</td><td>16</td><td>13</td><td>21</td><td>20</td><td>15</td>
+              <td>12</td><td>23</td><td>14</td><td>26</td><td>19</td></tr>
+          </tbody>
+        </table>
+
+        <h3>The game is slow on a Pi</h3>
+        <ol class="steps">
+          <li><strong>Settings &rsaquo; Display &rsaquo; Show FPS</strong>: ON, to see the frame rate.</li>
+          <li><strong>Settings &rsaquo; Display &rsaquo; Render Res</strong>: 1x. Each step up draws more pixels.</li>
+          <li><strong>Settings &rsaquo; Input &rsaquo; Test Graphics</strong> runs the graphics test again. On a Pi it
+            picks the frame rate the device holds.</li>
+        </ol>
+        <p>Version 1.0 holds 30 frames a second in every scene on a Pi Zero 2W.</p>
+
+        <h3>Batocera</h3>
+        <ul>
+          <li>Batocera runs the game in its Pygame system, with its own Python and pygame. Some Batocera images lack
+            them; the game cannot run there.</li>
+          <li>The game is always fullscreen on Batocera.</li>
+          <li>Folder and launcher: see the <a href="installation-guide.html">Installation Guide</a>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============================================================ DISPLAY AND CONTROLS -->
+    <div class="content-section" id="display" data-theme="settings">
+      <h2 class="section-title">Display, sound and controls</h2>
+      <div class="section-content">
+
+        <h3>The game opens at the wrong size</h3>
+        <p>Windows and macOS start in a window. Linux, Raspberry Pi and Batocera start fullscreen.</p>
+        <ul>
+          <li><strong>Settings &rsaquo; Display &rsaquo; Window Size</strong> sets the window size. The game is scaled
+            to fit. Dimmed in fullscreen.</li>
+          <li><strong>Settings &rsaquo; Display &rsaquo; Render Res</strong> sets the internal resolution, 1x to
+            4x.</li>
+          <li>Fullscreen: start with <code>--fullscreen</code> or <code>-f</code>, or set
+            <code>OMNIPET_FULLSCREEN=1</code>.</li>
+        </ul>
+
+        <h3>There is no sound</h3>
+        <p><strong>Settings &rsaquo; Audio &rsaquo; Volume</strong>: 0% to 100%, in steps of 10.</p>
+
+        <h3>The buttons do the wrong thing</h3>
+        <p><strong>Settings &rsaquo; Input &rsaquo; Remap Input.</strong> Press any button on the device to use
+          (keyboard, controller or GPIO), then each button when asked. The default keyboard keys:</p>
+        <table class="data-table">
+          <thead>
+            <tr><th>Button</th><th>Key</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>UP, DOWN, LEFT, RIGHT</td><td>Arrow keys</td></tr>
+            <tr><td>A</td><td><kbd>Enter</kbd></td></tr>
+            <tr><td>B</td><td><kbd>Esc</kbd></td></tr>
+            <tr><td>START</td><td><kbd>Backspace</kbd></td></tr>
+            <tr><td>SELECT</td><td><kbd>Tab</kbd></td></tr>
+            <tr><td>X</td><td><kbd>Left Ctrl</kbd></td></tr>
+            <tr><td>Y</td><td><kbd>Space</kbd></td></tr>
+            <tr><td>R</td><td><kbd>Left Shift</kbd></td></tr>
+            <tr><td>L</td><td>None by default. Set one with Remap Input.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>The screen goes dark and shows a clock</h3>
+        <p>That is the screensaver. It starts after <strong>Settings &rsaquo; Display &rsaquo; Timeout</strong> seconds
+          without input (60 by default; OFF, 10, 20, 30, 60 or 120). It shows icons for calls, poop and sickness. Any
+          button wakes the game.</p>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

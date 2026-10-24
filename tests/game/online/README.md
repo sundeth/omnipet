@@ -13,6 +13,7 @@ every connection that is not to this machine.
 | `tests/unit/online/test_omninet_client.py` | `OmninetService` call by call: linking, register/login codes, auto-login, logout, purchases, every call under every fault, rewards, the Android reward outbox (AND-08) |
 | `test_online_login.py` | `SceneLogin` phases by tap, logout from Config, a second device on the same account (ONL-02) |
 | `test_online_shop.py` | Shop views: item, module (download, install, load), background (download, Settings), Free Mode download, second device (ONL-01/02/04) |
+| `test_online_shop_delivery.py` | What a purchase delivers with Omninet's real data shapes: a shop item a module also defines (counted once, any Digimon), its icon, a background whose download has no picture, the module price after the free first one, a module install held by a scanner (ONL-01) |
 | `test_online_arena.py` | Arena hub, team creation and the freezer lock, Find Battle, history, replays and their return, season results and reward (ONL-03, ARN-05, ARN-07) |
 | `test_online_failures.py` | Down, slow, broken or half-done requests in every view (ARN-08, ONL failure paths, BLD-04) |
 | `online_ui.py` | Helpers for these files (not a test): find and tap buttons, type into fields, tap list rows and pet cells, wait for workers |

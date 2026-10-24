@@ -103,7 +103,8 @@ foreach ($m in $Modules) {
             $loadErrors += "$($fm.file)/$($fm.root): " + $_.Exception.GetBaseException().Message
         }
     }
-    # The Module tab's unlock type combo throws on anything outside its list.
+    # The Module tab's unlock type combo shows a blank Type for anything
+    # outside its list (the value is kept, but cannot be seen or chosen).
     if ($module -ne $null -and $module.Unlocks -ne $null) {
         foreach ($u in $module.Unlocks) {
             if ($validUnlockTypes -notcontains $u.Type) {

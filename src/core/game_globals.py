@@ -509,6 +509,10 @@ versus_progress = {}
 purchases = GamePurchases()  # Shop purchases
 configuration = GameConfiguration()  # Centralized configuration
 coins = 0  # Player's coin balance
+# Contribution points: a second Omninet balance, earned by contributing to the
+# Digimon Database and spent in Shop > Specials. Never mixed with the coins;
+# the server's figure is mirrored here (module_utils.sync_account_data).
+contribution_points = 0
 # Module currencies (shop.json): {module_name: {currency_name: balance}}. Kept
 # on the save rather than the pet, as the Digivice iC carries its Fight Money
 # across generations. See utils.currency_utils.
@@ -564,7 +568,7 @@ shop_gameplay_data = {}     # id -> {name, description, item_type}
 # Internal timer for autosave
 android_offline = None  # Optional Android metadata; legacy/desktop saves need none.
 _last_save_time = time.time()
-AUTOSAVE_INTERVAL_SECONDS = 60  # 5 minutes
+AUTOSAVE_INTERVAL_SECONDS = 60  # one minute
 
 def _saves_newest_first(saves):
     """``[(number, path), ...]`` ordered newest first.
@@ -733,6 +737,7 @@ def save() -> None:
         "versus_progress": versus_progress,
         "purchases": purchases.to_dict(),
         "coins": coins,
+        "contribution_points": contribution_points,
         "currency": currency,
         "shop_access": shop_access,
         "shop_items_data": shop_items_data,
@@ -820,6 +825,7 @@ def load() -> None:
     global pet_list, poop_list, traited, generations, gcell_fragments, unlocks, battle_area, battle_round, last_adventure_module, xai, xai_date, background_high_res
     global game_background, background_module_name, showClock, inventory, battle_effects, redeemed_codes
     global quests, event, event_time, total_victories, versus_progress, purchases, coins, configuration, setup_input, setup_graphics, show_tutorial, game_mode
+    global contribution_points
     global friends, friend_event_pending, card_collection, card_cooldowns, currency, shop_access
     global shop_items_data, shop_backgrounds
     global android_offline
@@ -938,6 +944,7 @@ def load() -> None:
                 versus_progress = data.get("versus_progress", {}) or {}
                 purchases = GamePurchases.from_dict(data.get("purchases", None))
                 coins = data.get("coins", 0)
+                contribution_points = int(data.get("contribution_points", 0) or 0)
                 currency = data.get("currency", {}) or {}
                 shop_access = data.get("shop_access", {}) or {}
                 # Omninet shop metadata: the inventory lists bought items by
@@ -1031,6 +1038,7 @@ def load() -> None:
     versus_progress = {}
     purchases = GamePurchases()
     coins = 0
+    contribution_points = 0
     currency = {}
     shop_access = {}
     shop_items_data = {}
