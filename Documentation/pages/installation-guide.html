@@ -33,18 +33,18 @@
     <div class="content-section" id="downloads">
       <h2 class="section-title">Downloads</h2>
       <div class="section-content">
-        <p>Every download is on the <a href="https://github.com/sundeth/omnipet/releases" target="_blank">release page</a>, except the GamePi SD card image, which is in the <a href="https://mega.nz/folder/ODhAmBZb#PnvjHOSqpz8AHK1qxwSaJg" target="_blank">Mega folder</a>. Version 1.0.0:</p>
+        <p>Every download is on the <a href="https://github.com/sundeth/omnipet/releases" target="_blank">release page</a>, except the GamePi SD card image, which is in the <a href="https://mega.nz/folder/ODhAmBZb#PnvjHOSqpz8AHK1qxwSaJg" target="_blank">Mega folder</a>. Version 1.0.1:</p>
         <table class="data-table">
           <thead><tr><th>Download</th><th>Platform</th><th>Starts with</th></tr></thead>
           <tbody>
-            <tr><td>Omnipet_Windows_Ver_1.0.0.zip</td><td>Windows 10 and 11</td><td><code>Omnipet.exe</code></td></tr>
-            <tr><td>Omnipet_Nuitka_Windows_Ver_1.0.0.zip</td><td>Windows; experimental Nuitka build</td><td><code>omnipet.exe</code></td></tr>
-            <tr><td>Omnipet_Python_Desktop_Ver_1.0.0.zip</td><td>Windows and Linux with Python 3.10 or newer</td><td><code>launch.bat</code> on Windows, <code>launch.sh</code> on Linux</td></tr>
-            <tr><td>Omnipet_GamePi_Ver_1.0.0.zip</td><td>GamePi and other Raspberry Pi; Linux with apt, dnf or pacman</td><td><code>setup.sh</code> once, then <code>launch.sh</code></td></tr>
-            <tr><td>Omnipet_GamePi_Nuitka_ARM_Ver_1.0.0.zip</td><td>Raspberry Pi; experimental Nuitka build</td><td><code>./omnipet</code></td></tr>
+            <tr><td>Omnipet_Windows_Ver_1.0.1.zip</td><td>Windows 10 and 11</td><td><code>Omnipet.exe</code></td></tr>
+            <tr><td>Omnipet_Nuitka_Windows_Ver_1.0.1.zip</td><td>Windows; experimental Nuitka build</td><td><code>omnipet.exe</code></td></tr>
+            <tr><td>Omnipet_Python_Desktop_Ver_1.0.1.zip</td><td>Windows and Linux with Python 3.10 or newer</td><td><code>launch.bat</code> on Windows, <code>launch.sh</code> on Linux</td></tr>
+            <tr><td>Omnipet_GamePi_Ver_1.0.1.zip</td><td>GamePi and other Raspberry Pi; Linux with apt, dnf or pacman</td><td><code>setup.sh</code> once, then <code>launch.sh</code></td></tr>
+            <tr><td>Omnipet_GamePi_Nuitka_ARM_Ver_1.0.1.zip</td><td>Raspberry Pi; experimental Nuitka build</td><td><code>./omnipet</code></td></tr>
             <tr><td>Omnipet_GamePi_Ver_&lt;version&gt; (Image).zip</td><td>GamePi SD card image, in the <a href="https://mega.nz/folder/ODhAmBZb#PnvjHOSqpz8AHK1qxwSaJg" target="_blank">Mega folder</a></td><td>Booting the Pi</td></tr>
-            <tr><td>Omnipet_Batocera_Ver_1.0.0.zip</td><td>Batocera</td><td><code>omnipet.pygame</code>, in EmulationStation's Pygame list</td></tr>
-            <tr><td>Omnipet_Android_Ver_1.0.0.apk</td><td>Android 5.0 or newer, 64-bit ARM</td><td>The Omnipet VPet Simulator app</td></tr>
+            <tr><td>Omnipet_Batocera_Ver_1.0.1.zip</td><td>Batocera</td><td><code>omnipet.pygame</code>, in EmulationStation's Pygame list</td></tr>
+            <tr><td>Omnipet_Android_Ver_1.0.1.apk</td><td>Android 5.0 or newer, 64-bit ARM</td><td>The Omnipet VPet Simulator app</td></tr>
           </tbody>
         </table>
 
@@ -83,14 +83,14 @@
         <div class="tab-panel active" id="win">
           <p>For Windows 10 and 11. Python is built into <code>Omnipet.exe</code>: there is nothing else to install.</p>
           <ol class="steps">
-            <li>Download <code>Omnipet_Windows_Ver_1.0.0.zip</code>.</li>
+            <li>Download <code>Omnipet_Windows_Ver_1.0.1.zip</code>.</li>
             <li>Extract all files to a folder of your own, such as <code>C:\Games\Omnipet</code>.</li>
             <li>Double-click <code>Omnipet.exe</code>.</li>
           </ol>
           <div class="warning"><strong>Unsigned program.</strong> <code>Omnipet.exe</code> is not signed, so Windows may
             show "Windows protected your PC". Click More info, then Run anyway.</div>
           <h3>Nuitka build</h3>
-          <p><code>Omnipet_Nuitka_Windows_Ver_1.0.0.zip</code> is the same game compiled with Nuitka. It is experimental:
+          <p><code>Omnipet_Nuitka_Windows_Ver_1.0.1.zip</code> is the same game compiled with Nuitka. It is experimental:
             use it if the standard build runs slowly. Start it with <code>omnipet.exe</code> and keep the
             <code>.pyd</code> and <code>.dll</code> files beside it.</p>
         </div>
@@ -105,7 +105,7 @@
               Tick the option that adds Python to PATH: <code>launch.bat</code> runs <code>python</code>.</li>
             <li>Open Command Prompt and install the packages:
               <pre><code>python -m pip install pygame requests psutil</code></pre></li>
-            <li>Extract <code>Omnipet_Python_Desktop_Ver_1.0.0.zip</code> to a folder of your own.</li>
+            <li>Extract <code>Omnipet_Python_Desktop_Ver_1.0.1.zip</code> to a folder of your own.</li>
             <li>Double-click <code>launch.bat</code>. It stops with a message when Python or pygame is missing.</li>
           </ol>
           <h3>Linux</h3>
@@ -113,7 +113,7 @@
             <li>Install Python 3.10 or newer and the packages (table below). Check the version with
               <code>python3 --version</code>: Raspberry Pi OS Bullseye's Python 3.9 is too old.</li>
             <li>Extract the zip:
-              <pre><code>unzip Omnipet_Python_Desktop_Ver_1.0.0.zip -d ~/Omnipet</code></pre></li>
+              <pre><code>unzip Omnipet_Python_Desktop_Ver_1.0.1.zip -d ~/Omnipet</code></pre></li>
             <li>Make the launcher executable and start the game:
               <pre><code>cd ~/Omnipet
 chmod +x launch.sh
@@ -139,10 +139,10 @@ chmod +x launch.sh
             installs on Debian, Ubuntu, Fedora and Arch.</p>
           <h3>From the zip</h3>
           <ol class="steps">
-            <li>Copy <code>Omnipet_GamePi_Ver_1.0.0.zip</code> to the Pi and extract it into the game folder. The GamePi
+            <li>Copy <code>Omnipet_GamePi_Ver_1.0.1.zip</code> to the Pi and extract it into the game folder. The GamePi
               uses <code>~/Games/Omnipet</code>:
               <pre><code>mkdir -p ~/Games/Omnipet
-unzip -o Omnipet_GamePi_Ver_1.0.0.zip -d ~/Games/Omnipet</code></pre></li>
+unzip -o Omnipet_GamePi_Ver_1.0.1.zip -d ~/Games/Omnipet</code></pre></li>
             <li>Run the setup script once (table below):
               <pre><code>cd ~/Games/Omnipet
 bash setup.sh</code></pre></li>
@@ -179,7 +179,7 @@ sudo apt install python3-requests</code></pre></li>
           </ol>
 
           <h3>Nuitka build</h3>
-          <p><code>Omnipet_GamePi_Nuitka_ARM_Ver_1.0.0.zip</code> is the game compiled with Nuitka. It is experimental
+          <p><code>Omnipet_GamePi_Nuitka_ARM_Ver_1.0.1.zip</code> is the game compiled with Nuitka. It is experimental
             and has no launch script. Extract it, then from its folder:</p>
           <pre><code>chmod +x omnipet
 ./omnipet</code></pre>
@@ -207,7 +207,7 @@ sudo apt install python3-requests</code></pre></li>
             game fullscreen from its own folder. <code>input_test/input_test.pygame</code> shows what each key, joystick
             button, axis and GPIO pin sends.</p>
           <ol class="steps">
-            <li>Extract <code>Omnipet_Batocera_Ver_1.0.0.zip</code> into a folder named <code>omnipet</code>.</li>
+            <li>Extract <code>Omnipet_Batocera_Ver_1.0.1.zip</code> into a folder named <code>omnipet</code>.</li>
             <li>Copy that folder to <code>/userdata/roms/pygame/</code>, over the network share (<code>\\batocera</code>
               on Windows, <code>smb://batocera</code> on Linux; folder <code>roms/pygame</code>) or over SSH
               (<code>ssh root@batocera</code>, password <code>linux</code>).</li>
@@ -222,7 +222,7 @@ sudo apt install python3-requests</code></pre></li>
 
         <!-- Android -->
         <div class="tab-panel" id="android">
-          <p><code>Omnipet_Android_Ver_1.0.0.apk</code> is for Android 5.0 or newer on 64-bit ARM (arm64-v8a). The app is
+          <p><code>Omnipet_Android_Ver_1.0.1.apk</code> is for Android 5.0 or newer on 64-bit ARM (arm64-v8a). The app is
             Omnipet VPet Simulator; it runs fullscreen in landscape.</p>
           <ol class="steps">
             <li>Download the APK on the phone or tablet.</li>
@@ -340,7 +340,7 @@ sudo apt install python3-requests</code></pre></li>
           <li>Copy the <code>save</code> folder somewhere safe, and <code>modules</code> if you added modules by hand.</li>
           <li>Extract the new release into the game folder, replacing the old files. Its <code>modules</code> and
             <code>save</code> folders are empty, so your save and modules stay. On a GamePi, over SSH:
-            <pre><code>unzip -o Omnipet_GamePi_Ver_1.0.0.zip -d ~/Games/Omnipet</code></pre></li>
+            <pre><code>unzip -o Omnipet_GamePi_Ver_1.0.1.zip -d ~/Games/Omnipet</code></pre></li>
           <li>Start the game, then open Connect &gt; Shop &gt; Modules and update the modules that show Update.</li>
         </ol>
         <h3>Android</h3>

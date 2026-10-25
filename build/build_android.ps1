@@ -23,6 +23,10 @@ Write-Host "=== Omnipet Android Build ===" -ForegroundColor Cyan
 
 # Configuration
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
+# The checkout this script belongs to, as WSL sees it: a clean checkout of
+# a release commit beside the working tree builds its own sources (this
+# used to read /mnt/e/Omnipet whatever checkout ran it).
+$WSLProjectRoot = (wsl wslpath -a ($ProjectRoot -replace '\\', '/')).Trim()
 $WSLBuildDir = "~/omnipet_build"
 $BuildType = if ($Release) { "release" } else { "debug" }
 
@@ -38,20 +42,20 @@ wsl bash -c "if [ -d $WSLBuildDir ]; then find $WSLBuildDir -maxdepth 1 -mindept
 wsl bash -c "mkdir -p $WSLBuildDir/{src/core,src/models,src/ui,src/ui/components,src/ui/windows,src/ui/minigames,src/input,src/battle,src/battle/dcom,src/battle/sim,src/training,src/services,src/data,src/data/protocols,src/data/attack_patterns,src/utils,src/scenes,src/wificom,assets,modules,save}"
 
 Write-Host "[2/4] Syncing files to WSL..." -ForegroundColor Yellow
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/core/ $WSLBuildDir/src/core/"
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/models/ $WSLBuildDir/src/models/"
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/ui/ $WSLBuildDir/src/ui/"
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/input/ $WSLBuildDir/src/input/"
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/battle/ $WSLBuildDir/src/battle/"
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/training/ $WSLBuildDir/src/training/"
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/services/ $WSLBuildDir/src/services/"
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/data/ $WSLBuildDir/src/data/"
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/utils/ $WSLBuildDir/src/utils/"
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/scenes/ $WSLBuildDir/src/scenes/"
-wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' /mnt/e/Omnipet/src/wificom/ $WSLBuildDir/src/wificom/"
-wsl bash -c "cp /mnt/e/Omnipet/src/vpet.py $WSLBuildDir/src/vpet.py"
-wsl bash -c "cp /mnt/e/Omnipet/src/__init__.py $WSLBuildDir/src/__init__.py"
-wsl bash -c "rsync -avu --delete /mnt/e/Omnipet/assets/ $WSLBuildDir/assets/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/core/ $WSLBuildDir/src/core/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/models/ $WSLBuildDir/src/models/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/ui/ $WSLBuildDir/src/ui/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/input/ $WSLBuildDir/src/input/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/battle/ $WSLBuildDir/src/battle/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/training/ $WSLBuildDir/src/training/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/services/ $WSLBuildDir/src/services/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/data/ $WSLBuildDir/src/data/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/utils/ $WSLBuildDir/src/utils/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/scenes/ $WSLBuildDir/src/scenes/"
+wsl bash -c "rsync -avu --delete --exclude='__pycache__' --exclude='*.pyc' $WSLProjectRoot/src/wificom/ $WSLBuildDir/src/wificom/"
+wsl bash -c "cp $WSLProjectRoot/src/vpet.py $WSLBuildDir/src/vpet.py"
+wsl bash -c "cp $WSLProjectRoot/src/__init__.py $WSLBuildDir/src/__init__.py"
+wsl bash -c "rsync -avu --delete $WSLProjectRoot/assets/ $WSLBuildDir/assets/"
 # Ship an EMPTY modules/ folder — releases must not bundle the dev
 # environment's installed modules.  --delete clears whatever may have
 # been there from a previous run.
@@ -65,10 +69,10 @@ wsl bash -c "rm -rf $WSLBuildDir/modules && mkdir -p $WSLBuildDir/modules"
 # from android.storage.app_storage_path()/save anyway, so a bundled save
 # folder would never be used.
 wsl bash -c "rm -rf $WSLBuildDir/save && mkdir -p $WSLBuildDir/save"
-wsl bash -c "cp /mnt/e/Omnipet/main_android.py $WSLBuildDir/main.py"
-wsl bash -c "rsync -avu --delete /mnt/e/Omnipet/android_src/ $WSLBuildDir/android_src/"
-wsl bash -c "python3 /mnt/e/Omnipet/build/prepare_android_manifest.py $WSLBuildDir/android_src"
-wsl bash -c "cp /mnt/e/Omnipet/buildozer.spec $WSLBuildDir/"
+wsl bash -c "cp $WSLProjectRoot/main_android.py $WSLBuildDir/main.py"
+wsl bash -c "rsync -avu --delete $WSLProjectRoot/android_src/ $WSLBuildDir/android_src/"
+wsl bash -c "python3 $WSLProjectRoot/build/prepare_android_manifest.py $WSLBuildDir/android_src"
+wsl bash -c "cp $WSLProjectRoot/buildozer.spec $WSLBuildDir/"
 
 # Clean caches
 Write-Host "[3/4] Cleaning Python bytecode cache..." -ForegroundColor Yellow
@@ -95,7 +99,7 @@ if ($LASTEXITCODE -eq 0) {
         throw "PetAlarmReceiver is missing from the APK's native classes."
     }
     New-Item -ItemType Directory -Force -Path "$ProjectRoot\bin" | Out-Null
-    wsl bash -c "cp $WSLBuildDir/bin/*.apk /mnt/e/Omnipet/bin/"
+    wsl bash -c "cp $WSLBuildDir/bin/*.apk $WSLProjectRoot/bin/"
     Get-ChildItem "$ProjectRoot\bin\*.apk" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
     # The release name build_all.ps1 looks for (Buildozer's own name stays in bin/)
     $apk = Get-ChildItem "$ProjectRoot\bin\*.apk" | Sort-Object LastWriteTime -Descending | Select-Object -First 1

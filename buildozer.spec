@@ -16,7 +16,7 @@ source.include_patterns = assets/**, src/**, *.py, *.json, *.txt, *.zip
 source.exclude_dirs = tests,tmp,bin,build,utilities,Documentation,logs,Module Editor,Release,__pycache__,python-for-android
 source.exclude_patterns = license,images/*/*.jpg,*.spec,*.bat,*.sh,*.ps1,*.md,*.log
 
-version = 1.0.0
+version = 1.0.1
 
 # ❗ Python 3.10 build target (3.11 has breaking changes with pygame)
 # paho-mqtt is the WiFiCom transport (src/wificom/transport.py). Pure Python,

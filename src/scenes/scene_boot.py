@@ -342,6 +342,12 @@ class SceneBoot:
             server_id = omninet_service.get_player_id()
             if server_id:
                 game_globals.set_player_id(server_id)
+            # A refreshed player id, or one the cache did not hold at start,
+            # is another save folder than the one loaded: load it, since
+            # saving never writes one folder's state into another.
+            if not game_globals.holds_save_dir():
+                from utils import display_utils
+                display_utils.load_preserving_display()
             runtime_globals.game_console.log("[SceneBoot] Server validation OK")
 
             # Reconcile coins / purchases / installed-module names with the

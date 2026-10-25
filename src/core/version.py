@@ -6,4 +6,4 @@ buildozer.spec's `version` is Android's numeric versionName and carries only
 the number part (1.0.0 for a pre-release such as "1.0.0 Beta 3").
 """
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"

@@ -202,7 +202,9 @@ def sync_owned_modules(download_missing: bool = True) -> bool:
     Always records the local name of every owned + installed module into
     ``purchases.module_names`` (keyed by the module's actual module.json name,
     matched via the install folder) so ownership checks — which egg selection
-    and the connect-exit routing rely on — work reliably.
+    and the connect-exit routing rely on — work reliably; and drops the names
+    of listed modules the account does not own (``purchases.modules``, which
+    sync_account_data matches to the server's purchase rows first).
 
     When ``download_missing`` is True it also downloads + installs any owned
     module that is absent or out of date (slow — best run off the main thread).
@@ -216,9 +218,11 @@ def sync_owned_modules(download_missing: bool = True) -> bool:
     if not game_globals.is_progress_mode() or not omninet_service.is_logged_in():
         return False
     purchases = getattr(game_globals, 'purchases', None)
-    owned_ids = list(getattr(purchases, 'modules', None) or [])
-    if purchases is None or not owned_ids:
+    if purchases is None:
         return False
+    # Fetched even when nothing is owned: a name booked for a module the
+    # account does not own still has to go (below).
+    owned_ids = list(getattr(purchases, 'modules', None) or [])
 
     # Map the server module id -> display name from the shop listing.
     try:
@@ -300,7 +304,24 @@ def sync_owned_modules(download_missing: bool = True) -> bool:
             purchases.add_module(mid, mod.name)
             names_added = True
 
-    if changed or names_added:
+    # The names booked for modules the shop lists and the account does not
+    # own go (a Free Mode download carried into the account: online finding
+    # 29), both the shop name and the installed module's. Names of modules
+    # the shop does not list (a Beta module since withdrawn, bought then)
+    # stay: the listing cannot speak for them.
+    owned = {str(mid) for mid in owned_ids}
+    keep = set()
+    unowned = set()
+    for mid, (name, _version) in id_to_info.items():
+        mod = installed_by_folder.get(safe_module_folder(name, mid))
+        (keep if mid in owned else unowned).update(n for n in (name, getattr(mod, 'name', None)) if n)
+    stale = (unowned - keep) & purchases.module_names
+    if stale:
+        purchases.module_names -= stale
+        runtime_globals.game_console.log(
+            f"[ModuleSync] Not owned by the account, no longer usable: {', '.join(sorted(stale))}")
+
+    if changed or names_added or stale:
         try:
             game_globals.save()
         except Exception:
@@ -348,6 +369,27 @@ def _apply_purchase_entries(purchases, entries) -> dict:
             added['special'] += 1
     purchases.item_purchases_tracked = True
     return added
+
+
+def _module_row_ids(entries) -> set:
+    """The module ids among the server's purchase rows."""
+    return {str(entry.get('item_id') or entry.get('id'))
+            for entry in entries or []
+            if isinstance(entry, dict) and (entry.get('purchase_type') or '').lower() == 'module'
+            and (entry.get('item_id') or entry.get('id'))}
+
+
+def _drop_unowned_module_ids(purchases, entries) -> int:
+    """Drop the module ids the local record holds and the server's purchase
+    rows do not: every module an account owns has a row there (bought, or
+    the free first one at price 0), so an id without one never belonged to
+    the account. A Free Mode download is booked as owned in the Free save,
+    and a Progress account loaded with it took it along (online finding 29);
+    the sync used to only add, so such an account kept the modules. The
+    names are reconciled in sync_owned_modules. Returns how many went."""
+    stale = {mid for mid in purchases.modules if str(mid) not in _module_row_ids(entries)}
+    purchases.modules -= stale
+    return len(stale)
 
 
 #: The effect fields of a shop item, as `GET /shop/download/item/{id}` gives
@@ -453,9 +495,12 @@ def sync_account_data(download_missing: bool = False) -> None:
         try:
             ok, data = omninet_service.get_user_purchases()
             if ok and isinstance(data, dict):
-                added = _apply_purchase_entries(purchases, data.get('purchases') or [])
+                rows = data.get('purchases') or []
+                added = _apply_purchase_entries(purchases, rows)
+                dropped = _drop_unowned_module_ids(purchases, rows)
                 runtime_globals.game_console.log(
-                    f"[AccountSync] Synced purchases from server: {added}")
+                    f"[AccountSync] Synced purchases from server: {added}"
+                    + (f", {dropped} module(s) the account does not own dropped" if dropped else ""))
         except Exception as exc:
             runtime_globals.game_console.log(
                 f"[AccountSync] purchases pull failed: {exc}")

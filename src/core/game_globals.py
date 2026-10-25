@@ -62,6 +62,17 @@ def get_save_dir():
     return save_dir
 
 
+def _same_dir(a: str, b: str) -> bool:
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def holds_save_dir() -> bool:
+    """Whether the state in memory is the current save folder's: load() read
+    it. After a mode or player change it is not until that folder is loaded,
+    and save() writes nothing until then."""
+    return _loaded_save_dir is not None and _same_dir(get_save_dir(), _loaded_save_dir)
+
+
 def _can_access_save_dir() -> bool:
     """Check if save operations can safely proceed.
 
@@ -568,6 +579,9 @@ shop_gameplay_data = {}     # id -> {name, description, item_type}
 # Internal timer for autosave
 android_offline = None  # Optional Android metadata; legacy/desktop saves need none.
 _last_save_time = time.time()
+#: The save folder the state in memory was loaded from (load()); save()
+#: writes nowhere else. None before the first load.
+_loaded_save_dir = None
 AUTOSAVE_INTERVAL_SECONDS = 60  # one minute
 
 def _saves_newest_first(saves):
@@ -694,9 +708,17 @@ def save() -> None:
     if not _can_access_save_dir():
         print("[Save] Skipping save - save directory not accessible")
         return
-    
-    # Ensure save directory exists
+
+    # A mode or account switch points the save folder elsewhere before that
+    # folder's save is loaded; the autosave in between wrote the Free Mode
+    # save, its downloaded modules marked owned and its pets, into the
+    # Progress account (reported exploit, 2026-10-25).
     save_dir = get_save_dir()
+    if _loaded_save_dir is not None and not _same_dir(save_dir, _loaded_save_dir):
+        print(f"[Save] Skipping save - the game holds {_loaded_save_dir}'s save, not {save_dir}'s")
+        return
+
+    # Ensure save directory exists
     if not os.path.exists(save_dir):
         try:
             os.makedirs(save_dir)
@@ -828,7 +850,7 @@ def load() -> None:
     global contribution_points
     global friends, friend_event_pending, card_collection, card_cooldowns, currency, shop_access
     global shop_items_data, shop_backgrounds
-    global android_offline
+    global android_offline, _loaded_save_dir
 
     if not _can_access_save_dir():
         print("[Save] Skipping load - save directory not accessible")
@@ -836,7 +858,7 @@ def load() -> None:
 
     # Get all available save files in order (newest first)
     save_files_to_try = []
-    
+
     save_dir = get_save_dir()
     if not os.path.exists(save_dir):
         try:
@@ -845,6 +867,8 @@ def load() -> None:
         except Exception as e:
             print(f"[Save] Failed to create save directory: {e}")
             return
+    # Loaded or started fresh below, the state is this folder's from here on.
+    _loaded_save_dir = save_dir
 
     # Check if old save_data.dat exists and migrate it first
     old_save_path = os.path.join(save_dir, "save_data.dat")

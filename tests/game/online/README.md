@@ -16,6 +16,8 @@ every connection that is not to this machine.
 | `test_online_shop_delivery.py` | What a purchase delivers with Omninet's real data shapes: a shop item a module also defines (counted once, any Digimon), its icon, a background whose download has no picture, the module price after the free first one, a module install held by a scanner (ONL-01) |
 | `test_online_arena.py` | Arena hub, team creation and the freezer lock, Find Battle, history, replays and their return, season results and reward (ONL-03, ARN-05, ARN-07) |
 | `test_online_failures.py` | Down, slow, broken or half-done requests in every view (ARN-08, ONL failure paths, BLD-04) |
+| `test_mode_switch_save.py` | Free Mode → Progress Mode through `SceneSetup`: nothing of the Free save (modules marked owned, pets) reaches the account, however long the account chooser stays open (finding 29) |
+| `test_owned_modules_sync.py` | The account sync takes back modules the server says the account does not own (an account that took a Free Mode download in before the fix); a module the shop no longer lists, and everything when the server cannot answer, are left alone (finding 29) |
 | `online_ui.py` | Helpers for these files (not a test): find and tap buttons, type into fields, tap list rows and pet cells, wait for workers |
 
 Bugs these tests found are marked `@unittest.expectedFailure` and listed in

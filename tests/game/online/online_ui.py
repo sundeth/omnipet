@@ -152,10 +152,14 @@ def pump(env, game, cond, max_frames=120):
 
 
 def progress_mode(env, player_id=None):
-    """Progress Mode with the mode preference saved (as after setup)."""
+    """Progress Mode with the mode preference saved (as after setup). The
+    account's save holds the fixture party: the state in memory is taken as
+    loaded from its folder, since save() writes only to the folder load()
+    read (a login loads it in the game)."""
     gg = env.gg
     gg.game_mode = gg.GAME_MODE_PROGRESS
     gg.player_id = player_id
+    gg._loaded_save_dir = gg.get_save_dir()
     with_quiet(gg.save_game_mode_preference)
 
 
